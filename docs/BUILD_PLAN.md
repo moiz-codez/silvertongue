@@ -43,10 +43,12 @@ Every milestone is done only when its acceptance criteria are met and `npm run c
 - Admin screen with `ADMIN_TOKEN`.
 - Projector: lobby with QR code and joined count; game view with the six-floor dungeon map and player tokens; event feed (first blood, clears). Throttled snapshots.
 - Phone lobby screen (moved here from M1): players wait until the admin starts the game.
+- Kicked players are blocked on `player:message` and `player:door` too, not only on resume, and their open socket is disconnected on kick (deferred from the M1 audit, LOW-2).
 
 **Acceptance**
 - Three browser tabs as three players plus a projector tab: tokens move down the map as floors are cleared; first blood appears once per floor.
 - Pausing stops message sending on phones with an in-character message.
+- A kicked player's phone can no longer send messages or try the door.
 
 ## M3 — The LLM queue and protection layer
 
@@ -54,6 +56,8 @@ Every milestone is done only when its acceptance criteria are met and `npm run c
 - Per-player cooldown, message cap, length cap; waiting lines after 1.5 s; in-character errors with cooldown refund.
 - `llm_calls` logging with cost; admin health panel (queue, 429s, latency, tokens, spend); `BUDGET_USD` auto-pause.
 - `scripts/loadtest.ts`: N fake socket clients sending messages on a realistic schedule.
+- Join limit per IP (`socket.handshake.address`; behind Caddy, the client IP from `X-Forwarded-For`). Keep it generous, around 60 joins per minute, because the whole class on university Wi-Fi may share one public IP. This sits on top of the one-join-per-socket rule from M1, so a script can't squat nicknames or multiply the message cap into API spend (deferred from the M1 audit, LOW-3).
+- `sanitize` edge cases: strip an unclosed trailing `[...` tag, clean up nested `[[x]]`, and turn fullwidth `＜ ＞` / small `﹤ ﹥` into `‹ ›`, with unit tests (deferred from the M1 audit, LOW-4).
 
 **Acceptance**
 - Load test, 60 fake players in mock mode for 5 minutes: no crashes, no unhandled errors, every message gets a reply or an in-character error.
