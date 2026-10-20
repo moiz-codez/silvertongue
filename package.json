@@ -21,7 +21,7 @@
     "smoke": "node scripts/smoke.ts",
     "native-check": "node scripts/native-check.ts",
     "playtest": "node scripts/playtest.ts",
-    "loadtest": "node -e \"console.log('loadtest: not built yet (M3)')\"",
+    "loadtest": "node scripts/loadtest.ts",
     "tunnel": "node scripts/tunnel.ts"
   },
   "devDependencies": {
