@@ -34,6 +34,12 @@ export function parseEnv(source: Record<string, string | undefined>): Env {
   return result.data;
 }
 
+// The mode actually in use. A game saved as Live runs on the mock if this server has no API key
+// (e.g. restarted without it), so the admin badge must show this, not the saved setting.
+export function effectiveMode(saved: 'mock' | 'live', env: Env): 'mock' | 'live' {
+  return saved === 'live' && env.ANTHROPIC_API_KEY !== '' ? 'live' : 'mock';
+}
+
 // Reads the repo-root .env (if there is one) into process.env, then validates it.
 // Variables already set in the shell win over the file.
 export function loadEnv(): Env {

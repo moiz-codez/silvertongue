@@ -89,10 +89,12 @@ export function errorStatus(err: unknown): 'rate_limited' | 'timeout' | 'error' 
   return 'error';
 }
 
-// Worth another try: rate limits, overload, server errors and dropped connections.
+// Worth another try: rate limits, overload, server errors and dropped connections (not timeouts).
 // Bad requests (400, 401…) would fail the same way again.
 export function isRetryable(err: unknown): boolean {
   if (err instanceof Anthropic.APIUserAbortError) return false;
+  // A timed-out call may already be running (and billed) at the API: retrying could pay twice.
+  if (err instanceof Anthropic.APIConnectionTimeoutError) return false;
   if (err instanceof Anthropic.APIConnectionError) return true;
   const status = (err as { status?: unknown }).status;
   return typeof status === 'number' && (status === 429 || status >= 500);

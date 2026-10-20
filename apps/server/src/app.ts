@@ -4,7 +4,7 @@ import path from 'node:path';
 import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
 import { Server } from 'socket.io';
-import type { Env } from './config/env.ts';
+import { effectiveMode, type Env } from './config/env.ts';
 import type { Db } from './db/db.ts';
 import { getCurrentGame } from './db/queries.ts';
 import { createLiveClient, type Complete } from './llm/client.ts';
@@ -37,7 +37,7 @@ export async function createApp(
 
   let live: Complete | undefined;
   const pickClient = (): Complete => {
-    if (ctx.game.llm_mode !== 'live' || !env.ANTHROPIC_API_KEY) return mock;
+    if (effectiveMode(ctx.game.llm_mode, env) === 'mock') return mock;
     return (live ??= createLiveClient(env.ANTHROPIC_API_KEY));
   };
   // Every call from every phone waits its turn here.

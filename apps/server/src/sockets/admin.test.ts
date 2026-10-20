@@ -2,7 +2,7 @@
 import type { Socket } from 'socket.io-client';
 import { describe, expect, it } from 'vitest';
 import type { AdminClientEvents, AdminServerEvents, AdminState } from '@silvertongue/shared/events';
-import { getRune } from '../db/queries.ts';
+import { getRune, saveGame } from '../db/queries.ts';
 import type { Complete } from '../llm/client.ts';
 import { ADMIN_TOKEN, client, join, next, open, startServer } from './testServer.ts';
 
@@ -178,6 +178,15 @@ describe('admin', () => {
       }),
     ).toEqual({ ok: false, error: "The server has no ANTHROPIC_API_KEY, so it can't go Live." });
     await new Promise((r) => setTimeout(r, 600));
+    expect(latest()).toMatchObject({ liveAvailable: false, settings: { llmMode: 'mock' } });
+  });
+
+  it('shows MOCK when a game saved as Live runs on a server without an API key', async () => {
+    const { db, ctx, url } = await startServer();
+    ctx.game = { ...ctx.game, llm_mode: 'live' }; // e.g. saved as Live, then restarted without the key
+    saveGame(db, ctx.game, Date.now());
+    const { latest } = admin(url);
+    await new Promise((r) => setTimeout(r, 300));
     expect(latest()).toMatchObject({ liveAvailable: false, settings: { llmMode: 'mock' } });
   });
 

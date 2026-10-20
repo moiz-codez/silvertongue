@@ -232,6 +232,8 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
           ? q.findPlayerByTokenHash(db, hashToken(parsed.data.token))
           : undefined;
         if (!player || player.kicked || player.game_id !== ctx.game.id) return ack({ ok: false });
+        // One player per socket, as for join: switching mid-call would dodge the message cap.
+        if (socket.data.playerId && socket.data.playerId !== player.id) return ack({ ok: false });
 
         socket.data.playerId = player.id;
         ack({ ok: true });

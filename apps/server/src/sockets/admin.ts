@@ -15,6 +15,7 @@ import {
   kickPayload,
   renamePayload,
 } from '@silvertongue/shared/schemas';
+import { effectiveMode } from '../config/env.ts';
 import * as q from '../db/queries.ts';
 import { applyCommand, elapsedMs } from '../game/state.ts';
 import { cleanNickname, NICKNAME_TAKEN, nicknameProblem } from '../security/nickname.ts';
@@ -49,6 +50,7 @@ export function registerAdmin(io: PlayerServer, ctx: GameContext, phones: PhoneC
 
   function state(): AdminState {
     const game = ctx.game;
+    const queue = ctx.queueStats();
     return {
       status: game.status,
       elapsedMs: elapsedMs(game, Date.now()),
@@ -63,11 +65,17 @@ export function registerAdmin(io: PlayerServer, ctx: GameContext, phones: PhoneC
       settings: {
         cooldownMs: game.cooldown_ms,
         maxMessages: game.max_messages,
-        llmMode: game.llm_mode,
+        llmMode: effectiveMode(game.llm_mode, env), // what is really answering, never just what was saved
       },
       liveAvailable: env.ANTHROPIC_API_KEY !== '',
       health: {
-        ...ctx.queueStats(),
+        queued: queue.queued,
+        inFlight: queue.inFlight,
+        rateLimited1m: queue.rateLimited1m,
+        avgReplyMs: queue.avgReplyMs,
+        callsLastMin: queue.callsLastMin,
+        estInputLastMin: queue.estInputLastMin,
+        maxOutputLastMin: queue.maxOutputLastMin,
         memoryMb: Math.round(process.memoryUsage().rss / 1_000_000),
       },
       spendUsd: q.gameSpendUsd(db, game.id),

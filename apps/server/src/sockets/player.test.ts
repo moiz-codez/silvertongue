@@ -209,4 +209,15 @@ describe('Floor 1, end to end in mock mode', () => {
     });
     expect(await join(client(url, '198.51.100.2').socket, 'Four')).toMatchObject({ ok: true });
   });
+
+  it('will not switch a socket to a different player', async () => {
+    const { url } = await startServer();
+    const a = client(url).socket;
+    const b = client(url).socket;
+    const joinedA = await join(a, 'Ali');
+    const joinedB = await join(b, 'Bea');
+    if (!joinedA.ok || !joinedB.ok) throw new Error('join failed');
+    expect(await a.emitWithAck('player:resume', { token: joinedB.token })).toEqual({ ok: false });
+    expect(await a.emitWithAck('player:resume', { token: joinedA.token })).toEqual({ ok: true }); // itself: fine
+  });
 });

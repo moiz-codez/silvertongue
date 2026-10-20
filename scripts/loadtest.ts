@@ -27,6 +27,11 @@ const { values } = parseArgs({
 });
 const env = loadEnv();
 const URL = values.url || `http://localhost:${env.PORT}`;
+// It resets the game: only ever against a server on this laptop, never the demo address.
+if (!['localhost', '127.0.0.1'].includes(new globalThis.URL(URL).hostname)) {
+  console.error('Load tests only run against a server on this laptop (localhost).');
+  process.exit(1);
+}
 const PLAYERS = Number(values.players);
 const DURATION_MS = Number(values.minutes) * 60_000;
 const GRACE_MS = 65_000; // longer than the queue's 60 s deadline: every message must be answered by then
