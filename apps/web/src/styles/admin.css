@@ -100,7 +100,7 @@
 .admin-tiles {
   margin: var(--space-4) 0;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: var(--space-3);
 }
 
@@ -212,4 +212,92 @@
   width: 100%;
   margin: 0;
   white-space: normal;
+}
+
+.mode-badge {
+  padding: var(--space-1) var(--space-4);
+  border-radius: 8px;
+  font-family: var(--font-heading);
+  font-size: 1.6rem;
+  letter-spacing: 0.08em;
+}
+
+/* Live costs real money: loud and solid. Mock: unmistakably not the real thing. */
+.mode-live {
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+}
+
+.mode-mock {
+  border: 2px dashed var(--color-muted);
+  color: var(--color-muted);
+}
+
+.budget-alert {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-danger);
+  background: #3a1f1a;
+  color: var(--color-text);
+}
+
+.tile-ok {
+  color: #8fd19e;
+}
+
+.tile-warn {
+  color: var(--color-accent);
+}
+
+.admin-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 420px;
+  align-items: start;
+  gap: var(--space-4);
+}
+
+@media (max-width: 900px) {
+  .admin-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.kicked-count {
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  color: var(--color-muted);
+}
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.setting .field {
+  width: 7em;
+}
+
+.setting legend {
+  float: left; /* puts the legend on the row, like the other labels */
+}
+
+.settings .hint {
+  margin: 0;
+}
+
+.radios {
+  margin-left: auto;
+  display: flex;
+  gap: var(--space-4);
 }
