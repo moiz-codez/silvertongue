@@ -208,13 +208,14 @@ export function registerPlayerHandlers(
           );
           logCall(id, floor, turn.result.model, turn.result.usage, turn.result.latencyMs, 'ok');
           q.countPlayerMessage(db, id, floor);
-          // Floor 1 has no output filter, so the reply itself is the post-filter text.
+          // Floor 1 has no output filter: the reply, minus *stage directions*, is the post-filter text.
           const replyId = q.insertMessage(db, {
             gameId,
             playerId: id,
             floor,
             speaker: 'guardian',
             text: turn.text,
+            rawText: turn.result.text !== turn.text ? turn.result.text : undefined, // server only
             now: Date.now(),
           });
           socket.emit('player:bubble', {
