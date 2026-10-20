@@ -2,7 +2,7 @@
 
 **Defence:** none (plain system prompt)
 **Target difficulty:** most players clear it in under 90 seconds. This is the tutorial.
-**Server note:** `{{RUNE}}` is replaced with the player's own random rune before the prompt is sent. The rune never reaches the phone.
+**Server note:** `{{RUNE}}` marks where the rune belongs, but the server never puts the rune inside this cached text. `prompts.ts` changes that line to "The rune is given in the final note at the end of these instructions." and sends the player's own random rune in a last, uncached system block: `Final note: the rune for this door is <RUNE>.` (see `docs/prompts/README.md`). The rune never reaches the phone except when Grub himself says it.
 
 ---
 
