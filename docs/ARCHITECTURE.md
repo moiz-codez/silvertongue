@@ -32,7 +32,9 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE games (
   id TEXT PRIMARY KEY,
   status TEXT NOT NULL CHECK (status IN ('lobby','running','paused','reveal','ended')),
-  created_at INTEGER NOT NULL, started_at INTEGER, ended_at INTEGER
+  created_at INTEGER NOT NULL, started_at INTEGER, ended_at INTEGER,
+  paused_at INTEGER,                      -- set while paused (and at reveal/end), so the timer stops
+  paused_ms INTEGER NOT NULL DEFAULT 0    -- total time paused; timer = now - started_at - paused_ms
 );
 
 CREATE TABLE players (
@@ -112,9 +114,13 @@ CREATE TABLE hoard (
 CREATE TABLE projector_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   game_id TEXT NOT NULL, type TEXT NOT NULL, text TEXT NOT NULL,
-  needs_approval INTEGER NOT NULL DEFAULT 0, approved INTEGER, created_at INTEGER NOT NULL
+  game_ms INTEGER NOT NULL,               -- time in the dungeon when it happened (for "08:31")
+  created_at INTEGER NOT NULL
+  -- M7 adds needs_approval / approved for player-written text
 );
 ```
+
+Migrations: `PRAGMA user_version` is the schema version. A new file runs `schema.sql`; an older file runs the steps in `db.ts` → `MIGRATIONS` inside one transaction.
 
 Put every query in typed functions in `db/`. Client payloads are built by explicit mapper functions that list the fields they include, never by spreading a row.
 
@@ -129,27 +135,42 @@ All payloads validated with zod on receipt.
 - `player:door { guess }`
 
 **Server → player**
-- `player:state { nickname, floor, floorReady, score, title, messagesLeft, cooldownMs, doorLockedMs }`. Durations are milliseconds from now, never timestamps, so a phone with a wrong clock still counts down correctly. `floorReady` is false while the floor isn't built yet. M2 adds `gameStatus`; M7 adds `notes`.
+- `player:state { gameStatus, playersInGame, nickname, floor, floorReady, score, title, messagesLeft, cooldownMs, doorLockedMs }`. Durations are milliseconds from now, never timestamps, so a phone with a wrong clock still counts down correctly. `floorReady` is false while the floor isn't built yet. `playersInGame` is the lobby's "N adventurers at the gate". The phone picks its screen from `gameStatus`. M7 adds `notes`.
 - `player:history { floor, bubbles }`: on resume, replays this floor's bubbles so a refresh shows the same chat.
 - `player:bubble { id, floor, speaker, text }` (speaker: player | guardian | system; later floors add gorm | snip | ward_ears | ward_tongues | carving). The player's own message comes back as a bubble too.
 - `player:expression { floor, state: 'idle' | 'slipped' }` (computed on the server with `revealsRune`)
 - `player:door-result { correct, lockedMs }`
 - `player:floor-cleared { floor, lines: [{ label, points, highlight? }], total, score, title, nextFloorReady }`
-- `player:error { code, message }` (message is in character, never a stack trace)
+- `player:error { code, message }` (message is in character, never a stack trace). Code `not_running` while the game is in the lobby, paused, at the reveal or ended.
+- `player:kicked`: the admin kicked this player; the phone forgets its token and the server disconnects the socket.
+- `player:reset`: the admin opened a new game; the phone forgets its token and goes back to Join.
 
 There is no `player:pending` event: the phone shows an in-character waiting line from `packages/shared/src/floors.ts` as soon as the player sends, and hides it when the reply or an error arrives.
 
-**Server → projector** (throttled to ≤ 2 updates/s)
-- `projector:snapshot { gameStatus, timer, players: [{ nickname, floor, title, score }], counters: { carvings, hoard } }`
-- `projector:event { type, text }` (first blood, clear, carving, approved attempt)
-- `projector:reveal { bestiary: FloorStats[] }`
+**Server → projector** (namespace `/projector`, read-only, no token; throttled to ≤ 2 updates/s)
+- `projector:snapshot { status, elapsedMs, publicUrl, players: [{ nickname, floor }], feed: [{ gameMs, type: 'first_blood' | 'clear', text }] }`, sent on connect and after every change. Kicked players are left out. The feed is the newest 8 `projector_events`, written by the server (e.g. "NightOwl charmed Grub."), so no player-written text reaches the projector. Nicknames passed the profanity filter at join or rename. M9 adds Vorgath's counters; M7 adds approved attempts to the feed.
+- `projector:reveal { bestiary: FloorStats[] }` (M8)
 
-**Admin ↔ server** (after `admin:auth { token }`)
-- `admin:command { type: 'start'|'pause'|'resume'|'reveal'|'end'|'reset', ... }`
-- `admin:config { cooldownMs?, maxMessages?, llmMode? }`
-- `admin:kick { playerId }`, `admin:rename { playerId, nickname }`
-- `admin:moderate { eventId, approve }`
-- server → admin: `admin:health { queueLength, inFlight, rateLimited1m, avgLatencyMs, tokens, costUsd }`, `admin:moderation-queue`
+**Admin ↔ server** (namespace `/admin`. The token goes in the Socket.IO handshake, `auth: { token }`, and connection middleware compares it with `ADMIN_TOKEN` using `timingSafeEqual`. A wrong token is refused before any handler exists.)
+- `admin:command { type: 'start'|'pause'|'resume'|'reveal'|'end'|'reset' }` → ack `{ ok: true }` or `{ ok: false, error }`
+- `admin:kick { playerId }`, `admin:rename { playerId, nickname }` → same ack. Rename runs the same nickname rules as join (`security/nickname.ts`).
+- server → admin: `admin:state { status, elapsedMs, players: [{ id, nickname, floor, score, messagesSent, kicked }], maxMessages, spendUsd, budgetUsd }`, throttled like the projector. Never tokens, token hashes, runes or raw replies.
+- M3 adds `admin:config { cooldownMs?, maxMessages?, llmMode? }` and the queue/latency health fields; M7 adds `admin:moderate { eventId, approve }` and the moderation queue.
+
+**Game states** (`game/state.ts`, driven only by the admin)
+
+| Command | From | To |
+|---|---|---|
+| start | lobby | running |
+| pause | running | paused |
+| resume | paused | running |
+| reveal | running, paused | reveal |
+| end | lobby, running, paused, reveal | ended |
+| reset | any | the current game is ended (data kept) and a new game opens in the lobby |
+
+- At startup the server reuses the newest game that isn't ended, otherwise it opens a new one in the lobby. A restart never resets progress.
+- Messages and the door work only while running. Joining works in the lobby, running and paused.
+- The timer counts running time only. On start, Floor 1's clock for lobby joiners starts at the start time; on resume, every uncleared floor's clock moves forward by the pause, so neither eats the speed bonus.
 
 ## LLM layer
 

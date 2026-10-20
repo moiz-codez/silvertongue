@@ -46,11 +46,11 @@ apps/server/src/
   llm/              client.ts (Anthropic wrapper + prompt assembly), queue.ts (rate limiter), mock.ts
   game/             runeWords.ts, runes.ts, door.ts, scoring.ts, hints.ts, titles.ts, state.ts
   floors/           01-grub/ … 06-vorgath/: prompts.ts, pipeline.ts, *.test.ts
-  security/         normalize.ts, revealsRune.ts, stripActions.ts, snip.ts, sanitize.ts, verdict.ts (fail-closed parsing)
+  security/         normalize.ts, revealsRune.ts, stripActions.ts, nickname.ts, snip.ts, sanitize.ts, verdict.ts (fail-closed parsing)
   embeddings/       embed.ts, cosine.ts
-  sockets/          player.ts, projector.ts, admin.ts
+  sockets/          player.ts, projector.ts, admin.ts, throttle.ts (≤ 2 sends/s), testServer.ts (test helper)
 apps/web/src/
-  routes/           Join, Play, Projector, Admin
+  routes/           Join, Lobby, Play, Cleared, Closed, Projector, Admin (App.tsx picks by path)
   sprites/          pixel-art SVG components, two expressions per guardian
   styles/           tokens.css
 packages/shared/src/  events.ts, schemas.ts, constants.ts
