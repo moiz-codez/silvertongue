@@ -1,0 +1,40 @@
+{
+  "name": "silvertongue",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "node scripts/dev.ts",
+    "start": "npm start -w apps/server",
+    "build": "npm run typecheck && npm run build -w apps/web",
+    "typecheck": "tsc -p . && tsc -p apps/web",
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write .",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm run lint && npm test",
+    "smoke": "node scripts/smoke.ts",
+    "native-check": "node scripts/native-check.ts",
+    "playtest": "node -e \"console.log('playtest: not built yet (M1)')\"",
+    "loadtest": "node -e \"console.log('loadtest: not built yet (M3)')\""
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.19.2",
+    "eslint": "^10.13.0",
+    "prettier": "^3.9.10",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.0",
+    "vitest": "^5.0.5"
+  },
+  "allowScripts": {
+    "better-sqlite3": false,
+    "onnxruntime-node": false,
+    "protobufjs": false
+  }
+}
