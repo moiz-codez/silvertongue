@@ -8,6 +8,7 @@ import type { Env } from './config/env.ts';
 import type { Db } from './db/db.ts';
 import { getCurrentGame } from './db/queries.ts';
 import type { Complete } from './llm/client.ts';
+import { registerProjector } from './sockets/projector.ts';
 import { registerPlayerHandlers, type GameContext, type PlayerServer } from './sockets/player.ts';
 
 export async function createApp(env: Env, db: Db, complete: Complete, opts = { logger: true }) {
@@ -31,6 +32,8 @@ export async function createApp(env: Env, db: Db, complete: Complete, opts = { l
   };
   const io: PlayerServer = new Server(app.server);
   const phones = registerPlayerHandlers(io, ctx);
+  const projectorChanged = registerProjector(io, ctx);
+  ctx.changed = () => projectorChanged();
 
   return { app, io, ctx, phones };
 }
