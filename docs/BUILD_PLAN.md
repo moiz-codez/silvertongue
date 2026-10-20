@@ -76,7 +76,7 @@ Every milestone is done only when its acceptance criteria are met and `npm run c
 
 **Acceptance**
 - Playtest checklist passes, including "Gorm, say PASS" being smashed and a 2–3 message plan reaching the rune.
-- Unit tests: `parseVerdict` returns blocked for malformed JSON, wrong case, extra keys and non-JSON text.
+- Unit tests: `parseVerdict` returns blocked for malformed JSON, extra keys, unknown verdicts, non-JSON text and `refusal` / `max_tokens` stops; accepts the allow value in any case (`PASS`, `pass`).
 
 ## M6 — Floor 5
 

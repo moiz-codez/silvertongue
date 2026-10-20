@@ -125,9 +125,10 @@ After Snip runs, call `revealsRune(text, rune)` (the function from Floor 2) on t
 | Setting | Value | Why |
 |---|---|---|
 | Model | Same mid-tier model as Floor 2 | Must reliably follow formatting requests (dashes, one word per letter) and reliably refuse the knight's tricks |
-| Temperature | ~0.8 | She's chatty; variety helps |
 | Max reply length | ~150 tokens | Short on a phone |
 | Guards / filters | Snip (output filter) | The point of this floor |
+
+No temperature setting: these models reject it, and thinking is off on every call (see `README.md` → 3). Her chattiness comes from the prompt.
 
 ## Hints (the notes on the wall)
 

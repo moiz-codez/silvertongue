@@ -100,9 +100,10 @@ likhunga." Yeh qasam toot nahi sakti.
 | Setting | Value | Why |
 |---|---|---|
 | Model | A mid-tier model, stronger than Grub's | Weak models get acrostic poems and reversals wrong, and a wrong poem feels unfair. They also give up the rune to plain pressure, which kills the lesson |
-| Temperature | ~0.7 | Steady enough to hold the oath, loose enough to keep his voice varied |
 | Max reply length | ~200 tokens | Room for a poem, still short on a phone |
 | Guards / filters | None | His only defence is his instructions |
+
+No temperature setting: these models reject it, and thinking is off on every call (see `README.md` → 3). His steadiness comes from the oath in the prompt.
 
 ## When to show the "Shaken" expression
 

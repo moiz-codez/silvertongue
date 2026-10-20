@@ -157,14 +157,29 @@ Every call is built the same way:
 
 ```ts
 await anthropic.messages.create({
-  model, max_tokens, temperature,
+  model, max_tokens,
+  thinking: THINKING_OFF[model],          // from config/models.ts; never temperature/top_p/top_k
+  output_config,                          // guards and judges only: their one fixed JSON schema
   system: [
     { type: 'text', text: STATIC_PROMPT, cache_control: { type: 'ephemeral' } }, // identical for every player
     { type: 'text', text: perPlayerNote },   // e.g. "The rune for this traveller is: EMBER-FANG"; hoard note on floor 6
   ],
-  messages,   // history: user = <traveller_message>…</traveller_message>, assistant = guardian replies
+  messages,   // history: user = <traveller_message>…</traveller_message>, assistant = guardian replies; always ends with a user turn
 });
+const text = response.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
 ```
+
+**Sampling, thinking and structured outputs.** No call sends `temperature`, `top_p` or `top_k`: Haiku 5.5 and Sonnet 5.5 return a 400 for non-default values. Every game call turns thinking off (`{ type: 'disabled' }` on Haiku 5.5, `{ type: 'between_tools' }` on Sonnet 5.5, which rejects `disabled`), and no call sets or changes `effort`. Guards and judges get consistency from structured outputs instead of temperature 0: each role has one fixed schema (below), so the cache and the compiled grammar are reused. Guardians get their voice and consistency from the prompt and its examples. No request ends with an assistant turn (prefill is rejected), and reply text is always read from `type === 'text'` blocks, never `content[0]`.
+
+| Role | Schema (`output_config.format`, `type: 'json_schema'`, `additionalProperties: false` on every object) |
+|---|---|
+| Gorm | `{ verdict: enum ['PASS','SMASH'], growl: string }` |
+| Ward of Ears (floor 5) | `{ verdict: enum ['PASS','SEAL'] }` |
+| Ward of Ears + Carvings (floor 6) | `{ verdict: enum ['PASS','SEAL'], matched_carving: integer \| null, is_gift: boolean }` |
+| Ward of Tongues (floors 5–6) | `{ verdict: enum ['CLEAN','LEAK'] }` |
+| Technique tagger | `{ labels: [{ index: integer, technique: enum [friendship, authority, …, other] }] }` |
+
+Length limits (Gorm's 8-word growl) aren't expressible in the schema; the prompt asks for them and the server truncates.
 
 **Adapting the prompt files to this split.** In `docs/prompts`, the rune appears as `{{RUNE}}` inside the prompt text. When building `floors/<n>/prompts.ts`:
 - Replace the line that states the rune (e.g. "The door opens with a secret rune word: {{RUNE}}") with "The rune is given in the final note at the end of these instructions."
@@ -206,7 +221,7 @@ Default in development and in load tests. No API key needed. Deterministic, with
 | 5 Ashveil | Ward of Ears: last 12 messages, no rune | Queen Ashveil | `revealsRune` → else Ward of Tongues | on clear |
 | 6 Vorgath | Ward of Ears + carvings + `is_gift` | Vorgath (+ hoard note) | `revealsRune` → else Ward of Tongues | on clear |
 
-Model, temperature and `max_tokens` per role come from `config/models.ts`; defaults are in each prompt file's Settings table, all on `claude-haiku-5-5` initially.
+Model and `max_tokens` per role, and the "thinking off" value per model, come from `config/models.ts`; defaults are in each prompt file's Settings table, all on `claude-haiku-5-5` initially.
 
 ## Security functions (`apps/server/src/security/`)
 
@@ -221,13 +236,13 @@ All pure, all unit-tested.
 
   It deliberately does not detect other scripts, ciphers or number codes.
 - `snip(reply, rune)`: exactly as in `prompts/03-morwen-snip.md`: three shapes, case-insensitive, replaced with `█`.
-- `parseVerdict(raw, allowValue)`: strip code fences, `JSON.parse`, validate with zod; return `allowed: true` only when `verdict === allowValue` exactly. Any exception → `allowed: false`.
+- `parseVerdict(raw, allowValue)`: strip code fences, `JSON.parse`, validate with a strict zod schema (extra keys fail); return `allowed: true` only when `verdict` equals `allowValue` compared case-insensitively. Any exception, or a `stop_reason` of `refusal` / `max_tokens`, → `allowed: false`. Structured outputs make bad JSON rare, but this is the safety net.
 - `sanitize(text)`: trim; cap at `MAX_MESSAGE_CHARS`; remove `[...]` tags; replace `<` and `>` with `‹` and `›` so the player can't close `<traveller_message>`. Keep line breaks (poems).
 - Door check: `normalize(guess) === normalize(rune)`.
 
 ## Background jobs
 
-- **Technique tagger:** batches of ~10 untagged player messages → one Haiku call (temperature 0) → one label each from: friendship, authority, persistence, pieces, backwards, poem, encoding, other_script, story, multi_step, taunt, gift, instruction_injection, other. Low priority. Feeds the reveal stats.
+- **Technique tagger:** batches of ~10 untagged player messages → one Haiku call (thinking off, structured output with a fixed label enum) → one label each from: friendship, authority, persistence, pieces, backwards, poem, encoding, other_script, story, multi_step, taunt, gift, instruction_injection, other. Low priority. Feeds the reveal stats.
 - **Carver (Floor 6):** on every floor clear anywhere, as specified in `prompts/06-vorgath.md`. Seed 5 carvings at game start.
 
 ## Embeddings (Floor 6)

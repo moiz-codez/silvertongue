@@ -216,8 +216,10 @@ Identical to Floor 5's prompt. Change "the Queen" to "the dragon" throughout.
 | | Ears + Carvings | Vorgath | Tongues | Carver | Embeddings |
 |---|---|---|---|---|---|
 | Model | Mid-tier | Strongest affordable | Mid-tier | Small | Any embeddings model |
-| Temperature | **0** | ~0.7 | **0** | ~0.3 | — |
+| Output | Structured output: `{ verdict: enum ['PASS','SEAL'], matched_carving: integer \| null, is_gift: boolean }` | Plain text | Structured output: `{ verdict: enum ['CLEAN','LEAK'] }` | Plain text (one sentence or `NONE`) | 384-dim vector |
 | Knows the rune | **No** | Yes | Yes | Sees the winning conversation (drops any carving that leaks it) | No |
+
+No temperature setting: these models reject it, and thinking is off on every AI call, the Carver included (see `README.md` → 3). The Carver's steadiness comes from its rules and the `NONE` escape hatch, not from a low temperature.
 
 Floor 6 runs the same request load as Floor 5, plus one embedding per gift and one Carver call per clear anywhere. Very few players reach it, so load is small.
 
