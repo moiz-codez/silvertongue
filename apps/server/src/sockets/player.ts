@@ -5,11 +5,12 @@ import type { Server, Socket } from 'socket.io';
 import type {
   Bubble,
   ClientToServerEvents,
+  GameStatus,
   PlayerState,
   ServerToClientEvents,
   Speaker,
 } from '@silvertongue/shared/events';
-import { NICKNAME_MAX, NICKNAME_MIN } from '@silvertongue/shared/constants';
+import { GUARDIANS, isBuilt } from '@silvertongue/shared/floors';
 import {
   doorPayload,
   joinPayload,
@@ -24,45 +25,62 @@ import { grubTurn, type Turn } from '../floors/01-grub/pipeline.ts';
 import { checkDoor } from '../game/door.ts';
 import { generateRunes } from '../game/runes.ts';
 import { scoreFloorClear } from '../game/scoring.ts';
+import { elapsedMs } from '../game/state.ts';
 import { titleFor } from '../game/titles.ts';
 import { errorStatus, type Complete } from '../llm/client.ts';
-import { isProfane } from '../security/profanity.ts';
+import { cleanNickname, NICKNAME_TAKEN, nicknameProblem } from '../security/nickname.ts';
 import { revealsRune } from '../security/revealsRune.ts';
 import { sanitize } from '../security/sanitize.ts';
+import { throttle } from './throttle.ts';
 
-type PlayerSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
+export interface SocketData {
+  playerId?: string; // set by join or resume; cleared by kick and reset
+}
+export type PlayerServer = Server<ClientToServerEvents, ServerToClientEvents, object, SocketData>;
+type PlayerSocket = Socket<ClientToServerEvents, ServerToClientEvents, object, SocketData>;
 
 export interface GameContext {
   db: Db;
   env: Env;
   complete: Complete;
-  gameId: string;
+  game: q.GameRow; // the current game; admin commands replace it
+  changed: () => void; // the projector and admin screens need a fresh look (throttled)
   logError: (err: unknown) => void;
 }
 
-const BUILT_FLOORS = new Set([1]); // floors whose guardian exists; more arrive in M4–M9
-const GUARDIAN_NAMES: Record<number, string> = { 1: 'Grub' };
+// What the admin can do to phones from outside these handlers.
+export interface PhoneControls {
+  refreshAll: () => void;
+  kick: (playerId: string) => void;
+  resetAll: () => void;
+}
+
+// Why a phone can't talk or try the door right now, by game status. null = play on.
+const NOT_NOW: Record<GameStatus, string | null> = {
+  lobby: 'The doors are still sealed. Wait for the game master.',
+  running: null,
+  paused: 'The torches gutter. The dungeon holds its breath… wait for the game master.',
+  reveal: 'The dungeon sleeps. Look up at the big screen.',
+  ended: 'The dungeon sleeps. Look up at the big screen.',
+};
 
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
 
-export function registerPlayerHandlers(
-  io: Server<ClientToServerEvents, ServerToClientEvents>,
-  ctx: GameContext,
-): void {
-  const { db, env, complete, gameId } = ctx;
+export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): PhoneControls {
+  const { db, env, complete } = ctx;
   const cooldownUntil = new Map<string, number>(); // playerId → time the next message is allowed
   const busy = new Set<string>(); // players waiting for a reply: one message at a time
 
   function stateFor(playerId: string): PlayerState {
     const player = q.getPlayer(db, playerId);
     const now = Date.now();
-    const progress = BUILT_FLOORS.has(player.floor)
-      ? q.getProgress(db, playerId, player.floor)
-      : null;
+    const progress = isBuilt(player.floor) ? q.getProgress(db, playerId, player.floor) : null;
     return {
+      gameStatus: ctx.game.status,
+      playersInGame: q.listPlayers(db, ctx.game.id).filter((p) => !p.kicked).length,
       nickname: player.nickname,
       floor: player.floor,
-      floorReady: BUILT_FLOORS.has(player.floor),
+      floorReady: isBuilt(player.floor),
       score: player.score,
       title: titleFor(player.floor - 1),
       messagesLeft: Math.max(0, env.MAX_MESSAGES_PER_PLAYER - player.messages_sent),
@@ -75,7 +93,7 @@ export function registerPlayerHandlers(
   function sendEverything(socket: PlayerSocket, playerId: string): void {
     const player = q.getPlayer(db, playerId);
     socket.emit('player:state', stateFor(playerId));
-    if (!BUILT_FLOORS.has(player.floor)) return;
+    if (!isBuilt(player.floor)) return;
 
     const rows = q.listFloorMessages(db, playerId, player.floor);
     const bubbles: Bubble[] = rows.map((row) => ({
@@ -94,9 +112,48 @@ export function registerPlayerHandlers(
     socket.emit('player:expression', { floor: player.floor, state: slipped ? 'slipped' : 'idle' });
   }
 
-  io.on('connection', (socket: PlayerSocket) => {
-    let playerId: string | null = null; // set by join or resume
+  function phoneSockets(): PlayerSocket[] {
+    return [...io.of('/').sockets.values()].filter((s) => s.data.playerId);
+  }
 
+  const controls: PhoneControls = {
+    refreshAll() {
+      for (const s of phoneSockets()) s.emit('player:state', stateFor(s.data.playerId!));
+    },
+    kick(playerId) {
+      for (const s of phoneSockets().filter((s) => s.data.playerId === playerId)) {
+        s.data.playerId = undefined;
+        s.emit('player:kicked');
+        s.disconnect(true);
+      }
+    },
+    resetAll() {
+      for (const s of phoneSockets()) {
+        s.data.playerId = undefined;
+        s.emit('player:reset');
+      }
+    },
+  };
+  const refreshLobbyCount = throttle(controls.refreshAll, 500);
+
+  // The player behind this socket, if they may still play. Kicked players are logged out here.
+  function currentPlayer(socket: PlayerSocket): q.PlayerRow | null {
+    const id = socket.data.playerId;
+    if (!id) return null;
+    const player = q.getPlayer(db, id);
+    if (player.kicked) {
+      controls.kick(id); // also covers a phone that missed the kick while offline
+      return null;
+    }
+    if (player.game_id !== ctx.game.id) {
+      socket.data.playerId = undefined; // their game was reset
+      socket.emit('player:reset');
+      return null;
+    }
+    return player;
+  }
+
+  io.on('connection', (socket: PlayerSocket) => {
     // Any unexpected error is logged and answered in character; it never crashes the server.
     function safely<A extends unknown[]>(handler: (...args: A) => unknown) {
       return async (...args: A) => {
@@ -113,17 +170,25 @@ export function registerPlayerHandlers(
       'player:join',
       safely((payload, ack) => {
         if (typeof ack !== 'function') return;
-        if (playerId) return ack({ ok: false, error: 'You are already in the dungeon.' }); // one player per socket
+        if (socket.data.playerId) {
+          return ack({ ok: false, error: 'You are already in the dungeon.' }); // one player per socket
+        }
+        if (ctx.game.status === 'reveal' || ctx.game.status === 'ended') {
+          return ack({ ok: false, error: 'The dungeon is closed. Look up at the big screen.' });
+        }
         const parsed = joinPayload.safeParse(payload);
         if (!parsed.success)
           return ack({ ok: false, error: 'That name got lost in the dark. Try again.' });
 
-        const nickname = parsed.data.nickname.trim().replace(/\s+/g, ' ');
+        const gameId = ctx.game.id;
+        const nickname = cleanNickname(parsed.data.nickname);
         const error =
-          nicknameProblem(nickname) ?? (q.isNicknameTaken(db, gameId, nickname) ? TAKEN : null);
+          nicknameProblem(nickname) ??
+          (q.isNicknameTaken(db, gameId, nickname) ? NICKNAME_TAKEN : null);
         if (error) return ack({ ok: false, error });
 
         const token = randomBytes(32).toString('base64url');
+        let playerId: string;
         try {
           playerId = q.createPlayer(db, {
             gameId,
@@ -135,12 +200,15 @@ export function registerPlayerHandlers(
         } catch (err) {
           // Two phones picked the same name at the same moment.
           if ((err as { code?: string }).code === 'SQLITE_CONSTRAINT_UNIQUE') {
-            return ack({ ok: false, error: TAKEN });
+            return ack({ ok: false, error: NICKNAME_TAKEN });
           }
           throw err;
         }
+        socket.data.playerId = playerId;
         ack({ ok: true, playerId, token });
         sendEverything(socket, playerId);
+        ctx.changed();
+        if (ctx.game.status === 'lobby') refreshLobbyCount(); // "27 adventurers at the gate"
       }),
     );
 
@@ -152,9 +220,9 @@ export function registerPlayerHandlers(
         const player = parsed.success
           ? q.findPlayerByTokenHash(db, hashToken(parsed.data.token))
           : undefined;
-        if (!player || player.kicked || player.game_id !== gameId) return ack({ ok: false });
+        if (!player || player.kicked || player.game_id !== ctx.game.id) return ack({ ok: false });
 
-        playerId = player.id;
+        socket.data.playerId = player.id;
         ack({ ok: true });
         sendEverything(socket, player.id);
       }),
@@ -164,15 +232,18 @@ export function registerPlayerHandlers(
       'player:message',
       safely(async (payload) => {
         const parsed = messagePayload.safeParse(payload);
-        if (!playerId || !parsed.success) return;
-        const id = playerId;
-        const player = q.getPlayer(db, id);
+        const player = currentPlayer(socket);
+        if (!player || !parsed.success) return;
+        const id = player.id;
+        const gameId = ctx.game.id;
         const floor = player.floor;
         const now = Date.now();
 
         const text = sanitize(parsed.data.text, env.MAX_MESSAGE_CHARS);
         if (text === '') return;
-        if (!BUILT_FLOORS.has(floor)) return sendError(socket, 'not_ready', STAIRS);
+        const notNow = NOT_NOW[ctx.game.status];
+        if (notNow) return sendError(socket, 'not_running', notNow);
+        if (!isBuilt(floor)) return sendError(socket, 'not_ready', STAIRS);
         if (busy.has(id)) return sendError(socket, 'busy', 'Wait for an answer first, tall-folk.');
         if (now < (cooldownUntil.get(id) ?? 0)) {
           return sendError(socket, 'cooldown', 'Catch your breath before you speak again.');
@@ -206,7 +277,9 @@ export function registerPlayerHandlers(
             [...history, { speaker: 'player', text }],
             q.getRune(db, id, floor),
           );
-          logCall(id, floor, turn.result.model, turn.result.usage, turn.result.latencyMs, 'ok');
+          logCall(gameId, id, floor, turn.result, 'ok');
+          // Kicked or reset while Grub was thinking: this socket no longer plays as them.
+          if (socket.data.playerId !== id) return;
           q.countPlayerMessage(db, id, floor);
           // Floor 1 has no output filter: the reply, minus *stage directions*, is the post-filter text.
           const replyId = q.insertMessage(db, {
@@ -227,11 +300,10 @@ export function registerPlayerHandlers(
           if (turn.slipped) socket.emit('player:expression', { floor, state: 'slipped' });
         } catch (err) {
           logCall(
+            gameId,
             id,
             floor,
-            ROLES.grub.model,
-            { input_tokens: 0, output_tokens: 0 },
-            0,
+            { model: ROLES.grub.model, usage: { input_tokens: 0, output_tokens: 0 }, latencyMs: 0 },
             errorStatus(err),
           );
           q.removeFromGuardianHistory(db, playerMessageId);
@@ -239,7 +311,8 @@ export function registerPlayerHandlers(
           sendError(socket, 'llm', 'The dungeon trembles. Try again.');
         } finally {
           busy.delete(id);
-          socket.emit('player:state', stateFor(id));
+          if (socket.data.playerId === id) socket.emit('player:state', stateFor(id));
+          ctx.changed(); // message counts and spend on the admin screen
         }
       }),
     );
@@ -249,11 +322,13 @@ export function registerPlayerHandlers(
       'player:door',
       safely((payload) => {
         const parsed = doorPayload.safeParse(payload);
-        if (!playerId || !parsed.success) return;
-        const id = playerId;
-        const player = q.getPlayer(db, id);
+        const player = currentPlayer(socket);
+        if (!player || !parsed.success) return;
+        const id = player.id;
         const floor = player.floor;
-        if (!BUILT_FLOORS.has(floor)) return sendError(socket, 'not_ready', STAIRS);
+        const notNow = NOT_NOW[ctx.game.status];
+        if (notNow) return sendError(socket, 'not_running', notNow);
+        if (!isBuilt(floor)) return sendError(socket, 'not_ready', STAIRS);
 
         const now = Date.now();
         const progress = q.getProgress(db, id, floor);
@@ -282,16 +357,26 @@ export function registerPlayerHandlers(
           return;
         }
 
-        const firstBlood = !q.isFloorClearedInGame(db, gameId, floor);
+        const guardian = GUARDIANS[floor]!;
+        const firstBlood = !q.isFloorClearedInGame(db, ctx.game.id, floor);
         const score = scoreFloorClear({
           floor,
-          guardianName: GUARDIAN_NAMES[floor] ?? 'the guardian',
+          guardianName: guardian.name,
           reachedAt: progress.reached_at,
           clearedAt: now,
           messagesUsed: progress.messages_used,
           firstBlood,
         });
         q.clearFloor(db, { playerId: id, floor, points: score.total, firstBlood, now });
+        // The projector turns this into "NightOwl charmed Grub." when it sends the feed.
+        q.insertProjectorEvent(db, {
+          gameId: ctx.game.id,
+          playerId: id,
+          floor,
+          type: firstBlood ? 'first_blood' : 'clear',
+          gameMs: elapsedMs(ctx.game, now),
+          now,
+        });
 
         socket.emit('player:door-result', { correct: true, lockedMs: 0 });
         socket.emit('player:expression', { floor, state: 'slipped' });
@@ -301,19 +386,23 @@ export function registerPlayerHandlers(
           total: score.total,
           score: player.score + score.total,
           title: titleFor(floor),
-          nextFloorReady: BUILT_FLOORS.has(floor + 1),
+          nextFloorReady: isBuilt(floor + 1),
         });
         socket.emit('player:state', stateFor(id));
+        ctx.changed();
       }),
     );
   });
 
   function logCall(
+    gameId: string,
     id: string,
     floor: number,
-    model: Parameters<typeof costUsd>[0],
-    usage: Parameters<typeof costUsd>[1],
-    latencyMs: number,
+    call: {
+      model: Parameters<typeof costUsd>[0];
+      usage: Parameters<typeof costUsd>[1];
+      latencyMs: number;
+    },
     status: string,
   ): void {
     q.insertLlmCall(db, {
@@ -321,31 +410,22 @@ export function registerPlayerHandlers(
       playerId: id,
       floor,
       role: 'grub',
-      model,
-      inputTokens: usage.input_tokens,
-      cacheCreationTokens: usage.cache_creation_input_tokens ?? 0,
-      cacheReadTokens: usage.cache_read_input_tokens ?? 0,
-      outputTokens: usage.output_tokens,
-      costUsd: costUsd(model, usage),
-      latencyMs,
+      model: call.model,
+      inputTokens: call.usage.input_tokens,
+      cacheCreationTokens: call.usage.cache_creation_input_tokens ?? 0,
+      cacheReadTokens: call.usage.cache_read_input_tokens ?? 0,
+      outputTokens: call.usage.output_tokens,
+      costUsd: costUsd(call.model, call.usage),
+      latencyMs: call.latencyMs,
       status,
       now: Date.now(),
     });
   }
+
+  return controls;
 }
 
-const TAKEN = 'Someone in the dungeon already goes by that name.';
 const STAIRS = 'The stairs below are still being carved. Wait here, rogue.';
-
-// In-character reasons a nickname is refused. Never says which word matched.
-function nicknameProblem(nickname: string): string | null {
-  if (nickname.length < NICKNAME_MIN || nickname.length > NICKNAME_MAX) {
-    return `Names need ${NICKNAME_MIN} to ${NICKNAME_MAX} characters.`;
-  }
-  if (!/^[A-Za-z0-9 _.-]+$/.test(nickname)) return 'Use letters, numbers, spaces, dots, - or _.';
-  if (isProfane(nickname)) return 'Grub covers his ears. Pick a kinder name, tall-folk.';
-  return null;
-}
 
 function sendError(socket: PlayerSocket, code: string, message: string): void {
   socket.emit('player:error', { code, message });

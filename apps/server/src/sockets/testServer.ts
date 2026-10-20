@@ -1,0 +1,83 @@
+// Shared by the socket tests: a real server on a random port with an in-memory database,
+// in mock mode. No API calls. Everything opened here is closed after each test.
+import type { AddressInfo } from 'node:net';
+import { afterEach } from 'vitest';
+import { io as connect, type Socket } from 'socket.io-client';
+import type { ClientToServerEvents, ServerToClientEvents } from '@silvertongue/shared/events';
+import { createApp } from '../app.ts';
+import { parseEnv } from '../config/env.ts';
+import { openDb } from '../db/db.ts';
+import { saveGame } from '../db/queries.ts';
+import { applyCommand, type GameCommand } from '../game/state.ts';
+import type { Complete } from '../llm/client.ts';
+import { createMockClient } from '../llm/mock.ts';
+
+export type Client = Socket<ServerToClientEvents, ClientToServerEvents>;
+export interface Seen {
+  event: string;
+  payload: unknown;
+}
+export const ADMIN_TOKEN = 'test-admin-token-123';
+
+const cleanups: (() => Promise<void> | void)[] = [];
+afterEach(async () => {
+  while (cleanups.length) await cleanups.pop()!();
+});
+
+// The game starts running unless `commands` says otherwise ([] = still in the lobby).
+export async function startServer(
+  vars: Record<string, string> = {},
+  complete?: Complete,
+  commands: GameCommand[] = ['start'],
+) {
+  const env = parseEnv({ ADMIN_TOKEN, COOLDOWN_MS: '0', ...vars });
+  const db = openDb(':memory:');
+  const { app, ctx, phones } = await createApp(
+    env,
+    db,
+    complete ?? createMockClient({ minMs: 0, maxMs: 0 }),
+    { logger: false },
+  );
+  for (const command of commands) {
+    const moved = applyCommand(ctx.game, command, Date.now());
+    if (!moved.ok) throw new Error(moved.error);
+    ctx.game = moved.game;
+    saveGame(db, ctx.game, Date.now());
+  }
+  await app.listen({ port: 0, host: '127.0.0.1' });
+  cleanups.push(() => app.close());
+  const { port } = app.server.address() as AddressInfo;
+  return { db, ctx, phones, url: `http://127.0.0.1:${port}` };
+}
+
+// A socket on any namespace that records every event it receives.
+export function open<S extends Socket>(url: string, auth?: Record<string, string>) {
+  const socket = connect(url, { transports: ['websocket'], forceNew: true, auth }) as S;
+  const seen: Seen[] = [];
+  socket.onAny((event: string, payload: unknown) => seen.push({ event, payload }));
+  cleanups.push(() => void socket.close());
+  return { socket, seen };
+}
+
+// A phone.
+export const client = (url: string) => open<Client>(url);
+
+// Resolves with the next `event` payload that matches.
+export function next<E extends keyof ServerToClientEvents>(
+  socket: Client,
+  event: E,
+  match: (payload: Parameters<ServerToClientEvents[E]>[0]) => boolean = () => true,
+): Promise<Parameters<ServerToClientEvents[E]>[0]> {
+  return new Promise((resolve) => {
+    const handler = (payload: Parameters<ServerToClientEvents[E]>[0]) => {
+      if (!match(payload)) return;
+      socket.off(event, handler as never);
+      resolve(payload);
+    };
+    socket.on(event, handler as never);
+  });
+}
+
+export async function join(socket: Client, nickname: string) {
+  return socket.emitWithAck('player:join', { nickname });
+}

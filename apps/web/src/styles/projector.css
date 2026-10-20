@@ -1,0 +1,322 @@
+/* Projector screens, from docs/design/projector-*.png. 1em = 1/100 of a 16:9 screen's width,
+   so the same layout fills any projector. Design pixels ÷ 20 = em. */
+
+.projector {
+  font-size: min(1vw, 1.7778vh);
+  width: 100em;
+  height: 56.25em;
+  margin: 0 auto;
+  overflow: hidden;
+  position: relative;
+}
+
+.projector .eyebrow {
+  font-size: 1.1em;
+}
+
+.projector .loading {
+  font-size: 2em;
+}
+
+/* ---------- Lobby ---------- */
+
+.pj-lobby {
+  height: 100%;
+  padding: 4.5em 5.5em;
+  display: grid;
+  grid-template-columns: 1fr 27.5em;
+  gap: 6em;
+}
+
+.pj-eyebrow {
+  font-size: 1.4em !important;
+}
+
+.pj-title {
+  margin: 0.15em 0 0.2em;
+  font-size: 8.4em;
+  line-height: 1;
+}
+
+.pj-intro {
+  margin: 0;
+  max-width: 28em;
+  color: var(--color-muted);
+  font-size: 1.8em;
+}
+
+.pj-steps {
+  list-style: none;
+  margin: 2em 0 0;
+  padding: 0;
+  display: flex;
+  gap: 2em;
+  font-size: 1.6em;
+}
+
+.pj-steps li {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+}
+
+.pj-steps span {
+  width: 2.2em;
+  height: 2.2em;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--color-accent);
+  color: var(--color-accent);
+  font-family: var(--font-heading);
+}
+
+.pj-gate {
+  margin: 2.6em 0 0.8em;
+  font-size: 1.7em;
+}
+
+.pj-gate span {
+  color: var(--color-accent);
+}
+
+.pj-qr-column {
+  padding-top: 6.5em;
+  text-align: center;
+}
+
+.pj-qr {
+  width: 27.5em;
+  height: 27.5em;
+  padding: 1.5em;
+  background: var(--color-text);
+}
+
+.pj-qr img {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  display: block;
+}
+
+.pj-host {
+  margin: 1em 0 0;
+  font-family: var(--font-heading);
+  color: var(--color-accent);
+  font-size: 1.7em;
+  overflow-wrap: anywhere;
+}
+
+.pj-qr-note {
+  margin: 0.8em 0 0;
+  color: var(--color-muted);
+  font-size: 1.25em;
+}
+
+/* ---------- Chips (lobby and map) ---------- */
+
+.pj-chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em;
+}
+
+.pj-chip {
+  padding: 0.25em 0.75em;
+  border-radius: 999px;
+  background: var(--color-field);
+  font-size: 1.25em;
+  white-space: nowrap;
+}
+
+.pj-chip-cleared {
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+  font-weight: 600;
+}
+
+.pj-chip-more {
+  background: none;
+  color: var(--color-muted);
+}
+
+/* ---------- Map ---------- */
+
+.pj-map {
+  height: 100%;
+  padding: 2.4em 2.5em;
+  display: grid;
+  grid-template-columns: 1fr 25em;
+  grid-template-rows: auto 1fr;
+  column-gap: 1.75em;
+  row-gap: 1.6em;
+}
+
+.pj-map-header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  gap: 1.2em;
+}
+
+.pj-map-header h1 {
+  margin: 0;
+  font-size: 2.6em;
+}
+
+.pj-map-header p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 1.5em;
+}
+
+.pj-map-host {
+  margin-left: auto;
+  font-family: var(--font-heading);
+  color: var(--color-muted);
+  font-size: 1.2em;
+}
+
+.pj-floors {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4em;
+  min-height: 0;
+}
+
+.pj-floor {
+  flex: 1 1 auto; /* a crowded floor grows, quiet floors give it room */
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 3em 5em 14.5em 1fr 3em;
+  align-items: center;
+  padding: 0.5em 1.2em;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+}
+
+.pj-floor.pj-vault {
+  border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
+}
+
+.pj-floor-number,
+.pj-floor-count {
+  font-family: var(--font-heading);
+  font-size: 1.8em;
+}
+
+.pj-floor-number {
+  color: var(--color-accent);
+}
+
+.pj-floor-count {
+  text-align: right;
+}
+
+.pj-floor-sprite {
+  width: 4em;
+  height: 4em;
+}
+
+.pj-floor-name h2 {
+  margin: 0;
+  font-size: 1.5em;
+}
+
+.pj-floor-name p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 1em;
+}
+
+.pj-floor-players .pj-chip {
+  font-size: 1.05em;
+}
+
+.pj-empty {
+  margin: 0;
+  color: var(--color-muted);
+  font-style: italic;
+  font-size: 1.2em;
+}
+
+.pj-side {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2em;
+  min-height: 0;
+}
+
+.pj-timer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.2em 1.5em;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}
+
+.pj-timer span {
+  color: var(--color-muted);
+  font-size: 1.2em;
+}
+
+.pj-timer strong {
+  font-family: var(--font-heading);
+  color: var(--color-accent);
+  font-size: 2.6em;
+  font-variant-numeric: tabular-nums;
+}
+
+.pj-feed {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 1.4em 1.5em;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}
+
+.pj-feed .eyebrow {
+  margin-bottom: 1em;
+}
+
+.pj-feed-item {
+  margin-bottom: 1em;
+}
+
+.pj-feed-meta {
+  color: var(--color-muted);
+  font-size: 0.85em;
+  text-transform: uppercase;
+}
+
+.pj-feed-meta b {
+  font-weight: 400;
+}
+
+.pj-feed-meta .first-blood {
+  color: var(--color-accent);
+}
+
+.pj-feed-item p {
+  margin: 0.1em 0 0;
+  font-size: 1.15em;
+}
+
+/* ---------- Reveal / ended holding screen ---------- */
+
+.pj-holding {
+  height: 100%;
+  display: grid;
+  place-content: center;
+  text-align: center;
+}
+
+.pj-holding h1 {
+  margin: 0.4em 0 0;
+  font-size: 4em;
+}

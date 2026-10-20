@@ -2,7 +2,13 @@ import { useState, type FormEvent } from 'react';
 import { NICKNAME_MAX, NICKNAME_MIN } from '@silvertongue/shared/constants';
 import { DOOR_SPRITE } from '../sprites.ts';
 
-export function Join({ onJoin }: { onJoin: (nickname: string) => Promise<string | null> }) {
+export function Join({
+  notice,
+  onJoin,
+}: {
+  notice: string | null;
+  onJoin: (nickname: string) => Promise<string | null>;
+}) {
   const [nickname, setNickname] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
@@ -24,6 +30,11 @@ export function Join({ onJoin }: { onJoin: (nickname: string) => Promise<string 
         You have no sword. Only words.
       </p>
       <img className="sprite join-door" src={DOOR_SPRITE} alt="" />
+      {notice && (
+        <p className="join-notice" role="status">
+          {notice}
+        </p>
+      )}
 
       <form onSubmit={submit} className="join-form">
         <label htmlFor="nickname" className="label">

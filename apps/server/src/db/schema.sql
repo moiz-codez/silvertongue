@@ -1,10 +1,12 @@
--- Silvertongue schema, version 1. WAL mode and foreign keys are switched on in db.ts.
--- Tables for later milestones (carvings, hoard, projector_events) are added when they're needed.
+-- Silvertongue schema, version 2 (db.ts migrates version-1 files). WAL mode and foreign keys are switched on in db.ts.
+-- Tables for later milestones (carvings, hoard) are added when they're needed.
 
 CREATE TABLE games (
   id TEXT PRIMARY KEY,
   status TEXT NOT NULL CHECK (status IN ('lobby','running','paused','reveal','ended')),
-  created_at INTEGER NOT NULL, started_at INTEGER, ended_at INTEGER
+  created_at INTEGER NOT NULL, started_at INTEGER, ended_at INTEGER,
+  paused_at INTEGER,                      -- set while paused
+  paused_ms INTEGER NOT NULL DEFAULT 0    -- total time spent paused, so the timer skips it
 );
 
 CREATE TABLE players (
@@ -68,4 +70,17 @@ CREATE TABLE llm_calls (
   cost_usd REAL, latency_ms INTEGER,
   status TEXT NOT NULL,                   -- ok | rate_limited | error | timeout
   created_at INTEGER NOT NULL
+);
+
+-- What the projector feed shows. Text is written by the server; no player-written text in M2.
+CREATE TABLE projector_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  game_id TEXT NOT NULL,
+  player_id TEXT NOT NULL REFERENCES players(id),
+  floor INTEGER NOT NULL,
+  type TEXT NOT NULL,                     -- first_blood | clear
+  game_ms INTEGER NOT NULL,               -- time in the dungeon when it happened (for "08:31")
+  created_at INTEGER NOT NULL
+  -- no text column: the line is built when sent, from the player's CURRENT name,
+  -- so a rename or kick also changes or removes their old lines on the projector
 );

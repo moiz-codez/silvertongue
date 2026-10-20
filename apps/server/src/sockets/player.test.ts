@@ -1,65 +1,8 @@
 // End to end in mock mode: real server, real sockets, in-memory database. No API calls.
-import type { AddressInfo } from 'node:net';
-import { afterEach, describe, expect, it } from 'vitest';
-import { io as connect, type Socket } from 'socket.io-client';
-import type { ClientToServerEvents, ServerToClientEvents } from '@silvertongue/shared/events';
-import { createApp } from '../app.ts';
-import { parseEnv } from '../config/env.ts';
-import { openDb } from '../db/db.ts';
-import { getRune } from '../db/queries.ts';
+import { describe, expect, it } from 'vitest';
+import { getRune, kickPlayer } from '../db/queries.ts';
 import type { Complete } from '../llm/client.ts';
-import { createMockClient } from '../llm/mock.ts';
-
-type Client = Socket<ServerToClientEvents, ClientToServerEvents>;
-interface Seen {
-  event: string;
-  payload: unknown;
-}
-
-const cleanups: (() => Promise<void> | void)[] = [];
-afterEach(async () => {
-  while (cleanups.length) await cleanups.pop()!();
-});
-
-async function startServer(vars: Record<string, string> = {}, complete?: Complete) {
-  const env = parseEnv({ ADMIN_TOKEN: 'test-admin-token-123', COOLDOWN_MS: '0', ...vars });
-  const db = openDb(':memory:');
-  const { app } = await createApp(env, db, complete ?? createMockClient({ minMs: 0, maxMs: 0 }), {
-    logger: false,
-  });
-  await app.listen({ port: 0, host: '127.0.0.1' });
-  cleanups.push(() => app.close());
-  const { port } = app.server.address() as AddressInfo;
-  return { db, url: `http://127.0.0.1:${port}` };
-}
-
-function client(url: string): { socket: Client; seen: Seen[] } {
-  const socket: Client = connect(url, { transports: ['websocket'], forceNew: true });
-  const seen: Seen[] = [];
-  socket.onAny((event: string, payload: unknown) => seen.push({ event, payload }));
-  cleanups.push(() => void socket.close());
-  return { socket, seen };
-}
-
-// Resolves with the next `event` payload that matches.
-function next<E extends keyof ServerToClientEvents>(
-  socket: Client,
-  event: E,
-  match: (payload: Parameters<ServerToClientEvents[E]>[0]) => boolean = () => true,
-): Promise<Parameters<ServerToClientEvents[E]>[0]> {
-  return new Promise((resolve) => {
-    const handler = (payload: Parameters<ServerToClientEvents[E]>[0]) => {
-      if (!match(payload)) return;
-      socket.off(event, handler as never);
-      resolve(payload);
-    };
-    socket.on(event, handler as never);
-  });
-}
-
-async function join(socket: Client, nickname: string) {
-  return socket.emitWithAck('player:join', { nickname });
-}
+import { client, join, next, startServer } from './testServer.ts';
 
 describe('Floor 1, end to end in mock mode', () => {
   it('joins, chats, gets the rune, survives the lockout, clears and resumes', async () => {
@@ -197,5 +140,42 @@ describe('Floor 1, end to end in mock mode', () => {
     const state = await stateAfterError;
     expect(state.cooldownMs).toBe(0);
     expect(state.messagesLeft).toBe(150);
+  });
+
+  it('keeps the doors sealed in the lobby and while paused', async () => {
+    for (const [commands, words] of [
+      [[], 'still sealed'],
+      [['start', 'pause'], 'holds its breath'],
+    ] as const) {
+      const { db, url } = await startServer({}, undefined, [...commands]);
+      const { socket, seen } = client(url);
+      const joined = await join(socket, 'Ali');
+      if (!joined.ok) throw new Error(joined.error);
+
+      socket.emit('player:message', { text: 'hi grub' });
+      expect((await next(socket, 'player:error')).message).toContain(words);
+      socket.emit('player:door', { guess: getRune(db, joined.playerId, 1) });
+      expect((await next(socket, 'player:error')).message).toContain(words);
+      expect(seen.some((s) => ['player:bubble', 'player:floor-cleared'].includes(s.event))).toBe(
+        false,
+      );
+    }
+  });
+
+  it('sends a kicked player away and keeps them out', async () => {
+    const { db, phones, url } = await startServer();
+    const { socket } = client(url);
+    const joined = await join(socket, 'Ali');
+    if (!joined.ok) throw new Error(joined.error);
+
+    const kicked = next(socket, 'player:kicked');
+    kickPlayer(db, joined.playerId);
+    phones.kick(joined.playerId);
+    await kicked;
+
+    const again = client(url);
+    expect(await again.socket.emitWithAck('player:resume', { token: joined.token })).toEqual({
+      ok: false,
+    });
   });
 });

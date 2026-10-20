@@ -1,0 +1,215 @@
+/* Admin screen, from docs/design/admin.png. A laptop screen first; the table scrolls on a phone. */
+
+.admin {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4);
+}
+
+.admin h1 {
+  margin: 0;
+  font-size: 1.9rem;
+}
+
+.admin h2 {
+  margin: 0 0 var(--space-3);
+  font-size: 1.35rem;
+}
+
+.admin-login {
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.admin-login form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.admin-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.status-pill {
+  padding: var(--space-1) var(--space-3);
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+  background: var(--color-field);
+  color: var(--color-muted);
+}
+
+.status-running {
+  background: #1f3a2a;
+  color: #8fd19e;
+}
+
+.status-paused {
+  background: #3a2f1a;
+  color: var(--color-accent);
+}
+
+.admin-actions {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.admin-button {
+  min-height: 48px;
+  padding: 0 var(--space-4);
+  border-radius: 8px;
+  font-size: 1.05rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.admin-button.primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-accent-ink);
+}
+
+.admin-button.danger {
+  background: transparent;
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.admin-button.small {
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+}
+
+.admin-error {
+  margin: var(--space-3) 0 0;
+  color: var(--color-danger);
+}
+
+.admin-tiles {
+  margin: var(--space-4) 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-3);
+}
+
+.tile {
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.tile span {
+  color: var(--color-muted);
+  font-size: 0.95rem;
+}
+
+.tile strong {
+  font-family: var(--font-heading);
+  font-size: 2rem;
+}
+
+.tile small {
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
+.spend-bar {
+  height: 6px;
+  background: var(--color-field);
+}
+
+.spend-bar div {
+  height: 100%;
+  background: var(--color-accent);
+}
+
+.admin-panel {
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}
+
+.admin-empty {
+  margin: 0;
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.players {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.players th {
+  text-align: left;
+  font-weight: 400;
+  color: var(--color-muted);
+  font-size: 0.95rem;
+}
+
+.players th,
+.players td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.players tr.kicked td {
+  color: var(--color-faint);
+  text-decoration: line-through;
+}
+
+.players tr.kicked td.row-actions {
+  text-decoration: none;
+}
+
+.row-actions {
+  text-align: right;
+}
+
+.row-actions .admin-button + .admin-button {
+  margin-left: var(--space-2);
+}
+
+.kicked-label {
+  color: var(--color-danger);
+  font-size: 0.9rem;
+}
+
+.rename {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.rename .field {
+  width: 12em;
+  min-height: 36px;
+  padding: var(--space-1) var(--space-2);
+}
+
+.rename .hint {
+  width: 100%;
+  margin: 0;
+  white-space: normal;
+}

@@ -8,11 +8,13 @@
   },
   "dependencies": {
     "@silvertongue/shared": "*",
+    "qrcode": "^1.5.4",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "socket.io-client": "^4.8.4"
   },
   "devDependencies": {
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",

@@ -17,6 +17,9 @@ interface Props {
   onDoor: (guess: string) => void;
 }
 
+// The server refuses messages and the door while paused; this just says so up front.
+const PAUSED = 'The torches gutter. The dungeon holds its breath… wait for the game master.';
+
 export function Play(props: Props) {
   const { state, bubbles, expression, waitingLine, doorNote } = props;
   const floor = FLOORS[state.floor]!;
@@ -32,8 +35,9 @@ export function Play(props: Props) {
     endRef.current?.scrollIntoView({ block: 'end' });
   }, [bubbles, waitingLine]);
 
+  const paused = state.gameStatus === 'paused';
   const canSend =
-    text.trim() !== '' && !waitingLine && cooldownLeft === 0 && state.messagesLeft > 0;
+    !paused && text.trim() !== '' && !waitingLine && cooldownLeft === 0 && state.messagesLeft > 0;
 
   function send(event?: FormEvent) {
     event?.preventDefault();
@@ -49,7 +53,7 @@ export function Play(props: Props) {
 
   function knock(event: FormEvent) {
     event.preventDefault();
-    if (guess.trim() === '' || lockLeft > 0) return;
+    if (paused || guess.trim() === '' || lockLeft > 0) return;
     props.onDoor(guess);
     setGuess('');
   }
@@ -97,6 +101,11 @@ export function Play(props: Props) {
       </section>
 
       <footer className="composer">
+        {paused && (
+          <p className="paused-banner" role="status">
+            {PAUSED}
+          </p>
+        )}
         {doorNote && (
           <p className={`door-note ${doorNote.tone}`} role="status">
             {doorNote.text}
@@ -116,7 +125,7 @@ export function Play(props: Props) {
             aria-label="Rune"
             maxLength={100}
           />
-          <button className="door-button" disabled={lockLeft > 0 || guess.trim() === ''}>
+          <button className="door-button" disabled={paused || lockLeft > 0 || guess.trim() === ''}>
             {lockLeft > 0 ? `${lockLeft}s` : 'Open'}
           </button>
         </form>

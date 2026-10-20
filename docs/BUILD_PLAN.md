@@ -45,6 +45,13 @@ Every milestone is done only when its acceptance criteria are met and `npm run c
 - Phone lobby screen (moved here from M1): players wait until the admin starts the game.
 - Kicked players are blocked on `player:message` and `player:door` too, not only on resume, and their open socket is disconnected on kick (deferred from the M1 audit, LOW-2).
 
+**Decisions made in M2**
+- Startup reuses the newest game that isn't ended, otherwise a new lobby game. Reset ends the current game (data kept) and opens a new lobby; phones go back to Join.
+- Start reveal is a state: phones show "Look up at the big screen", the projector a holding screen until M8.
+- Players past the deepest built floor wait in its row on the map with an amber ✓.
+- The admin health panel shows players, game state and spend only. The queue, rate-limit and latency tiles and the Live settings panel arrive in M3, the "For the big screen" moderation panel in M7, Vorgath's counters in M9.
+- End, Reset and Kick need a second click; no browser dialogs.
+
 **Acceptance**
 - Three browser tabs as three players plus a projector tab: tokens move down the map as floors are cleared; first blood appears once per floor.
 - Pausing stops message sending on phones with an in-character message.
@@ -56,7 +63,9 @@ Every milestone is done only when its acceptance criteria are met and `npm run c
 - Per-player cooldown, message cap, length cap; waiting lines after 1.5 s; in-character errors with cooldown refund.
 - `llm_calls` logging with cost; admin health panel (queue, 429s, latency, tokens, spend); `BUDGET_USD` auto-pause.
 - `scripts/loadtest.ts`: N fake socket clients sending messages on a realistic schedule.
+- A kicked player can currently rejoin under a new name by clearing their browser (found in M2). The per-IP join limit below slows this down, and the admin can kick again.
 - Join limit per IP (`socket.handshake.address`; behind Caddy, the client IP from `X-Forwarded-For`). Keep it generous, around 60 joins per minute, because the whole class on university Wi-Fi may share one public IP. This sits on top of the one-join-per-socket rule from M1, so a script can't squat nicknames or multiply the message cap into API spend (deferred from the M1 audit, LOW-3).
+- Back off repeated failed `/admin` handshakes and cap `/projector` sockets per address (from the M2 audit, LOW-3; the 16+ character token already makes guessing impractical).
 - `sanitize` edge cases: strip an unclosed trailing `[...` tag, clean up nested `[[x]]`, and turn fullwidth `＜ ＞` / small `﹤ ﹥` into `‹ ›`, with unit tests (deferred from the M1 audit, LOW-4).
 
 **Acceptance**
