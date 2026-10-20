@@ -125,7 +125,7 @@ Per-floor details: `docs/ARCHITECTURE.md` → "Floor pipelines".
 ## Git workflow
 
 - One branch per milestone, named `mN-short-name` (e.g. `m0-scaffold`, `m1-floor1`), branched from an up-to-date `main`.
-- Small commits, each a working state, with imperative messages ("Add door check with lockout").
+- Small commits, each a working state, in [Conventional Commits](https://www.conventionalcommits.org/) format: `type(scope): imperative summary`, e.g. `feat(db): add WAL mode`, `fix(web): stop chat scroll crash`, `chore: restore trailing newline in .gitignore`. Types: feat, fix, docs, test, refactor, chore. Scope is the area touched (db, llm, sockets, security, game, web, shared, grub, scripts). Earlier commits predate this rule and are not rewritten.
 - `npm run check` passes before every commit.
 - Push the branch to `origin`; Moiz reviews on GitHub and merges to `main` via a pull request.
 - Never commit `.env`, never force-push, never rewrite pushed history.
