@@ -28,9 +28,13 @@ interface Price {
   output: number;
 }
 
+// max_tokens per role comes from each prompt file's Settings table.
 export const ROLES = {
   smoke: { model: MODELS.haiku, maxTokens: 200 },
+  grub: { model: MODELS.haiku, maxTokens: 120 },
 } as const;
+
+export type RoleName = keyof typeof ROLES;
 
 export interface TokenUsage {
   input_tokens: number;
