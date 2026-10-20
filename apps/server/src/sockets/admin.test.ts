@@ -94,6 +94,7 @@ describe('admin', () => {
       ok: false,
       error: 'Someone in the dungeon already goes by that name.',
     });
+    expect(await rename('ALI')).toEqual({ ok: true }); // their own name in other letters is fine
     const renamed = next(ali.socket, 'player:state', (s) => s.nickname === 'Ali Baba');
     expect(await rename('  Ali   Baba ')).toEqual({ ok: true });
     await renamed;

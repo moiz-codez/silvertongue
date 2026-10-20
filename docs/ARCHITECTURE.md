@@ -113,10 +113,14 @@ CREATE TABLE hoard (
 
 CREATE TABLE projector_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  game_id TEXT NOT NULL, type TEXT NOT NULL, text TEXT NOT NULL,
+  game_id TEXT NOT NULL,
+  player_id TEXT NOT NULL REFERENCES players(id),
+  floor INTEGER NOT NULL,
+  type TEXT NOT NULL,                     -- first_blood | clear
   game_ms INTEGER NOT NULL,               -- time in the dungeon when it happened (for "08:31")
   created_at INTEGER NOT NULL
-  -- M7 adds needs_approval / approved for player-written text
+  -- No text column: the line is built when sent, from the player's CURRENT name, so a rename
+  -- or kick also fixes their old lines. M7 adds text + needs_approval/approved for attempts.
 );
 ```
 
@@ -148,7 +152,7 @@ All payloads validated with zod on receipt.
 There is no `player:pending` event: the phone shows an in-character waiting line from `packages/shared/src/floors.ts` as soon as the player sends, and hides it when the reply or an error arrives.
 
 **Server → projector** (namespace `/projector`, read-only, no token; throttled to ≤ 2 updates/s)
-- `projector:snapshot { status, elapsedMs, publicUrl, players: [{ nickname, floor }], feed: [{ gameMs, type: 'first_blood' | 'clear', text }] }`, sent on connect and after every change. Kicked players are left out. The feed is the newest 8 `projector_events`, written by the server (e.g. "NightOwl charmed Grub."), so no player-written text reaches the projector. Nicknames passed the profanity filter at join or rename. M9 adds Vorgath's counters; M7 adds approved attempts to the feed.
+- `projector:snapshot { status, elapsedMs, publicUrl, players: [{ nickname, floor }], feed: [{ gameMs, type: 'first_blood' | 'clear', text }] }`, sent on connect and after every change. Kicked players are left out. The feed is the newest 8 `projector_events` of players who aren't kicked, each turned into a server-written line with the player's current name (e.g. "NightOwl charmed Grub."), so no player-written text reaches the projector and a rename or kick also changes the old lines. Nicknames passed the profanity filter at join or rename. M9 adds Vorgath's counters; M7 adds approved attempts to the feed.
 - `projector:reveal { bestiary: FloorStats[] }` (M8)
 
 **Admin ↔ server** (namespace `/admin`. The token goes in the Socket.IO handshake, `auth: { token }`, and connection middleware compares it with `ADMIN_TOKEN` using `timingSafeEqual`. A wrong token is refused before any handler exists.)

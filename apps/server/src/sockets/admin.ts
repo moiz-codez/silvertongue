@@ -132,7 +132,7 @@ export function registerAdmin(
         if (nickname === player.nickname) return { ok: true };
         const error =
           nicknameProblem(nickname) ??
-          (q.isNicknameTaken(db, ctx.game.id, nickname) ? NICKNAME_TAKEN : null);
+          (q.isNicknameTaken(db, ctx.game.id, nickname, player.id) ? NICKNAME_TAKEN : null);
         if (error) return { ok: false, error };
         q.renamePlayer(db, player.id, nickname);
         phones.refreshAll(); // their phone shows the new name

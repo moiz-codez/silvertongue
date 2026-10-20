@@ -4,7 +4,7 @@ import type { Socket } from 'socket.io-client';
 import { describe, expect, it } from 'vitest';
 import type { ProjectorServerEvents, ProjectorSnapshot } from '@silvertongue/shared/events';
 import type { Db } from '../db/db.ts';
-import { getRune } from '../db/queries.ts';
+import { getRune, kickPlayer, renamePlayer } from '../db/queries.ts';
 import { client, join, next, open, startServer } from './testServer.ts';
 
 type Screen = Socket<ProjectorServerEvents>;
@@ -95,6 +95,22 @@ describe('projector', () => {
         { nickname: 'Sara', floor: 2 },
       ]),
     );
+  });
+
+  it('shows the current name after a rename, and drops a kicked player from the feed', async () => {
+    const { db, ctx, url } = await startServer();
+    const { snapshots } = projector(url);
+    const ali = await joinAndClear(db, url, 'Ali');
+    const sara = await joinAndClear(db, url, 'Sara');
+    await until(snapshots, (s) => s.feed.length === 2);
+    if (!ali.ok || !sara.ok) throw new Error('join failed');
+
+    renamePlayer(db, ali.playerId, 'Falcon');
+    kickPlayer(db, sara.playerId);
+    ctx.changed();
+    const shot = await until(snapshots, (s) => s.feed.length === 1);
+    expect(shot.feed.map((f) => f.text)).toEqual(['Falcon charmed Grub.']);
+    expect(JSON.stringify(shot)).not.toMatch(/Ali|Sara/);
   });
 
   it('sends at most 2 snapshots a second during a burst of joins', async () => {

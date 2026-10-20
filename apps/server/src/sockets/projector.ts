@@ -2,6 +2,7 @@
 // event text the server wrote itself, built field by field. No ids, tokens, runes or player messages.
 import type { Namespace } from 'socket.io';
 import type { ProjectorServerEvents, ProjectorSnapshot } from '@silvertongue/shared/events';
+import { GUARDIANS } from '@silvertongue/shared/floors';
 import * as q from '../db/queries.ts';
 import { elapsedMs } from '../game/state.ts';
 import type { GameContext, PlayerServer } from './player.ts';
@@ -24,10 +25,11 @@ export function registerProjector(io: PlayerServer, ctx: GameContext): () => voi
         .listPlayers(db, game.id)
         .filter((p) => !p.kicked)
         .map((p) => ({ nickname: p.nickname, floor: p.floor })),
+      // Server-written words around a filtered nickname. No player-typed text, ever.
       feed: q.listProjectorEvents(db, game.id, FEED_LENGTH).map((e) => ({
         gameMs: e.game_ms,
         type: e.type === 'first_blood' ? 'first_blood' : 'clear',
-        text: e.text,
+        text: GUARDIANS[e.floor]?.clearedBy(e.nickname) ?? '',
       })),
     };
   }

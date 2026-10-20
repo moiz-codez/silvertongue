@@ -13,7 +13,8 @@ const MIGRATIONS: Record<number, string> = {
     ALTER TABLE games ADD COLUMN paused_ms INTEGER NOT NULL DEFAULT 0;
     CREATE TABLE projector_events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      game_id TEXT NOT NULL, type TEXT NOT NULL, text TEXT NOT NULL,
+      game_id TEXT NOT NULL, player_id TEXT NOT NULL REFERENCES players(id),
+      floor INTEGER NOT NULL, type TEXT NOT NULL,
       game_ms INTEGER NOT NULL, created_at INTEGER NOT NULL
     );`,
 };

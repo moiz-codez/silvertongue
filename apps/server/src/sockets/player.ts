@@ -278,6 +278,8 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
             q.getRune(db, id, floor),
           );
           logCall(gameId, id, floor, turn.result, 'ok');
+          // Kicked or reset while Grub was thinking: this socket no longer plays as them.
+          if (socket.data.playerId !== id) return;
           q.countPlayerMessage(db, id, floor);
           // Floor 1 has no output filter: the reply, minus *stage directions*, is the post-filter text.
           const replyId = q.insertMessage(db, {
@@ -366,11 +368,12 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
           firstBlood,
         });
         q.clearFloor(db, { playerId: id, floor, points: score.total, firstBlood, now });
-        // Feed text is written here, from a filtered nickname and fixed words. No player text.
+        // The projector turns this into "NightOwl charmed Grub." when it sends the feed.
         q.insertProjectorEvent(db, {
           gameId: ctx.game.id,
+          playerId: id,
+          floor,
           type: firstBlood ? 'first_blood' : 'clear',
-          text: guardian.clearedBy(player.nickname),
           gameMs: elapsedMs(ctx.game, now),
           now,
         });

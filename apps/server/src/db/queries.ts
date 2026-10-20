@@ -100,10 +100,16 @@ export function gameSpendUsd(db: Db, gameId: string): number {
 
 // ---------- players ----------
 
-export function isNicknameTaken(db: Db, gameId: string, nickname: string): boolean {
+// `exceptPlayerId`: a rename may keep the player's own name in different letter case.
+export function isNicknameTaken(
+  db: Db,
+  gameId: string,
+  nickname: string,
+  exceptPlayerId = '',
+): boolean {
   return !!db
-    .prepare('SELECT 1 FROM players WHERE game_id = ? AND nickname = ?')
-    .get(gameId, nickname);
+    .prepare('SELECT 1 FROM players WHERE game_id = ? AND nickname = ? AND id != ?')
+    .get(gameId, nickname, exceptPlayerId);
 }
 
 // Creates the player, all their runes and their Floor 1 progress in one transaction.
@@ -172,24 +178,28 @@ export function renamePlayer(db: Db, playerId: string, nickname: string): void {
 
 export interface ProjectorEventRow {
   type: string;
-  text: string;
+  floor: number;
   game_ms: number;
+  nickname: string; // the player's name NOW, not when it happened
 }
 
 export function insertProjectorEvent(
   db: Db,
-  e: { gameId: string; type: string; text: string; gameMs: number; now: number },
+  e: { gameId: string; playerId: string; floor: number; type: string; gameMs: number; now: number },
 ): void {
   db.prepare(
-    'INSERT INTO projector_events (game_id, type, text, game_ms, created_at) VALUES (?, ?, ?, ?, ?)',
-  ).run(e.gameId, e.type, e.text, e.gameMs, e.now);
+    `INSERT INTO projector_events (game_id, player_id, floor, type, game_ms, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  ).run(e.gameId, e.playerId, e.floor, e.type, e.gameMs, e.now);
 }
 
-// Newest first.
+// Newest first. Kicked players' lines disappear from the projector.
 export function listProjectorEvents(db: Db, gameId: string, limit: number): ProjectorEventRow[] {
   return db
     .prepare(
-      'SELECT type, text, game_ms FROM projector_events WHERE game_id = ? ORDER BY id DESC LIMIT ?',
+      `SELECT e.type, e.floor, e.game_ms, p.nickname FROM projector_events e
+       JOIN players p ON p.id = e.player_id
+       WHERE e.game_id = ? AND p.kicked = 0 ORDER BY e.id DESC LIMIT ?`,
     )
     .all(gameId, limit) as ProjectorEventRow[];
 }

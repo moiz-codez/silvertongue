@@ -75,7 +75,12 @@ CREATE TABLE llm_calls (
 -- What the projector feed shows. Text is written by the server; no player-written text in M2.
 CREATE TABLE projector_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  game_id TEXT NOT NULL, type TEXT NOT NULL, text TEXT NOT NULL,
+  game_id TEXT NOT NULL,
+  player_id TEXT NOT NULL REFERENCES players(id),
+  floor INTEGER NOT NULL,
+  type TEXT NOT NULL,                     -- first_blood | clear
   game_ms INTEGER NOT NULL,               -- time in the dungeon when it happened (for "08:31")
   created_at INTEGER NOT NULL
+  -- no text column: the line is built when sent, from the player's CURRENT name,
+  -- so a rename or kick also changes or removes their old lines on the projector
 );

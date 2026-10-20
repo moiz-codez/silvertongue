@@ -10,8 +10,6 @@ import {
   getCurrentGame,
   getPlayer,
   getProgress,
-  insertProjectorEvent,
-  listProjectorEvents,
   saveGame,
   shiftFloorClocks,
   startFloorClocks,
@@ -109,15 +107,15 @@ it('migrates a version-1 file without losing data', () => {
   const db = openDb(file);
   expect(db.pragma('user_version', { simple: true })).toBe(2);
   expect(getCurrentGame(db, 2)).toMatchObject({ id: 'g1', status: 'running', paused_ms: 0 });
-  insertProjectorEvent(db, {
-    gameId: 'g1',
-    type: 'clear',
-    text: 'Ali charmed Grub.',
-    gameMs: 2,
-    now: 3,
-  });
-  expect(listProjectorEvents(db, 'g1', 8)).toEqual([
-    { type: 'clear', text: 'Ali charmed Grub.', game_ms: 2 },
+  const columns = db.prepare('SELECT name FROM pragma_table_info(?)').all('projector_events');
+  expect(columns.map((c) => (c as { name: string }).name)).toEqual([
+    'id',
+    'game_id',
+    'player_id',
+    'floor',
+    'type',
+    'game_ms',
+    'created_at',
   ]);
   db.close();
 });
