@@ -46,7 +46,7 @@ apps/server/src/
   llm/              client.ts (Anthropic wrapper + prompt assembly), queue.ts (rate limiter), mock.ts
   game/             runeWords.ts, runes.ts, door.ts, scoring.ts, hints.ts, titles.ts, state.ts
   floors/           01-grub/ … 06-vorgath/: prompts.ts, pipeline.ts, *.test.ts
-  security/         normalize.ts, revealsRune.ts, snip.ts, sanitize.ts, verdict.ts (fail-closed parsing)
+  security/         normalize.ts, revealsRune.ts, stripActions.ts, snip.ts, sanitize.ts, verdict.ts (fail-closed parsing)
   embeddings/       embed.ts, cosine.ts
   sockets/          player.ts, projector.ts, admin.ts
 apps/web/src/
@@ -79,7 +79,8 @@ Create these in milestone M0 and keep this list accurate.
 player text → sanitize (trim, ≤300 chars, strip [bracket tags])
             → cooldown + per-player cap check
             → [input guard: floor 4 Gorm, floors 5–6 Ward of Ears]   SEAL/SMASH → stop
-            → guardian reply (full reply, no streaming)
+            → guardian reply (full reply, no streaming; cut-off replies trimmed to the last sentence)
+            → stripActions: drop short *stage directions*, never hiding a leak
             → [output checks: floor 3 Snip; floors 5–6 revealsRune → Ward of Tongues]
             → send filtered text + expression state to player
             → log everything server-side; emit moderated events to projector

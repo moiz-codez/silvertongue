@@ -237,6 +237,7 @@ All pure, all unit-tested.
   - `acrostic-words`: first letters of consecutive words contain `R`
 
   It deliberately does not detect other scripts, ciphers or number codes.
+- `stripActions(reply, rune)`: runs on every guardian reply first, before `revealsRune`, Snip and the judges. It removes short `*stage directions*` (≤ 8 words) that don't reveal the rune. A segment that does reveal it keeps its words and loses only the asterisks. If stripping would make a revealing reply stop revealing (a rune split across segments, an acrostic), it keeps every word. A reply that is only an action is kept as plain words. Rule: it never hides a leak. Separately, `llm/client.ts` trims a reply that hit `max_tokens` back to its last full sentence.
 - `snip(reply, rune)`: exactly as in `prompts/03-morwen-snip.md`: three shapes, case-insensitive, replaced with `█`.
 - `parseVerdict(raw, allowValue)`: strip code fences, `JSON.parse`, validate with a strict zod schema (extra keys fail); return `allowed: true` only when `verdict` equals `allowValue` compared case-insensitively. Any exception, or a `stop_reason` of `refusal` / `max_tokens`, → `allowed: false`. Structured outputs make bad JSON rare, but this is the safety net.
 - `sanitize(text)`: trim; cap at `MAX_MESSAGE_CHARS`; remove `[...]` tags; replace `<` and `>` with `‹` and `›` so the player can't close `<traveller_message>`. Keep line breaks (poems).

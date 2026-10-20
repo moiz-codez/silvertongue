@@ -2,6 +2,7 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type { Complete, LlmResult } from '../../llm/client.ts';
 import { revealsRune } from '../../security/revealsRune.ts';
+import { stripActions } from '../../security/stripActions.ts';
 import { GRUB_PROMPT, runeNote } from './prompts.ts';
 
 export interface Turn {
@@ -23,7 +24,8 @@ export async function grubTurn(
     playerNote: runeNote(rune),
     messages: toMessages(history),
   });
-  return { text: result.text, slipped: revealsRune(result.text, rune).revealed, result };
+  const text = stripActions(result.text, rune); // before the leak check, never hiding a leak
+  return { text, slipped: revealsRune(text, rune).revealed, result };
 }
 
 // Player text is data: always inside <traveller_message> tags. Starts and ends with a user turn,
