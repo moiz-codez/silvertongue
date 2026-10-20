@@ -34,7 +34,7 @@ A live, multiplayer AI-security game built for an Artificial Intelligence lab pr
 - **Web** (`apps/web`): React + Vite + TypeScript, socket.io-client, `qrcode` for the projector QR. Plain CSS with design tokens. No UI framework.
 - **Shared** (`packages/shared`): socket event types, zod schemas, constants.
 - **Tests:** vitest.
-- **Hosting:** one Oracle Cloud Always Free VM (Ubuntu, ARM64). Fastify serves the built web app and Socket.IO in **one process** behind Caddy (HTTPS + websockets), run by systemd. One process means one in-memory LLM queue sees all traffic.
+- **Hosting:** the Windows laptop, exposed through a Cloudflare quick tunnel (`cloudflared`, HTTPS + websockets, a new `*.trycloudflare.com` address per run). Fastify serves the built web app and Socket.IO in **one process**; `npm run tunnel` starts both. One process means one in-memory LLM queue sees all traffic. Steps: `docs/DEPLOY_LAPTOP.md`. An Oracle Cloud VM (`docs/DEPLOY_ORACLE.md`) is an optional future alternative.
 
 ## Repo layout
 
@@ -71,6 +71,7 @@ Create these in milestone M0 and keep this list accurate.
 - `npm run smoke` — two **real** Haiku calls; passes when the second shows `cache_read_input_tokens > 0` (well under $0.01)
 - `npm run native-check` — better-sqlite3 in WAL mode + one local MiniLM embedding; run on every new machine/server
 - `npm run playtest -- --floor 1` — scripted attacks from the floor's playtest checklist against the **real** API; prints transcripts, leaks, tokens and cost (costs money; Haiku = about a cent). Floors are added as they are built.
+- `npm run tunnel` — demo hosting: opens a Cloudflare quick tunnel, then runs the production server with `PUBLIC_URL` set to the tunnel address; shouts if the tunnel dies (run `npm run build` first; needs `cloudflared`)
 - `npm run loadtest -- --players 40` — fake socket clients against a mock-mode server
 
 ## Message pipeline (every floor)

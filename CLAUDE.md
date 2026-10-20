@@ -41,13 +41,13 @@ Moiz, BSCS 7th semester at Mehran UET. He builds with Claude Code and has to pre
 
 ## Deploying
 
-Follow `docs/DEPLOY_ORACLE.md`. Deploy a hello-world in M0 and keep deploying after each milestone. The first real deploy must never be in demo week.
+The demo runs from the laptop through a Cloudflare quick tunnel: follow `docs/DEPLOY_LAPTOP.md` (`npm run tunnel`). Rehearse through the tunnel after each milestone; the first real run must never be in demo week. `docs/DEPLOY_ORACLE.md` is optional/future.
 
 ## Gotchas
 
-- Oracle VM: ports 80 and 443 must be opened in **both** the VCN security list and the instance's own firewall (iptables).
-- The server is ARM64. Confirm in M0 that `better-sqlite3` and `@huggingface/transformers` install and run there.
-- Socket.IO behind Caddy: plain `reverse_proxy` handles the websocket upgrade; test it from a phone on mobile data, not just on Wi-Fi.
+- The tunnel address changes on every `npm run tunnel`, and phones keep their progress per address: start it once before the class arrives and leave it running.
+- Test through the tunnel from a phone on mobile data, not just on Wi-Fi.
+- (Oracle option only) ports 80 and 443 must be opened in both the VCN security list and iptables; the server is ARM64.
 - SQLite: enable WAL mode at startup.
 - The prompt cache only hits when the static prefix is byte-identical. Never interpolate per-player values (rune, nickname, hoard note) into the cached block.
 - Windows dev machine: no bash-only npm scripts; use Node scripts or cross-platform tools.

@@ -1,5 +1,7 @@
 # Deploying Silvertongue to the Oracle Cloud free VM
 
+> **Optional / future.** Oracle had no free capacity, so the demo runs from the laptop through a Cloudflare quick tunnel: see `docs/DEPLOY_LAPTOP.md`. Keep this guide for a later move to a real server.
+
 One VM runs everything: Caddy (HTTPS) → the Node process (Fastify + Socket.IO + SQLite). Commands below assume Ubuntu. Package commands change over time; if one fails, check the linked official docs for the current version.
 
 ## 1. The VM
