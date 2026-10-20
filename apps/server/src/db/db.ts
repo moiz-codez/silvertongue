@@ -4,7 +4,7 @@ import Database from 'better-sqlite3';
 
 export type Db = Database.Database;
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 // Steps that bring an older file up to date. Key = the version the step upgrades FROM.
 const MIGRATIONS: Record<number, string> = {
@@ -17,6 +17,12 @@ const MIGRATIONS: Record<number, string> = {
       floor INTEGER NOT NULL, type TEXT NOT NULL,
       game_ms INTEGER NOT NULL, created_at INTEGER NOT NULL
     );`,
+  // Live settings live on the game. Older games get them filled in from .env when loaded.
+  2: `
+    ALTER TABLE games ADD COLUMN cooldown_ms INTEGER;
+    ALTER TABLE games ADD COLUMN max_messages INTEGER;
+    ALTER TABLE games ADD COLUMN llm_mode TEXT;
+    ALTER TABLE games ADD COLUMN budget_alert_at INTEGER;`,
 };
 
 // Opens (or creates) the database file. Pass ':memory:' in tests.

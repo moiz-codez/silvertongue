@@ -64,7 +64,7 @@ export function registerAdmin(
         const ended = applyCommand(ctx.game, 'end', now);
         if (ended.ok) q.saveGame(db, ended.game, now);
       }
-      ctx.game = q.createGame(db, now);
+      ctx.game = q.createGame(db, now, ctx.game); // the live settings carry over
       phones.resetAll();
       return { ok: true };
     }

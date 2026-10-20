@@ -24,12 +24,19 @@ export interface ProgressRow {
   door_locked_until: number | null;
 }
 
-export interface GameRow {
+export interface GameSettings {
+  cooldown_ms: number;
+  max_messages: number;
+  llm_mode: 'mock' | 'live';
+}
+
+export interface GameRow extends GameSettings {
   id: string;
   status: GameStatus;
   started_at: number | null;
   paused_at: number | null;
   paused_ms: number;
+  budget_alert_at: number | null;
 }
 
 export interface MessageRow {
@@ -41,31 +48,66 @@ export interface MessageRow {
 
 // ---------- games ----------
 
-const GAME_COLUMNS = 'id, status, started_at, paused_at, paused_ms';
+const GAME_COLUMNS =
+  'id, status, started_at, paused_at, paused_ms, cooldown_ms, max_messages, llm_mode, budget_alert_at';
 
 // At startup: the newest game that isn't over, so a restart never resets progress.
 // Only when every game has ended is a new one opened, in the lobby.
-export function getCurrentGame(db: Db, now: number): GameRow {
+// `seed`: the settings for a brand-new game, or for a game from before settings were stored.
+export function getCurrentGame(db: Db, now: number, seed: GameSettings): GameRow {
   const existing = db
     .prepare(
       `SELECT ${GAME_COLUMNS} FROM games WHERE status != 'ended' ORDER BY created_at DESC, rowid DESC LIMIT 1`,
     )
-    .get() as GameRow | undefined;
-  return existing ?? createGame(db, now);
+    .get() as
+    (Omit<GameRow, keyof GameSettings> & Partial<Record<keyof GameSettings, null>>) | undefined;
+  if (!existing) return createGame(db, now, seed);
+  const game: GameRow = {
+    ...existing,
+    cooldown_ms: existing.cooldown_ms ?? seed.cooldown_ms,
+    max_messages: existing.max_messages ?? seed.max_messages,
+    llm_mode: existing.llm_mode ?? seed.llm_mode,
+  };
+  saveGame(db, game, now);
+  return game;
 }
 
-export function createGame(db: Db, now: number): GameRow {
-  const id = randomUUID();
-  db.prepare("INSERT INTO games (id, status, created_at) VALUES (?, 'lobby', ?)").run(id, now);
-  return { id, status: 'lobby', started_at: null, paused_at: null, paused_ms: 0 };
+export function createGame(db: Db, now: number, settings: GameSettings): GameRow {
+  const game: GameRow = {
+    id: randomUUID(),
+    status: 'lobby',
+    started_at: null,
+    paused_at: null,
+    paused_ms: 0,
+    budget_alert_at: null,
+    cooldown_ms: settings.cooldown_ms,
+    max_messages: settings.max_messages,
+    llm_mode: settings.llm_mode,
+  };
+  db.prepare("INSERT INTO games (id, status, created_at) VALUES (?, 'lobby', ?)").run(game.id, now);
+  saveGame(db, game, now);
+  return game;
 }
 
 export function saveGame(db: Db, game: GameRow, now: number): void {
   db.prepare(
     `UPDATE games SET status = ?, started_at = ?, paused_at = ?, paused_ms = ?,
+       cooldown_ms = ?, max_messages = ?, llm_mode = ?, budget_alert_at = ?,
        ended_at = CASE WHEN ? = 'ended' THEN ? ELSE ended_at END
      WHERE id = ?`,
-  ).run(game.status, game.started_at, game.paused_at, game.paused_ms, game.status, now, game.id);
+  ).run(
+    game.status,
+    game.started_at,
+    game.paused_at,
+    game.paused_ms,
+    game.cooldown_ms,
+    game.max_messages,
+    game.llm_mode,
+    game.budget_alert_at,
+    game.status,
+    now,
+    game.id,
+  );
 }
 
 // On Start: players who joined in the lobby start Floor 1's clock now, not when they joined.

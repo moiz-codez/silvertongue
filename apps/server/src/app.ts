@@ -30,7 +30,12 @@ export async function createApp(env: Env, db: Db, complete: Complete, opts = { l
     db,
     env,
     complete,
-    game: getCurrentGame(db, Date.now()), // a restart picks up where the game was
+    // A restart picks up where the game was, settings included. .env only seeds the first game.
+    game: getCurrentGame(db, Date.now(), {
+      cooldown_ms: env.COOLDOWN_MS,
+      max_messages: env.MAX_MESSAGES_PER_PLAYER,
+      llm_mode: env.LLM_MODE,
+    }),
     changed: () => {}, // the projector and admin screens hook in here
     logError: (err) => app.log.error(err),
   };
