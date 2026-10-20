@@ -12,7 +12,7 @@ Moiz, BSCS 7th semester at Mehran UET. He builds with Claude Code and has to pre
 
 ## The demo
 
-- Date: **[22-10-2026]**
+- Date: **[DEMO DATE]**
 - About 40 players on their own phones, ~15 minutes of play, a projector, university Wi-Fi or mobile data.
 - **Priority: the demo never visibly breaks.** A slower game beats an error screen every time. When a choice trades speed for reliability, choose reliability.
 
@@ -26,6 +26,12 @@ Moiz, BSCS 7th semester at Mehran UET. He builds with Claude Code and has to pre
 - Never put secrets in code or commit `.env`. Read all config through `config/env.ts`.
 - When you change a guardian's behaviour, update `docs/prompts/<floor>.md` in the same change.
 - If a doc and the code disagree, stop and ask which one is right instead of guessing.
+
+## Commits and pushing
+
+- You commit and push for Moiz, following "Git workflow" in AGENTS.md. Routine git commands are pre-approved in `.claude/settings.json`; force-pushes and reading `.env` are blocked there.
+- Start each session with `git status` and `git pull`. If there are uncommitted changes you didn't make, ask before touching them.
+- At the end of every session, list the commits you made (hash + message) and the branch they're on, so Moiz can review them on GitHub.
 
 ## Subagents (`.claude/agents/`)
 

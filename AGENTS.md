@@ -111,6 +111,6 @@ Per-floor details: `docs/ARCHITECTURE.md` → "Floor pipelines".
 - TypeScript strict; no `any`. Validate every socket payload with zod.
 - Game logic (door, scoring, hints, revealsRune, snip, cosine, verdict parsing) is pure functions with unit tests.
 - Prompts live in `floors/<n>/prompts.ts`; `docs/prompts/*.md` is the source of truth for wording. Change both together.
-- Small, focused commits with clear messages.
+- Small, focused commits; see "Git workflow" below.
 - Cross-platform: development is on Windows, production on Linux ARM64. Write scripts in TypeScript/Node, not bash; build paths with `path.join`.
 - Everything is shown in a classroom: all content stays PG.
