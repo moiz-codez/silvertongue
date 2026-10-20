@@ -27,6 +27,7 @@ export function createMockClient(latency = { minMs: 300, maxMs: 1500 }): Complet
 
     return {
       text,
+      rawText: text,
       model: ROLES[role].model,
       usage: { input_tokens: 0, output_tokens: 0 },
       latencyMs: Math.round(wait),

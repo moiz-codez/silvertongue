@@ -18,7 +18,8 @@ export interface LlmRequest {
 }
 
 export interface LlmResult {
-  text: string;
+  text: string; // what the game uses: trimmed to a full sentence if cut off by max_tokens
+  rawText: string; // SERVER ONLY: the reply exactly as the model wrote it, for the logs
   model: ModelId;
   usage: TokenUsage;
   latencyMs: number;
@@ -60,7 +61,7 @@ export function createLiveClient(apiKey: string): Complete {
     const text = response.stop_reason === 'max_tokens' ? trimToLastSentence(joined) : joined;
     if (text === '') throw new Error(`Empty reply (stop_reason: ${response.stop_reason})`);
 
-    return { text, model, usage: response.usage, latencyMs: Date.now() - started };
+    return { text, rawText: joined, model, usage: response.usage, latencyMs: Date.now() - started };
   };
 }
 

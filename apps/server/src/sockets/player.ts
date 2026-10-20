@@ -215,7 +215,7 @@ export function registerPlayerHandlers(
             floor,
             speaker: 'guardian',
             text: turn.text,
-            rawText: turn.result.text !== turn.text ? turn.result.text : undefined, // server only
+            rawText: turn.result.rawText !== turn.text ? turn.result.rawText : undefined, // server only
             now: Date.now(),
           });
           socket.emit('player:bubble', {
