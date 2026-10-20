@@ -75,5 +75,7 @@ CREATE TABLE llm_calls (
 -- What the projector feed shows. Text is written by the server; no player-written text in M2.
 CREATE TABLE projector_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  game_id TEXT NOT NULL, type TEXT NOT NULL, text TEXT NOT NULL, created_at INTEGER NOT NULL
+  game_id TEXT NOT NULL, type TEXT NOT NULL, text TEXT NOT NULL,
+  game_ms INTEGER NOT NULL,               -- time in the dungeon when it happened (for "08:31")
+  created_at INTEGER NOT NULL
 );

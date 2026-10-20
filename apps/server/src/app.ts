@@ -4,16 +4,14 @@ import path from 'node:path';
 import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
 import { Server } from 'socket.io';
-import type { ClientToServerEvents, ServerToClientEvents } from '@silvertongue/shared/events';
 import type { Env } from './config/env.ts';
 import type { Db } from './db/db.ts';
 import { getCurrentGame } from './db/queries.ts';
 import type { Complete } from './llm/client.ts';
-import { registerPlayerHandlers } from './sockets/player.ts';
+import { registerPlayerHandlers, type GameContext, type PlayerServer } from './sockets/player.ts';
 
 export async function createApp(env: Env, db: Db, complete: Complete, opts = { logger: true }) {
   const app = Fastify({ logger: opts.logger });
-  const gameId = getCurrentGame(db, Date.now()).id;
 
   app.get('/health', async () => ({ ok: true })); // no LLM mode here: it would tell players when Grub is a mock
 
@@ -23,8 +21,16 @@ export async function createApp(env: Env, db: Db, complete: Complete, opts = { l
     await app.register(fastifyStatic, { root: webDist });
   }
 
-  const io = new Server<ClientToServerEvents, ServerToClientEvents>(app.server);
-  registerPlayerHandlers(io, { db, env, complete, gameId, logError: (err) => app.log.error(err) });
+  const ctx: GameContext = {
+    db,
+    env,
+    complete,
+    game: getCurrentGame(db, Date.now()), // a restart picks up where the game was
+    changed: () => {}, // the projector and admin screens hook in here
+    logError: (err) => app.log.error(err),
+  };
+  const io: PlayerServer = new Server(app.server);
+  const phones = registerPlayerHandlers(io, ctx);
 
-  return { app, io, gameId };
+  return { app, io, ctx, phones };
 }

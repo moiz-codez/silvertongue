@@ -6,7 +6,8 @@ import type { ClientToServerEvents, ServerToClientEvents } from '@silvertongue/s
 import { createApp } from '../app.ts';
 import { parseEnv } from '../config/env.ts';
 import { openDb } from '../db/db.ts';
-import { getRune } from '../db/queries.ts';
+import { getRune, kickPlayer, saveGame } from '../db/queries.ts';
+import { applyCommand, type GameCommand } from '../game/state.ts';
 import type { Complete } from '../llm/client.ts';
 import { createMockClient } from '../llm/mock.ts';
 
@@ -21,16 +22,30 @@ afterEach(async () => {
   while (cleanups.length) await cleanups.pop()!();
 });
 
-async function startServer(vars: Record<string, string> = {}, complete?: Complete) {
+// The game starts running unless `commands` says otherwise ([] = still in the lobby).
+async function startServer(
+  vars: Record<string, string> = {},
+  complete?: Complete,
+  commands: GameCommand[] = ['start'],
+) {
   const env = parseEnv({ ADMIN_TOKEN: 'test-admin-token-123', COOLDOWN_MS: '0', ...vars });
   const db = openDb(':memory:');
-  const { app } = await createApp(env, db, complete ?? createMockClient({ minMs: 0, maxMs: 0 }), {
-    logger: false,
-  });
+  const { app, ctx, phones } = await createApp(
+    env,
+    db,
+    complete ?? createMockClient({ minMs: 0, maxMs: 0 }),
+    { logger: false },
+  );
+  for (const command of commands) {
+    const moved = applyCommand(ctx.game, command, Date.now());
+    if (!moved.ok) throw new Error(moved.error);
+    ctx.game = moved.game;
+    saveGame(db, ctx.game, Date.now());
+  }
   await app.listen({ port: 0, host: '127.0.0.1' });
   cleanups.push(() => app.close());
   const { port } = app.server.address() as AddressInfo;
-  return { db, url: `http://127.0.0.1:${port}` };
+  return { db, ctx, phones, url: `http://127.0.0.1:${port}` };
 }
 
 function client(url: string): { socket: Client; seen: Seen[] } {
@@ -197,5 +212,42 @@ describe('Floor 1, end to end in mock mode', () => {
     const state = await stateAfterError;
     expect(state.cooldownMs).toBe(0);
     expect(state.messagesLeft).toBe(150);
+  });
+
+  it('keeps the doors sealed in the lobby and while paused', async () => {
+    for (const [commands, words] of [
+      [[], 'still sealed'],
+      [['start', 'pause'], 'holds its breath'],
+    ] as const) {
+      const { db, url } = await startServer({}, undefined, [...commands]);
+      const { socket, seen } = client(url);
+      const joined = await join(socket, 'Ali');
+      if (!joined.ok) throw new Error(joined.error);
+
+      socket.emit('player:message', { text: 'hi grub' });
+      expect((await next(socket, 'player:error')).message).toContain(words);
+      socket.emit('player:door', { guess: getRune(db, joined.playerId, 1) });
+      expect((await next(socket, 'player:error')).message).toContain(words);
+      expect(seen.some((s) => ['player:bubble', 'player:floor-cleared'].includes(s.event))).toBe(
+        false,
+      );
+    }
+  });
+
+  it('sends a kicked player away and keeps them out', async () => {
+    const { db, phones, url } = await startServer();
+    const { socket } = client(url);
+    const joined = await join(socket, 'Ali');
+    if (!joined.ok) throw new Error(joined.error);
+
+    const kicked = next(socket, 'player:kicked');
+    kickPlayer(db, joined.playerId);
+    phones.kick(joined.playerId);
+    await kicked;
+
+    const again = client(url);
+    expect(await again.socket.emitWithAck('player:resume', { token: joined.token })).toEqual({
+      ok: false,
+    });
   });
 });

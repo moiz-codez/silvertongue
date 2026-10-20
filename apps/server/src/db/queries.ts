@@ -173,23 +173,23 @@ export function renamePlayer(db: Db, playerId: string, nickname: string): void {
 export interface ProjectorEventRow {
   type: string;
   text: string;
-  created_at: number;
+  game_ms: number;
 }
 
 export function insertProjectorEvent(
   db: Db,
-  e: { gameId: string; type: string; text: string; now: number },
+  e: { gameId: string; type: string; text: string; gameMs: number; now: number },
 ): void {
   db.prepare(
-    'INSERT INTO projector_events (game_id, type, text, created_at) VALUES (?, ?, ?, ?)',
-  ).run(e.gameId, e.type, e.text, e.now);
+    'INSERT INTO projector_events (game_id, type, text, game_ms, created_at) VALUES (?, ?, ?, ?, ?)',
+  ).run(e.gameId, e.type, e.text, e.gameMs, e.now);
 }
 
 // Newest first.
 export function listProjectorEvents(db: Db, gameId: string, limit: number): ProjectorEventRow[] {
   return db
     .prepare(
-      'SELECT type, text, created_at FROM projector_events WHERE game_id = ? ORDER BY id DESC LIMIT ?',
+      'SELECT type, text, game_ms FROM projector_events WHERE game_id = ? ORDER BY id DESC LIMIT ?',
     )
     .all(gameId, limit) as ProjectorEventRow[];
 }
