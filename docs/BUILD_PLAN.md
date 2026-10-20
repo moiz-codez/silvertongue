@@ -28,7 +28,8 @@ Every milestone is done only when its acceptance criteria are met and `npm run c
 - Prompt assembly with the cache split (ARCHITECTURE.md → Prompt assembly).
 - Floor 1 (Grub): chat, `revealsRune`, door check with normalisation and 3-strike lockout, floor clear.
 - Mock LLM client.
-- Phone UI: Join → Lobby → Play (portrait, chat, door box). Grub's two expressions as SVG components from the cast canvas.
+- Scoring, titles and first blood (moved here from M2), shown on the Floor cleared screen.
+- Phone UI: Join → Play (portrait, chat, door box) → Floor cleared, from `docs/design/phone-*.png`. Grub's two expressions from the sprite SVGs in `apps/web/src/sprites/`. The server opens one running game at startup and reuses it after a restart; the lobby comes in M2.
 
 **Acceptance**
 - In mock mode, a player can join, chat, get the rune, enter it and clear Floor 1. Refreshing the page resumes the same player.
@@ -41,7 +42,7 @@ Every milestone is done only when its acceptance criteria are met and `npm run c
 - Game state machine: lobby → running → paused → reveal → ended; admin start/pause/resume/end/reset.
 - Admin screen with `ADMIN_TOKEN`.
 - Projector: lobby with QR code and joined count; game view with the six-floor dungeon map and player tokens; event feed (first blood, clears). Throttled snapshots.
-- Scoring, titles, first blood.
+- Phone lobby screen (moved here from M1): players wait until the admin starts the game.
 
 **Acceptance**
 - Three browser tabs as three players plus a projector tab: tokens move down the map as floors are cleared; first blood appears once per floor.

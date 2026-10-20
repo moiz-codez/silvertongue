@@ -38,8 +38,8 @@ CREATE TABLE games (
 CREATE TABLE players (
   id TEXT PRIMARY KEY,
   game_id TEXT NOT NULL REFERENCES games(id),
-  nickname TEXT NOT NULL,
-  token_hash TEXT NOT NULL,             -- sha256 of the session token; token itself only on the phone
+  nickname TEXT NOT NULL COLLATE NOCASE,  -- "Ali" and "ali" count as the same name
+  token_hash TEXT NOT NULL UNIQUE,      -- sha256 of the session token; token itself only on the phone
   floor INTEGER NOT NULL DEFAULT 1,     -- current floor (7 = finished)
   score INTEGER NOT NULL DEFAULT 0,
   messages_sent INTEGER NOT NULL DEFAULT 0,
@@ -123,19 +123,21 @@ Put every query in typed functions in `db/`. Client payloads are built by explic
 All payloads validated with zod on receipt.
 
 **Player → server**
-- `player:join { nickname }` → ack `{ playerId, token }`
+- `player:join { nickname }` → ack `{ ok: true, playerId, token }` or `{ ok: false, error }` (error is in character and never names a rude word)
 - `player:resume { token }` → ack `{ ok }`
 - `player:message { text }`
 - `player:door { guess }`
 
 **Server → player**
-- `player:state { gameStatus, floor, score, title, cooldownUntil, doorLockedUntil, notes: string[] }`
-- `player:pending { waitingLine }` (sent if a reply takes > 1.5 s)
-- `player:bubble { id, floor, speaker, text }` (speaker: guardian | gorm | snip | ward_ears | ward_tongues | carving | system)
-- `player:expression { floor, state: 'idle' | 'slipped' }`
-- `player:door-result { correct, lockedUntil? }`
-- `player:floor-cleared { floor, points, title }`
+- `player:state { nickname, floor, floorReady, score, title, messagesLeft, cooldownMs, doorLockedMs }`. Durations are milliseconds from now, never timestamps, so a phone with a wrong clock still counts down correctly. `floorReady` is false while the floor isn't built yet. M2 adds `gameStatus`; M7 adds `notes`.
+- `player:history { floor, bubbles }`: on resume, replays this floor's bubbles so a refresh shows the same chat.
+- `player:bubble { id, floor, speaker, text }` (speaker: player | guardian | system; later floors add gorm | snip | ward_ears | ward_tongues | carving). The player's own message comes back as a bubble too.
+- `player:expression { floor, state: 'idle' | 'slipped' }` (computed on the server with `revealsRune`)
+- `player:door-result { correct, lockedMs }`
+- `player:floor-cleared { floor, lines: [{ label, points, highlight? }], total, score, title, nextFloorReady }`
 - `player:error { code, message }` (message is in character, never a stack trace)
+
+There is no `player:pending` event: the phone shows an in-character waiting line from `packages/shared/src/floors.ts` as soon as the player sends, and hides it when the reply or an error arrives.
 
 **Server → projector** (throttled to ≤ 2 updates/s)
 - `projector:snapshot { gameStatus, timer, players: [{ nickname, floor, title, score }], counters: { carvings, hoard } }`

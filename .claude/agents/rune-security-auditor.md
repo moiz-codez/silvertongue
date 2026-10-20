@@ -14,10 +14,10 @@ Read `AGENTS.md` (Security invariants) and `docs/ARCHITECTURE.md` first. Then ch
 
 1. **API key:** `ANTHROPIC_API_KEY` is read only in `apps/server`. Run `npm run build`, then search `apps/web/dist` for `sk-ant`, `ANTHROPIC`, and any `VITE_` variable that holds a secret. Check `.env` is gitignored and not committed (`git ls-files`).
 2. **Runes in payloads:** trace every `emit(`, `socket.emit`, ack callback and HTTP reply. None may include a rune, a field derived from the `runes` table, or a spread of a database row. Payload builders must list fields explicitly.
-3. **Raw replies:** `raw_text` and unfiltered guardian output are never emitted. On floor 3, only `snip()` output leaves the server. Nothing is streamed.
+3. **Raw replies:** `raw_text` and unfiltered guardian output are never emitted. On floor 3, only `snip()` output leaves the server. Nothing is streamed. On Floor 1 there is no filter: Grub's reply *is* the post-filter text, so a rune inside a Grub bubble is the game working, not a leak.
 4. **Errors and logs:** error messages sent to clients are in-character and contain no rune, prompt text or stack trace. Projector events contain no rune.
 5. **Win condition:** floor clears happen only in the server-side door handler, using `normalize(guess) === normalize(rune)`. No other code path advances a floor. The door lockout and cooldown are enforced server-side.
-6. **Fail-closed guards:** every guard/judge verdict goes through `parseVerdict` and only the exact allow value passes. Look for any `try/catch` that defaults to PASS or CLEAN.
+6. **Fail-closed guards:** every guard/judge verdict goes through `parseVerdict`, and only the allow value (`PASS` / `CLEAN`, compared case-insensitively) passes. Unparseable output or extra keys block. Look for any `try/catch` that defaults to PASS or CLEAN.
 7. **Rune isolation:** Gorm and the Ward of Ears prompts and calls never include the rune.
 8. **Input handling:** every socket payload is validated with zod; `sanitize()` runs on player text before any LLM call; `[...]` tags are stripped; `<`/`>` are neutralised; length is capped.
 9. **Prompt cache safety:** the cached static system block contains no per-player data.
