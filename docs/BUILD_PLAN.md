@@ -63,12 +63,14 @@ Every milestone is done only when its acceptance criteria are met and `npm run c
 - Per-player cooldown, message cap, length cap; waiting lines after 1.5 s; in-character errors with cooldown refund.
 - `llm_calls` logging with cost; admin health panel (queue, 429s, latency, tokens, spend); `BUDGET_USD` auto-pause.
 - `scripts/loadtest.ts`: N fake socket clients sending messages on a realistic schedule.
+- `npm run tunnel` keeps `cloudflared` running and restarts only the game server if it crashes: a loud log line, a short delay (about 2 s), then a restart with the same `PUBLIC_URL`. A server crash then never changes the public address. Phones already reconnect by themselves and send `player:resume` with their saved token on every connect (`useGame.ts`), so they carry on where they were. The tunnel dying still stops everything with the red banner, as now.
 - A kicked player can currently rejoin under a new name by clearing their browser (found in M2). The per-IP join limit below slows this down, and the admin can kick again.
 - Join limit per IP (behind the Cloudflare tunnel every socket comes from `127.0.0.1`, so use the `cf-connecting-ip` handshake header, trusted only when the connection itself is from `127.0.0.1`; otherwise `socket.handshake.address`). Keep it generous, around 60 joins per minute, because the whole class on university Wi-Fi may share one public IP. This sits on top of the one-join-per-socket rule from M1, so a script can't squat nicknames or multiply the message cap into API spend (deferred from the M1 audit, LOW-3).
 - Back off repeated failed `/admin` handshakes and cap `/projector` sockets per address (from the M2 audit, LOW-3; the 16+ character token already makes guessing impractical).
 - `sanitize` edge cases: strip an unclosed trailing `[...` tag, clean up nested `[[x]]`, and turn fullwidth `＜ ＞` / small `﹤ ﹥` into `‹ ›`, with unit tests (deferred from the M1 audit, LOW-4).
 
 **Acceptance**
+- With `npm run tunnel` running, kill the game server's node process: a loud line appears, the server comes back on the same address within a few seconds, and a joined phone resumes with the same name, floor and progress without re-scanning.
 - Load test, 60 fake players in mock mode for 5 minutes: no crashes, no unhandled errors, every message gets a reply or an in-character error.
 - With a deliberately tiny fake limit, the queue slows the game instead of erroring.
 - `load-tester` subagent report attached to the milestone summary.
