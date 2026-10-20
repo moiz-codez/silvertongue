@@ -7,9 +7,9 @@
      │  Socket.IO          │  Socket.IO           │  Socket.IO + ADMIN_TOKEN
      └──────────────┬──────┴──────────────────────┘
                     ▼
-        Caddy (HTTPS, websockets)          Oracle Always Free VM, Ubuntu ARM64
+        Cloudflare quick tunnel (HTTPS, websockets; *.trycloudflare.com)
                     ▼
-        Node process (systemd)
+        cloudflared ─▶ Node process on the Windows laptop (npm run tunnel)
         ├─ Fastify: serves apps/web/dist, /health
         ├─ Socket.IO: player / projector / admin namespaces or rooms
         ├─ Game engine: runes, door, scoring, hints, state
@@ -287,8 +287,8 @@ All pure, all unit-tested.
 | `ANTHROPIC_API_KEY` | `sk-ant-…` | Required when `LLM_MODE=live` |
 | `LLM_MODE` | `mock` | `mock` or `live` |
 | `ADMIN_TOKEN` | long random string | Admin access |
-| `PORT` | `3000` | Fastify port (Caddy proxies to it) |
-| `PUBLIC_URL` | `https://silvertongue.duckdns.org` | For the projector QR code |
+| `PORT` | `3000` | Fastify port (cloudflared forwards to it) |
+| `PUBLIC_URL` | `https://<words>.trycloudflare.com` | For the projector QR code; `npm run tunnel` sets it |
 | `DATABASE_PATH` | `./data/silvertongue.db` | SQLite file |
 | `RATE_RPM` / `RATE_ITPM` / `RATE_OTPM` | `800` / `400000` / `64000` | 80% of the console limits |
 | `COOLDOWN_MS` | `5000` | Per-player message cooldown |
