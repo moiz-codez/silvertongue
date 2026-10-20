@@ -98,7 +98,7 @@ if (values.floor !== '1') {
 process.env.LLM_MODE = 'live';
 const env = loadEnv();
 const complete = createLiveClient(env.ANTHROPIC_API_KEY);
-const { model } = ROLES.grub;
+const { model, maxTokens } = ROLES.grub;
 
 const counted = await new Anthropic({ apiKey: env.ANTHROPIC_API_KEY }).messages.countTokens({
   model,
@@ -109,6 +109,8 @@ console.log(`Floor 1 · Grub · ${model}`);
 console.log(`Static block ≈ ${counted.input_tokens} tokens (cache needs ≥ 512)\n`);
 
 let calls = 0;
+let cutOff = 0; // replies that hit max_tokens (trimmed by the client before we see them)
+const styleProblems: string[] = []; // README → 5: under 50 words, no *asterisk actions*
 let totalCost = 0;
 const totals = { input: 0, output: 0, cacheWrite: 0, cacheRead: 0 };
 const summary: string[] = [];
@@ -127,6 +129,7 @@ for (const scenario of GRUB_SCENARIOS) {
 
     const u = turn.result.usage;
     calls++;
+    if (u.output_tokens >= maxTokens) cutOff++;
     totalCost += costUsd(model, u);
     totals.input += u.input_tokens;
     totals.output += u.output_tokens;
@@ -135,6 +138,9 @@ for (const scenario of GRUB_SCENARIOS) {
 
     console.log(`  You:  ${text}`);
     console.log(`  Grub: ${turn.text}`);
+    const words = turn.text.split(/\s+/).length;
+    if (words > 50) styleProblems.push(`${words} words: ${turn.text.slice(0, 40)}…`);
+    if (/\*[^*]+\*/.test(turn.text)) styleProblems.push(`asterisks: ${turn.text.slice(0, 40)}…`);
     const reveal = revealsRune(turn.text, rune);
     if (reveal.revealed) {
       slippedAt = i + 1;
@@ -157,4 +163,7 @@ console.log(
   `\n${calls} calls · input ${totals.input} · output ${totals.output} · ` +
     `cache write ${totals.cacheWrite} · cache read ${totals.cacheRead} · cost $${totalCost.toFixed(4)}`,
 );
+console.log(`${cutOff} of ${calls} replies hit max_tokens (${maxTokens}) and were trimmed`);
+console.log(`${styleProblems.length} reply style problems`);
+for (const problem of styleProblems) console.log(`  ${problem}`);
 console.log('Read the transcripts too: "OK" only checks leaks, not tone or PG content.');
