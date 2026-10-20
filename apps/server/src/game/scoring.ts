@@ -1,11 +1,7 @@
 // Scoring rules from GAME_DESIGN.md → Scoring.
-export const SPEED_BONUS_MS = 2 * 60_000;
+import type { ScoreLine } from '@silvertongue/shared/events';
 
-export interface ScoreLine {
-  label: string;
-  points: number;
-  highlight?: boolean; // first blood is shown in amber
-}
+export const SPEED_BONUS_MS = 2 * 60_000;
 
 export function scoreFloorClear(p: {
   floor: number;
