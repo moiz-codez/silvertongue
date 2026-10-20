@@ -1,3 +1,4 @@
+import { Admin } from './routes/Admin.tsx';
 import { Cleared } from './routes/Cleared.tsx';
 import { Closed } from './routes/Closed.tsx';
 import { Join } from './routes/Join.tsx';
@@ -9,6 +10,7 @@ import { useGame } from './useGame.ts';
 // Three apps in one build, picked by the path. No router library needed for three screens.
 export function App() {
   if (location.pathname === '/projector') return <Projector />;
+  if (location.pathname === '/admin') return <Admin />;
   return <Phone />;
 }
 

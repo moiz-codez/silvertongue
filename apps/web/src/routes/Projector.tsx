@@ -7,6 +7,7 @@ import { FLOOR_COUNT } from '@silvertongue/shared/constants';
 import type { ProjectorServerEvents, ProjectorSnapshot } from '@silvertongue/shared/events';
 import { DEEPEST_BUILT_FLOOR, GUARDIANS } from '@silvertongue/shared/floors';
 import type { Socket } from 'socket.io-client';
+import { clock } from '../clock.ts';
 import { GUARDIAN_SPRITES } from '../sprites.ts';
 import { useNow } from '../useGame.ts';
 import '../styles/projector.css';
@@ -18,7 +19,7 @@ export function Projector() {
   const [receivedAt, setReceivedAt] = useState(0);
 
   useEffect(() => {
-    const socket: Socket<ProjectorServerEvents> = io('/projector');
+    const socket: Socket<ProjectorServerEvents> = io('/projector', { forceNew: true }); // own connection, not the phone's
     socket.on('projector:snapshot', (s) => {
       setSnapshot(s);
       setReceivedAt(Date.now());
@@ -179,15 +180,6 @@ function Holding({ text }: { text: string }) {
       <h1>{text}</h1>
     </div>
   );
-}
-
-// "08:42"; hours only appear if a game somehow runs that long.
-function clock(ms: number): string {
-  const total = Math.floor(ms / 1000);
-  const mm = String(Math.floor(total / 60) % 60).padStart(2, '0');
-  const ss = String(total % 60).padStart(2, '0');
-  const hours = Math.floor(total / 3600);
-  return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
 function host(url: string): string {
