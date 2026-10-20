@@ -15,7 +15,7 @@ export async function createApp(env: Env, db: Db, complete: Complete, opts = { l
   const app = Fastify({ logger: opts.logger });
   const gameId = getOrCreateRunningGame(db, Date.now()); // M1: one running game; M2 adds lobby/admin
 
-  app.get('/health', async () => ({ ok: true, llmMode: env.LLM_MODE }));
+  app.get('/health', async () => ({ ok: true })); // no LLM mode here: it would tell players when Grub is a mock
 
   // After `npm run build`, the same process serves the web app (this is how production runs).
   const webDist = path.join(import.meta.dirname, '../../web/dist');

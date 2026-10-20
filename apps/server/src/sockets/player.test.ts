@@ -151,6 +151,7 @@ describe('Floor 1, end to end in mock mode', () => {
     const { url } = await startServer();
     const { socket } = client(url);
     expect((await join(socket, 'Ali')).ok).toBe(true);
+    expect((await join(socket, 'AliAgain')).ok).toBe(false); // one player per socket
 
     const replies = await Promise.all(
       ['ali', 'BigDick', 'A', 'x'.repeat(17), '<script>'].map((n) => join(client(url).socket, n)),

@@ -9,4 +9,8 @@ const repoRoot = path.join(import.meta.dirname, '../../..');
 const db = openDb(path.resolve(repoRoot, env.DATABASE_PATH)); // relative to the repo, not the cwd
 
 const { app } = await createApp(env, db, createLlm(env));
+if (env.LLM_MODE === 'mock')
+  app.log.warn(
+    'LLM_MODE=mock: guardians are fake and leak runes on request. Use LLM_MODE=live for a real game.',
+  );
 await app.listen({ port: env.PORT, host: '0.0.0.0' });

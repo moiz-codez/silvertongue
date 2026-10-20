@@ -113,6 +113,7 @@ export function registerPlayerHandlers(
       'player:join',
       safely((payload, ack) => {
         if (typeof ack !== 'function') return;
+        if (playerId) return ack({ ok: false, error: 'You are already in the dungeon.' }); // one player per socket
         const parsed = joinPayload.safeParse(payload);
         if (!parsed.success)
           return ack({ ok: false, error: 'That name got lost in the dark. Try again.' });
