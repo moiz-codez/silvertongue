@@ -65,6 +65,7 @@ Every milestone is done only when its acceptance criteria are met and `npm run c
 - `scripts/loadtest.ts`: N fake socket clients sending messages on a realistic schedule.
 - A kicked player can currently rejoin under a new name by clearing their browser (found in M2). The per-IP join limit below slows this down, and the admin can kick again.
 - Join limit per IP (`socket.handshake.address`; behind Caddy, the client IP from `X-Forwarded-For`). Keep it generous, around 60 joins per minute, because the whole class on university Wi-Fi may share one public IP. This sits on top of the one-join-per-socket rule from M1, so a script can't squat nicknames or multiply the message cap into API spend (deferred from the M1 audit, LOW-3).
+- Back off repeated failed `/admin` handshakes and cap `/projector` sockets per address (from the M2 audit, LOW-3; the 16+ character token already makes guessing impractical).
 - `sanitize` edge cases: strip an unclosed trailing `[...` tag, clean up nested `[[x]]`, and turn fullwidth `＜ ＞` / small `﹤ ﹥` into `‹ ›`, with unit tests (deferred from the M1 audit, LOW-4).
 
 **Acceptance**
