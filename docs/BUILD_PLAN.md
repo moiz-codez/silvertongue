@@ -68,6 +68,7 @@ Every milestone is done only when its acceptance criteria are met and `npm run c
 
 - Ser Vellum (Floor 2) and Morwen + Snip (Floor 3), prompts from `docs/prompts`.
 - `snip()` with Snip's own bubble style; "slipped past Snip" detection on filtered text.
+- Every new pipeline cleans the reply first, exactly as Floor 1 does: `stripActions(guardTrim(result.rawText, result.text, rune), rune)`. Snip, `revealsRune` and (later) the Ward of Tongues run on that text, and only their filtered result is sent. Each floor gets a test like "grubTurn clean-up" in `floors/01-grub/pipeline.test.ts` (from the M1 audit).
 - Expressions for both.
 
 **Acceptance**
