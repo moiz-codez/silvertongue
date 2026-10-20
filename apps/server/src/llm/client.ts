@@ -51,15 +51,26 @@ export function createLiveClient(apiKey: string): Complete {
     });
 
     // Find text by block type, never by position.
-    const text = response.content
+    const joined = response.content
       .filter((block) => block.type === 'text')
       .map((block) => block.text)
       .join('')
       .trim();
+    // A reply cut off by max_tokens is trimmed before anything sees or checks it.
+    const text = response.stop_reason === 'max_tokens' ? trimToLastSentence(joined) : joined;
     if (text === '') throw new Error(`Empty reply (stop_reason: ${response.stop_reason})`);
 
     return { text, model, usage: response.usage, latencyMs: Date.now() - started };
   };
+}
+
+// Cuts a reply back to its last complete sentence (ending in . ! ? or …, plus any closing quote).
+// With no complete sentence at all, keeps the text and adds "…" so it still reads as speech.
+export function trimToLastSentence(text: string): string {
+  const ends = [...text.matchAll(/[.!?…]+["'”’)]*(?=\s|$)/g)];
+  const last = ends.at(-1);
+  if (!last) return text.trim() === '' ? '' : `${text.trim()}…`;
+  return text.slice(0, last.index + last[0].length).trim();
 }
 
 // For the llm_calls log.
