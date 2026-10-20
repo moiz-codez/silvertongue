@@ -60,7 +60,7 @@ Every milestone is done only when its acceptance criteria are met and `npm run c
 ## M3 — The LLM queue and protection layer
 
 - `llm/queue.ts`: per-model token buckets at 80%, priorities, in-flight cap, timeouts, retries, usage reconciliation.
-- Per-player cooldown, message cap, length cap; waiting lines after 1.5 s; in-character errors with cooldown refund.
+- Per-player cooldown, message cap, length cap; waiting lines shown as soon as the player sends (the M1 decision); in-character errors with cooldown refund.
 - `llm_calls` logging with cost; admin health panel (queue, 429s, latency, tokens, spend); `BUDGET_USD` auto-pause.
 - `scripts/loadtest.ts`: N fake socket clients sending messages on a realistic schedule.
 - `npm run tunnel` keeps `cloudflared` running and restarts only the game server if it crashes: a loud log line, a short delay (about 2 s), then a restart with the same `PUBLIC_URL`. A server crash then never changes the public address. Phones already reconnect by themselves and send `player:resume` with their saved token on every connect (`useGame.ts`), so they carry on where they were. The tunnel dying still stops everything with the red banner, as now.
@@ -69,10 +69,19 @@ Every milestone is done only when its acceptance criteria are met and `npm run c
 - Back off repeated failed `/admin` handshakes and cap `/projector` sockets per address (from the M2 audit, LOW-3; the 16+ character token already makes guessing impractical).
 - `sanitize` edge cases: strip an unclosed trailing `[...` tag, clean up nested `[[x]]`, and turn fullwidth `＜ ＞` / small `﹤ ﹥` into `‹ ›`, with unit tests (deferred from the M1 audit, LOW-4).
 
+**Decisions made in M3**
+- Retries moved from the SDK into the queue, so every 429 is seen, counted and pauses the whole model for `retry-after`.
+- 60 s deadline per call from joining the queue; then an in-character "crowded" error with the turn refunded.
+- Live settings (cooldown, cap, mock/live) are stored on the game. `.env` only seeds the first game; Reset copies them into the next game; a restart keeps them. The admin header shows a large MOCK / LIVE badge.
+- The budget auto-pause fires once per game; the admin may resume on purpose.
+- Kicked phones remember the kick for 3 hours and show a "sent away" screen instead of the join form. Clearing the browser still gets round it; the per-address join limit slows that, and the admin can kick again. Banning addresses was ruled out: the class shares one IP.
+- The admin wrong-token lockout applies only through the tunnel; a browser on the laptop is never locked out.
+
 **Acceptance**
 - With `npm run tunnel` running, kill the game server's node process: a loud line appears, the server comes back on the same address within a few seconds, and a joined phone resumes with the same name, floor and progress without re-scanning.
 - Load test, 60 fake players in mock mode for 5 minutes: no crashes, no unhandled errors, every message gets a reply or an in-character error.
-- With a deliberately tiny fake limit, the queue slows the game instead of erroring.
+- 40 players at `RATE_RPM=60` (demand ~160 messages/min, so a growing backlog): 0 unanswered, 0 crashes, only in-character errors, error rate reported.
+- 40 players at the normal 800 RPM (above the message rate): 0 errors.
 - `load-tester` subagent report attached to the milestone summary.
 
 ## M4 — Floors 2 and 3

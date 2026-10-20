@@ -48,7 +48,7 @@ apps/server/src/
   floors/           01-grub/ … 06-vorgath/: prompts.ts, pipeline.ts, *.test.ts
   security/         normalize.ts, revealsRune.ts, stripActions.ts, nickname.ts, snip.ts, sanitize.ts, verdict.ts (fail-closed parsing)
   embeddings/       embed.ts, cosine.ts
-  sockets/          player.ts, projector.ts, admin.ts, throttle.ts (≤ 2 sends/s), testServer.ts (test helper)
+  sockets/          player.ts, projector.ts, admin.ts, clientIp.ts (per-address limits), throttle.ts (≤ 2 sends/s), testServer.ts (test helper)
 apps/web/src/
   routes/           Join, Lobby, Play, Cleared, Closed, Projector, Admin (App.tsx picks by path)
   sprites/          pixel-art SVG components, two expressions per guardian
@@ -72,7 +72,7 @@ Create these in milestone M0 and keep this list accurate.
 - `npm run native-check` — better-sqlite3 in WAL mode + one local MiniLM embedding; run on every new machine/server
 - `npm run playtest -- --floor 1` — scripted attacks from the floor's playtest checklist against the **real** API; prints transcripts, leaks, tokens and cost (costs money; Haiku = about a cent). Floors are added as they are built.
 - `npm run tunnel` — demo hosting: opens a Cloudflare quick tunnel, then runs the production server with `PUBLIC_URL` set to the tunnel address; shouts if the tunnel dies (run `npm run build` first; needs `cloudflared`)
-- `npm run loadtest -- --players 40` — fake socket clients against a mock-mode server
+- `npm run loadtest -- --players 40 --minutes 5 [--burst]` — fake phones against a running mock-mode server (refuses live mode); reports unanswered messages, latency, peak queue and projected API use
 
 ## Message pipeline (every floor)
 
