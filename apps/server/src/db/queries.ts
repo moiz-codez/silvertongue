@@ -1,6 +1,7 @@
 // Every SQL query lives here, as a typed function. Callers never write SQL.
 // Rows returned here are server-side only: client payloads are built from them field by field.
 import { randomUUID } from 'node:crypto';
+import type { GameStatus } from '@silvertongue/shared/events';
 import type { Db } from './db.ts';
 
 export interface PlayerRow {
@@ -23,6 +24,14 @@ export interface ProgressRow {
   door_locked_until: number | null;
 }
 
+export interface GameRow {
+  id: string;
+  status: GameStatus;
+  started_at: number | null;
+  paused_at: number | null;
+  paused_ms: number;
+}
+
 export interface MessageRow {
   id: number;
   speaker: string;
@@ -32,18 +41,61 @@ export interface MessageRow {
 
 // ---------- games ----------
 
-// Reuses the running game so a server restart never resets anyone's progress.
-export function getOrCreateRunningGame(db: Db, now: number): string {
-  const existing = db
-    .prepare("SELECT id FROM games WHERE status = 'running' ORDER BY created_at DESC LIMIT 1")
-    .get() as { id: string } | undefined;
-  if (existing) return existing.id;
+const GAME_COLUMNS = 'id, status, started_at, paused_at, paused_ms';
 
+// At startup: the newest game that isn't over, so a restart never resets progress.
+// Only when every game has ended is a new one opened, in the lobby.
+export function getCurrentGame(db: Db, now: number): GameRow {
+  const existing = db
+    .prepare(
+      `SELECT ${GAME_COLUMNS} FROM games WHERE status != 'ended' ORDER BY created_at DESC, rowid DESC LIMIT 1`,
+    )
+    .get() as GameRow | undefined;
+  return existing ?? createGame(db, now);
+}
+
+export function createGame(db: Db, now: number): GameRow {
   const id = randomUUID();
+  db.prepare("INSERT INTO games (id, status, created_at) VALUES (?, 'lobby', ?)").run(id, now);
+  return { id, status: 'lobby', started_at: null, paused_at: null, paused_ms: 0 };
+}
+
+export function saveGame(db: Db, game: GameRow, now: number): void {
   db.prepare(
-    "INSERT INTO games (id, status, created_at, started_at) VALUES (?, 'running', ?, ?)",
-  ).run(id, now, now);
-  return id;
+    `UPDATE games SET status = ?, started_at = ?, paused_at = ?, paused_ms = ?,
+       ended_at = CASE WHEN ? = 'ended' THEN ? ELSE ended_at END
+     WHERE id = ?`,
+  ).run(game.status, game.started_at, game.paused_at, game.paused_ms, game.status, now, game.id);
+}
+
+// On Start: players who joined in the lobby start Floor 1's clock now, not when they joined.
+export function startFloorClocks(db: Db, gameId: string, startedAt: number): void {
+  db.prepare(
+    `UPDATE floor_progress SET reached_at = ?
+     WHERE floor = 1 AND cleared_at IS NULL AND reached_at < ?
+       AND player_id IN (SELECT id FROM players WHERE game_id = ?)`,
+  ).run(startedAt, startedAt, gameId);
+}
+
+// On Resume: time spent paused doesn't count against anyone's speed bonus.
+export function shiftFloorClocks(
+  db: Db,
+  gameId: string,
+  pausedAt: number,
+  pausedFor: number,
+): void {
+  db.prepare(
+    `UPDATE floor_progress SET reached_at = reached_at + ?
+     WHERE cleared_at IS NULL AND reached_at < ?
+       AND player_id IN (SELECT id FROM players WHERE game_id = ?)`,
+  ).run(pausedFor, pausedAt, gameId);
+}
+
+export function gameSpendUsd(db: Db, gameId: string): number {
+  const row = db
+    .prepare('SELECT COALESCE(SUM(cost_usd), 0) AS total FROM llm_calls WHERE game_id = ?')
+    .get(gameId) as { total: number };
+  return row.total;
 }
 
 // ---------- players ----------
@@ -96,6 +148,50 @@ export function getRune(db: Db, playerId: string, floor: number): string {
     .prepare('SELECT rune FROM runes WHERE player_id = ? AND floor = ?')
     .get(playerId, floor) as { rune: string };
   return row.rune;
+}
+
+// Everyone in the game, deepest and highest-scoring first (admin table and projector map).
+export function listPlayers(db: Db, gameId: string): PlayerRow[] {
+  return db
+    .prepare(
+      `SELECT id, game_id, nickname, floor, score, messages_sent, kicked FROM players
+       WHERE game_id = ? ORDER BY floor DESC, score DESC, created_at`,
+    )
+    .all(gameId) as PlayerRow[];
+}
+
+export function kickPlayer(db: Db, playerId: string): void {
+  db.prepare('UPDATE players SET kicked = 1 WHERE id = ?').run(playerId);
+}
+
+export function renamePlayer(db: Db, playerId: string, nickname: string): void {
+  db.prepare('UPDATE players SET nickname = ? WHERE id = ?').run(nickname, playerId);
+}
+
+// ---------- projector feed ----------
+
+export interface ProjectorEventRow {
+  type: string;
+  text: string;
+  created_at: number;
+}
+
+export function insertProjectorEvent(
+  db: Db,
+  e: { gameId: string; type: string; text: string; now: number },
+): void {
+  db.prepare(
+    'INSERT INTO projector_events (game_id, type, text, created_at) VALUES (?, ?, ?, ?)',
+  ).run(e.gameId, e.type, e.text, e.now);
+}
+
+// Newest first.
+export function listProjectorEvents(db: Db, gameId: string, limit: number): ProjectorEventRow[] {
+  return db
+    .prepare(
+      'SELECT type, text, created_at FROM projector_events WHERE game_id = ? ORDER BY id DESC LIMIT ?',
+    )
+    .all(gameId, limit) as ProjectorEventRow[];
 }
 
 // ---------- floor progress ----------

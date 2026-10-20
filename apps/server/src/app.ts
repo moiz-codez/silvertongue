@@ -7,13 +7,13 @@ import { Server } from 'socket.io';
 import type { ClientToServerEvents, ServerToClientEvents } from '@silvertongue/shared/events';
 import type { Env } from './config/env.ts';
 import type { Db } from './db/db.ts';
-import { getOrCreateRunningGame } from './db/queries.ts';
+import { getCurrentGame } from './db/queries.ts';
 import type { Complete } from './llm/client.ts';
 import { registerPlayerHandlers } from './sockets/player.ts';
 
 export async function createApp(env: Env, db: Db, complete: Complete, opts = { logger: true }) {
   const app = Fastify({ logger: opts.logger });
-  const gameId = getOrCreateRunningGame(db, Date.now()); // M1: one running game; M2 adds lobby/admin
+  const gameId = getCurrentGame(db, Date.now()).id;
 
   app.get('/health', async () => ({ ok: true })); // no LLM mode here: it would tell players when Grub is a mock
 

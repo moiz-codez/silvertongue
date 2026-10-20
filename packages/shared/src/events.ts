@@ -2,6 +2,7 @@
 import type { z } from 'zod';
 import type { doorPayload, joinPayload, messagePayload, resumePayload } from './schemas.ts';
 
+export type GameStatus = 'lobby' | 'running' | 'paused' | 'reveal' | 'ended';
 export type Speaker = 'player' | 'guardian' | 'system';
 export type Expression = 'idle' | 'slipped';
 
