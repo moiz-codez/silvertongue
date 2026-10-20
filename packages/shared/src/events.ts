@@ -1,6 +1,14 @@
 // Socket.IO event types shared by server and phone. Nothing here may ever carry a rune.
 import type { z } from 'zod';
-import type { doorPayload, joinPayload, messagePayload, resumePayload } from './schemas.ts';
+import type {
+  adminCommandPayload,
+  doorPayload,
+  joinPayload,
+  kickPayload,
+  messagePayload,
+  renamePayload,
+  resumePayload,
+} from './schemas.ts';
 
 export type GameStatus = 'lobby' | 'running' | 'paused' | 'reveal' | 'ended';
 export type Speaker = 'player' | 'guardian' | 'system';
@@ -21,6 +29,8 @@ export interface ScoreLine {
 
 // Durations are "milliseconds from now", so a phone with a wrong clock still counts down correctly.
 export interface PlayerState {
+  gameStatus: GameStatus;
+  playersInGame: number; // shown in the lobby: "27 adventurers at the gate"
   nickname: string;
   floor: number;
   floorReady: boolean; // false while that floor isn't built yet
@@ -61,4 +71,65 @@ export interface ServerToClientEvents {
   'player:door-result': (result: { correct: boolean; lockedMs: number }) => void;
   'player:floor-cleared': (cleared: FloorCleared) => void;
   'player:error': (error: { code: string; message: string }) => void; // message is in character
+  'player:reset': () => void; // the admin opened a new game: forget the token, back to Join
+  'player:kicked': () => void; // forget the token; the server disconnects this socket
+}
+
+// ---------- projector (namespace /projector, read-only) ----------
+// Only nicknames that passed the filter and text the server wrote. Never ids, tokens, runes or chat.
+
+export interface FeedItem {
+  gameMs: number; // time in the dungeon when it happened
+  type: 'first_blood' | 'clear';
+  text: string;
+}
+
+export interface ProjectorSnapshot {
+  status: GameStatus;
+  elapsedMs: number;
+  publicUrl: string;
+  players: { nickname: string; floor: number }[];
+  feed: FeedItem[]; // newest first
+}
+
+export interface ProjectorServerEvents {
+  'projector:snapshot': (snapshot: ProjectorSnapshot) => void;
+}
+
+// ---------- admin (namespace /admin, needs ADMIN_TOKEN) ----------
+
+export interface AdminPlayer {
+  id: string;
+  nickname: string;
+  floor: number;
+  score: number;
+  messagesSent: number;
+  kicked: boolean;
+}
+
+export interface AdminState {
+  status: GameStatus;
+  elapsedMs: number;
+  players: AdminPlayer[];
+  maxMessages: number;
+  spendUsd: number;
+  budgetUsd: number;
+}
+
+export type AdminReply = { ok: true } | { ok: false; error: string };
+
+export interface AdminClientEvents {
+  'admin:command': (
+    payload: z.infer<typeof adminCommandPayload>,
+    ack: (reply: AdminReply) => void,
+  ) => void;
+  'admin:kick': (payload: z.infer<typeof kickPayload>, ack: (reply: AdminReply) => void) => void;
+  'admin:rename': (
+    payload: z.infer<typeof renamePayload>,
+    ack: (reply: AdminReply) => void,
+  ) => void;
+}
+
+export interface AdminServerEvents {
+  'admin:state': (state: AdminState) => void;
 }

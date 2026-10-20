@@ -6,3 +6,13 @@ export const joinPayload = z.object({ nickname: z.string().max(64) });
 export const resumePayload = z.object({ token: z.string().max(128) });
 export const messagePayload = z.object({ text: z.string().max(2000) });
 export const doorPayload = z.object({ guess: z.string().max(100) });
+
+// Admin payloads (only accepted on the /admin namespace, after the ADMIN_TOKEN check).
+export const adminCommandPayload = z.object({
+  type: z.enum(['start', 'pause', 'resume', 'reveal', 'end', 'reset']),
+});
+export const kickPayload = z.object({ playerId: z.string().max(64) });
+export const renamePayload = z.object({
+  playerId: z.string().max(64),
+  nickname: z.string().max(64),
+});

@@ -60,6 +60,8 @@ export function registerPlayerHandlers(
       ? q.getProgress(db, playerId, player.floor)
       : null;
     return {
+      gameStatus: 'running', // the game state machine is wired in next
+      playersInGame: 0,
       nickname: player.nickname,
       floor: player.floor,
       floorReady: BUILT_FLOORS.has(player.floor),
