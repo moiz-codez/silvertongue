@@ -20,7 +20,9 @@ export function Lobby({ state }: { state: PlayerState }) {
       </p>
       <p className="lobby-count">
         <span className="lobby-dot" aria-hidden="true" />
-        <strong>{count}</strong> {count === 1 ? 'adventurer' : 'adventurers'} at the gate
+        <span>
+          <strong>{count}</strong> {count === 1 ? 'adventurer' : 'adventurers'} at the gate
+        </span>
       </p>
 
       <section className="how-to">
