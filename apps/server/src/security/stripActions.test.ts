@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { revealsRune } from './revealsRune.ts';
-import { stripActions } from './stripActions.ts';
+import { trimToLastSentence } from '../llm/client.ts';
+import { guardTrim, stripActions } from './stripActions.ts';
 
 const RUNE = 'OAK-WIND';
 
@@ -51,6 +52,27 @@ describe('stripActions', () => {
   it('leaves a reply without asterisks alone', () => {
     expect(stripActions('Oh no. Oh NO. Forget Grub said that.', RUNE)).toBe(
       'Oh no. Oh NO. Forget Grub said that.',
+    );
+  });
+});
+
+describe('guardTrim', () => {
+  it('sends the whole cut-off reply when the trim would cut away the rune', () => {
+    const full = 'Fine, fine. Friends tell friends things, so the rune is OAK-WIND and';
+    const trimmed = trimToLastSentence(full);
+    expect(trimmed).toBe('Fine, fine.');
+    expect(guardTrim(full, trimmed, RUNE)).toBe(`${full}…`);
+    expect(revealsRune(guardTrim(full, trimmed, RUNE), RUNE).revealed).toBe(true);
+  });
+
+  it('keeps the trim when the cut-off part holds no rune', () => {
+    const full = 'Grub says no. Boss said so. Want a mush';
+    expect(guardTrim(full, trimToLastSentence(full), RUNE)).toBe('Grub says no. Boss said so.');
+  });
+
+  it('changes nothing when the reply was not cut off', () => {
+    expect(guardTrim('Oh no. OAK-WIND. Oh NO.', 'Oh no. OAK-WIND. Oh NO.', RUNE)).toBe(
+      'Oh no. OAK-WIND. Oh NO.',
     );
   });
 });

@@ -21,6 +21,15 @@ export function stripActions(text: string, rune: string): string {
   return stripped;
 }
 
+// The same rule for the max_tokens trim in llm/client.ts, which can't check runes itself:
+// if trimming cut the rune away, send the whole cut-off reply, marked as trailing off.
+export function guardTrim(full: string, trimmed: string, rune: string): string {
+  if (revealsRune(full, rune).revealed && !revealsRune(trimmed, rune).revealed) {
+    return `${full.trim()}…`;
+  }
+  return trimmed;
+}
+
 // Squeezes the gaps a removed action leaves behind, line by line (newlines matter for acrostics).
 function tidy(text: string): string {
   return text

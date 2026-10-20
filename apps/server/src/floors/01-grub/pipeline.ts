@@ -2,7 +2,7 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type { Complete, LlmResult } from '../../llm/client.ts';
 import { revealsRune } from '../../security/revealsRune.ts';
-import { stripActions } from '../../security/stripActions.ts';
+import { guardTrim, stripActions } from '../../security/stripActions.ts';
 import { GRUB_PROMPT, runeNote } from './prompts.ts';
 
 export interface Turn {
@@ -24,7 +24,8 @@ export async function grubTurn(
     playerNote: runeNote(rune),
     messages: toMessages(history),
   });
-  const text = stripActions(result.text, rune); // before the leak check, never hiding a leak
+  // Both clean-ups run before the leak check, and neither may hide a leak.
+  const text = stripActions(guardTrim(result.rawText, result.text, rune), rune);
   return { text, slipped: revealsRune(text, rune).revealed, result };
 }
 
