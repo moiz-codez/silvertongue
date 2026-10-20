@@ -67,7 +67,7 @@ Every milestone is done only when its acceptance criteria are met and `npm run c
 - A kicked player can currently rejoin under a new name by clearing their browser (found in M2). The per-IP join limit below slows this down, and the admin can kick again.
 - Join limit per IP (behind the Cloudflare tunnel every socket comes from `127.0.0.1`, so use the `cf-connecting-ip` handshake header, trusted only when the connection itself is from `127.0.0.1`; otherwise `socket.handshake.address`). Keep it generous, around 60 joins per minute, because the whole class on university Wi-Fi may share one public IP. This sits on top of the one-join-per-socket rule from M1, so a script can't squat nicknames or multiply the message cap into API spend (deferred from the M1 audit, LOW-3).
 - Back off repeated failed `/admin` handshakes and cap `/projector` sockets per address (from the M2 audit, LOW-3; the 16+ character token already makes guessing impractical).
-- `sanitize` edge cases: strip an unclosed trailing `[...` tag, clean up nested `[[x]]`, and turn fullwidth `＜ ＞` / small `﹤ ﹥` into `‹ ›`, with unit tests (deferred from the M1 audit, LOW-4).
+- `sanitize` edge cases: strip an unclosed trailing `[...` tag, clean up nested `[[x]]`, and neutralise fullwidth `＜ ＞` / small `﹤ ﹥` brackets, with unit tests (deferred from the M1 audit, LOW-4). Done in M3; after the M3 audit every angle bracket, lookalikes included, becomes `(` `)` and lookalike square brackets are stripped like `[ ]`.
 
 **Decisions made in M3**
 - Retries moved from the SDK into the queue, so every 429 is seen, counted and pauses the whole model for `retry-after`.

@@ -51,7 +51,7 @@ It then checks `/health` **through the tunnel** every 15 seconds and prints a re
 
 1. Open a terminal in `C:\dev\silvertongue` and run `npm run tunnel`. Wait for the green **READY** banner with the address. Leave this window open and visible to you, not on the projector.
 2. **Projector:** on this laptop, open `http://localhost:3000/projector` full screen (F11). Use localhost, not the tunnel address, so the big screen keeps working even if the tunnel drops. The QR still shows the tunnel address.
-3. **Admin:** on this laptop, open `http://localhost:3000/admin` in another window (or `<address>/admin` on a second device) and enter `ADMIN_TOKEN`. The status should be **LOBBY**.
+3. **Admin:** on this laptop, open `http://localhost:3000/admin` in another window (or `<address>/admin` on a second device) and enter `ADMIN_TOKEN`. The status should be **LOBBY**. Only open the admin page on `localhost` or the HTTPS tunnel address, never `http://<laptop-ip>:3000` on the Wi-Fi: that would send the token unencrypted across the classroom network.
 4. **Check from your phone on mobile data, with Wi-Fi off:** scan the projector QR, join with a test name, see it on the projector, then kick it from the admin page.
 5. Open /admin, set AI replies to Live in Live settings and press Apply, then confirm the header badge says LIVE. Do this after the final Reset, before the class joins. (Settings live in the database, not `.env`: changing `LLM_MODE` in `.env` doesn't change an existing game.)
 6. Let the class scan. When everyone is in, press **Start game** on the admin page.
