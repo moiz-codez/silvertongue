@@ -1,49 +1,28 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import { io, type Socket } from 'socket.io-client';
-import { MAX_MESSAGE_CHARS } from '@silvertongue/shared/constants';
-import type { ClientToServerEvents } from '@silvertongue/shared/events';
+import { Cleared } from './routes/Cleared.tsx';
+import { Join } from './routes/Join.tsx';
+import { Play } from './routes/Play.tsx';
+import { useGame } from './useGame.ts';
 
-// Same origin: Vite proxies /socket.io in dev; Fastify serves both in production.
-const socket: Socket<Record<string, never>, ClientToServerEvents> = io();
-
+// No router: the game state decides which screen the phone shows.
 export function App() {
-  const [connected, setConnected] = useState(socket.connected);
-  const [text, setText] = useState('');
-  const [reply, setReply] = useState('');
+  const game = useGame();
 
-  useEffect(() => {
-    const onConnect = () => setConnected(true);
-    const onDisconnect = () => setConnected(false);
-    socket.on('connect', onConnect);
-    socket.on('disconnect', onDisconnect);
-    return () => {
-      socket.off('connect', onConnect);
-      socket.off('disconnect', onDisconnect);
-    };
-  }, []);
-
-  function send(event: FormEvent) {
-    event.preventDefault();
-    socket.emit('echo', { text }, (r) => setReply(r.text));
+  if (!game.token) return <Join onJoin={game.join} />;
+  if (!game.state) return <p className="loading">Lighting the torches…</p>;
+  if (game.cleared || !game.state.floorReady) {
+    return <Cleared state={game.state} cleared={game.cleared} onDescend={game.descend} />;
   }
-
   return (
-    <main className="hello">
-      <h1>Silvertongue</h1>
-      <p className="muted">Talk your way past six guardians.</p>
-      <p className={connected ? 'status ok' : 'status'}>
-        {connected ? 'The dungeon hears you' : 'Connecting…'}
-      </p>
-      <form onSubmit={send}>
-        <input
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          maxLength={MAX_MESSAGE_CHARS}
-          placeholder="Say something into the dark"
-        />
-        <button disabled={!connected}>Echo</button>
-      </form>
-      {reply && <p className="echo">The walls echo: “{reply}”</p>}
-    </main>
+    <Play
+      state={game.state}
+      bubbles={game.bubbles}
+      expression={game.expression}
+      waitingLine={game.waitingLine}
+      doorNote={game.doorNote}
+      cooldownUntil={game.cooldownUntil}
+      doorLockedUntil={game.doorLockedUntil}
+      onSend={game.send}
+      onDoor={game.openDoor}
+    />
   );
 }

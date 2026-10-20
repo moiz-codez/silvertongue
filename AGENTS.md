@@ -46,7 +46,7 @@ apps/server/src/
   llm/              client.ts (Anthropic wrapper + prompt assembly), queue.ts (rate limiter), mock.ts
   game/             runeWords.ts, runes.ts, door.ts, scoring.ts, hints.ts, titles.ts, state.ts
   floors/           01-grub/ … 06-vorgath/: prompts.ts, pipeline.ts, *.test.ts
-  security/         normalize.ts, revealsRune.ts, snip.ts, sanitize.ts, verdict.ts (fail-closed parsing)
+  security/         normalize.ts, revealsRune.ts, stripActions.ts, snip.ts, sanitize.ts, verdict.ts (fail-closed parsing)
   embeddings/       embed.ts, cosine.ts
   sockets/          player.ts, projector.ts, admin.ts
 apps/web/src/
@@ -70,7 +70,7 @@ Create these in milestone M0 and keep this list accurate.
 - `npm start` — production server on `PORT`; serves `apps/web/dist` and Socket.IO from one process
 - `npm run smoke` — two **real** Haiku calls; passes when the second shows `cache_read_input_tokens > 0` (well under $0.01)
 - `npm run native-check` — better-sqlite3 in WAL mode + one local MiniLM embedding; run on every new machine/server
-- `npm run playtest -- --floor 3` — scripted attacks against the **real** API (costs money; Haiku = cents)
+- `npm run playtest -- --floor 1` — scripted attacks from the floor's playtest checklist against the **real** API; prints transcripts, leaks, tokens and cost (costs money; Haiku = about a cent). Floors are added as they are built.
 - `npm run loadtest -- --players 40` — fake socket clients against a mock-mode server
 
 ## Message pipeline (every floor)
@@ -79,7 +79,8 @@ Create these in milestone M0 and keep this list accurate.
 player text → sanitize (trim, ≤300 chars, strip [bracket tags])
             → cooldown + per-player cap check
             → [input guard: floor 4 Gorm, floors 5–6 Ward of Ears]   SEAL/SMASH → stop
-            → guardian reply (full reply, no streaming)
+            → guardian reply (full reply, no streaming; cut-off replies trimmed to the last sentence)
+            → stripActions: drop short *stage directions*, never hiding a leak
             → [output checks: floor 3 Snip; floors 5–6 revealsRune → Ward of Tongues]
             → send filtered text + expression state to player
             → log everything server-side; emit moderated events to projector
@@ -125,7 +126,7 @@ Per-floor details: `docs/ARCHITECTURE.md` → "Floor pipelines".
 ## Git workflow
 
 - One branch per milestone, named `mN-short-name` (e.g. `m0-scaffold`, `m1-floor1`), branched from an up-to-date `main`.
-- Small commits, each a working state, with imperative messages ("Add door check with lockout").
+- Small commits, each a working state, in [Conventional Commits](https://www.conventionalcommits.org/) format: `type(scope): imperative summary`, e.g. `feat(db): add WAL mode`, `fix(web): stop chat scroll crash`, `chore: restore trailing newline in .gitignore`. Types: feat, fix, docs, test, refactor, chore. Scope is the area touched (db, llm, sockets, security, game, web, shared, grub, scripts). Earlier commits predate this rule and are not rewritten.
 - `npm run check` passes before every commit.
 - Push the branch to `origin`; Moiz reviews on GitHub and merges to `main` via a pull request.
 - Never commit `.env`, never force-push, never rewrite pushed history.

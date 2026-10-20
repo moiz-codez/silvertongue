@@ -1,0 +1,459 @@
+/* Screen styles. Phone first: designed at 390 px, works from 360 px. */
+
+.eyebrow {
+  margin: 0;
+  font-family: var(--font-heading);
+  color: var(--color-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.button-primary {
+  width: 100%;
+  min-height: 56px;
+  border-radius: var(--radius);
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+  font-size: 1.25rem;
+  letter-spacing: 0.04em;
+}
+
+.loading {
+  padding: var(--space-5);
+  text-align: center;
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+/* ---------- Join ---------- */
+
+.join {
+  min-height: 100dvh;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.join-title {
+  margin: var(--space-2) 0 var(--space-3);
+  font-size: clamp(2.6rem, 13vw, 3.4rem);
+  line-height: 1;
+}
+
+.join-intro {
+  margin: 0;
+  text-align: center;
+  color: var(--color-muted);
+  font-size: 1.05rem;
+}
+
+.join-door {
+  width: 144px;
+  height: 180px;
+  margin: var(--space-5) 0;
+}
+
+.join-form {
+  width: 100%;
+}
+
+.label {
+  display: block;
+  margin-bottom: var(--space-2);
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.field {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 var(--space-3);
+  background: var(--color-field);
+  border: 2px solid var(--color-border-strong);
+  border-radius: var(--radius);
+  font-size: 1.1rem;
+}
+
+.field:focus,
+.message-input:focus,
+.door-input:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.hint {
+  margin: var(--space-2) 0 var(--space-4);
+  color: var(--color-muted);
+  font-size: 0.95rem;
+}
+
+.hint-error {
+  color: var(--color-accent);
+}
+
+.join-footer {
+  margin-top: auto;
+  padding-top: var(--space-5);
+  text-align: center;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
+/* ---------- Play ---------- */
+
+.play {
+  height: 100dvh;
+  max-width: 480px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.play-header {
+  padding: var(--space-3) var(--space-3) var(--space-3);
+  border-bottom: 1px solid var(--color-surface);
+}
+
+.play-header-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.eyebrow-left {
+  text-align: left;
+  margin-right: auto;
+  font-size: 0.9rem;
+}
+
+.score {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.title-pill {
+  padding: 2px var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 999px;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.progress {
+  display: flex;
+  gap: 4px;
+  margin-top: var(--space-3);
+}
+
+.progress-step {
+  flex: 1;
+  height: 4px;
+  background: var(--color-border);
+}
+
+.progress-step.done {
+  background: var(--color-accent);
+}
+
+.guardian-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--color-surface);
+}
+
+.guardian-portrait {
+  width: 72px;
+  height: 72px;
+  flex: none;
+  padding: 2px;
+  background: var(--color-field);
+}
+
+.guardian-name {
+  margin: 0;
+  font-size: 1.6rem;
+  line-height: 1.1;
+}
+
+.guardian-subtitle {
+  margin: 2px 0 0;
+  color: var(--color-muted);
+  font-size: 0.95rem;
+}
+
+.chat {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.bubble-row {
+  display: flex;
+  flex-direction: column;
+  max-width: 82%;
+}
+
+.bubble-row.player {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.bubble-row.guardian {
+  align-self: flex-start;
+}
+
+.bubble-name {
+  margin: 0 0 var(--space-1) var(--space-1);
+  font-size: 0.85rem;
+}
+
+.bubble {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--radius-bubble);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.bubble-player {
+  background: var(--bubble-player);
+  border-bottom-right-radius: 4px;
+}
+
+.bubble-guardian {
+  border-bottom-left-radius: 4px;
+}
+
+/* Per-guardian colours */
+.bubble-guardian.floor-1 {
+  background: var(--bubble-grub);
+}
+
+.bubble-row.guardian:has(.floor-1) .bubble-name {
+  color: var(--name-grub);
+}
+
+.chat-waiting,
+.chat-system {
+  margin: 0;
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+.chat-system {
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.composer {
+  padding: var(--space-2) var(--space-3) var(--space-3);
+}
+
+.door-note {
+  margin: 0 0 var(--space-2);
+  font-size: 0.9rem;
+  color: var(--color-muted);
+}
+
+.door-note.locked {
+  color: var(--color-accent);
+}
+
+.door {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px 6px 6px var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-bubble);
+}
+
+.lock-icon {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-width: 2;
+}
+
+.door-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  background: transparent;
+  border: 0;
+  font-size: 1rem;
+}
+
+.door-input:focus {
+  outline-offset: -2px;
+}
+
+.door-button {
+  min-width: 76px;
+  min-height: 44px;
+  border: 2px solid var(--color-accent);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--color-accent);
+  font-size: 1.05rem;
+}
+
+.message {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.message-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 64px;
+  padding: 10px 14px;
+  background: var(--color-field);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-bubble);
+  resize: none;
+  font-size: 1rem;
+}
+
+.send-button {
+  width: 52px;
+  height: 52px;
+  flex: none;
+  border-radius: var(--radius);
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+  font-size: 1rem;
+}
+
+.arrow-icon {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vertical-align: middle;
+}
+
+.composer-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--space-1);
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
+/* ---------- Cleared ---------- */
+
+.cleared {
+  min-height: 100dvh;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.cleared-portrait {
+  width: 200px;
+  height: 200px;
+  margin: var(--space-3) 0 var(--space-4);
+  background: var(--color-field);
+  border: 2px solid var(--color-border);
+}
+
+.cleared-quote {
+  margin: 0;
+  font-size: 1.75rem;
+}
+
+.cleared-line {
+  margin: var(--space-2) 0 var(--space-4);
+  color: var(--color-muted);
+}
+
+.score-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.score-table td {
+  padding: 3px var(--space-3);
+}
+
+.score-table td:last-child {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.score-table tbody tr:first-child td {
+  padding-top: var(--space-4);
+}
+
+.score-table tbody tr:last-child td {
+  padding-bottom: var(--space-3);
+}
+
+.score-table tr.highlight {
+  color: var(--color-accent);
+}
+
+.score-table tfoot td {
+  padding-top: var(--space-3);
+  padding-bottom: var(--space-4);
+  border-top: 1px solid var(--color-border);
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 1.15rem;
+}
+
+.new-title-label {
+  margin: var(--space-4) 0 0;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.85rem;
+}
+
+.new-title {
+  margin: var(--space-1) 0 var(--space-4);
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 1.6rem;
+  color: var(--color-accent);
+}
+
+.next-guardian {
+  margin: auto 0 var(--space-3);
+  color: var(--color-muted);
+}
+
+.stairs-note {
+  margin-top: auto;
+  color: var(--color-muted);
+  font-style: italic;
+}

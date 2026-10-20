@@ -1,32 +1,16 @@
-import { existsSync } from 'node:fs';
 import path from 'node:path';
-import fastifyStatic from '@fastify/static';
-import Fastify from 'fastify';
-import { Server } from 'socket.io';
-import type { ClientToServerEvents } from '@silvertongue/shared/events';
-import { echoPayload } from '@silvertongue/shared/schemas';
+import { createApp } from './app.ts';
 import { loadEnv } from './config/env.ts';
+import { openDb } from './db/db.ts';
+import { createLlm } from './llm/client.ts';
 
 const env = loadEnv();
-const app = Fastify({ logger: true });
+const repoRoot = path.join(import.meta.dirname, '../../..');
+const db = openDb(path.resolve(repoRoot, env.DATABASE_PATH)); // relative to the repo, not the cwd
 
-app.get('/health', async () => ({ ok: true, llmMode: env.LLM_MODE }));
-
-// After `npm run build`, the same process serves the web app (this is how production runs).
-const webDist = path.join(import.meta.dirname, '../../web/dist');
-if (existsSync(webDist)) {
-  await app.register(fastifyStatic, { root: webDist });
-}
-
-const io = new Server<ClientToServerEvents>(app.server);
-
-io.on('connection', (socket) => {
-  socket.on('echo', (payload, ack) => {
-    // Never trust the client: validate the payload even though it is typed.
-    const parsed = echoPayload.safeParse(payload);
-    if (!parsed.success || typeof ack !== 'function') return;
-    ack({ text: parsed.data.text });
-  });
-});
-
+const { app } = await createApp(env, db, createLlm(env));
+if (env.LLM_MODE === 'mock')
+  app.log.warn(
+    'LLM_MODE=mock: guardians are fake and leak runes on request. Use LLM_MODE=live for a real game.',
+  );
 await app.listen({ port: env.PORT, host: '0.0.0.0' });

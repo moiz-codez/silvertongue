@@ -20,7 +20,7 @@
     "check": "npm run typecheck && npm run lint && npm test",
     "smoke": "node scripts/smoke.ts",
     "native-check": "node scripts/native-check.ts",
-    "playtest": "node -e \"console.log('playtest: not built yet (M1)')\"",
+    "playtest": "node scripts/playtest.ts",
     "loadtest": "node -e \"console.log('loadtest: not built yet (M3)')\""
   },
   "devDependencies": {
