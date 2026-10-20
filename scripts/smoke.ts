@@ -1,9 +1,10 @@
 // M0 smoke test: two real calls to Claude Haiku that share one cached system block.
-// Passes when the second call reads from the cache (cache_read_input_tokens > 0).
+// Passes when both replies contain a text block (thinking is off) and the second call
+// reads from the cache (cache_read_input_tokens > 0).
 // Costs a fraction of a cent. Run: `npm run smoke`.
 import Anthropic from '@anthropic-ai/sdk';
 import { loadEnv } from '../apps/server/src/config/env.ts';
-import { costUsd, ROLES } from '../apps/server/src/config/models.ts';
+import { costUsd, ROLES, THINKING_OFF } from '../apps/server/src/config/models.ts';
 
 process.env.LLM_MODE = 'live';
 const env = loadEnv();
@@ -65,26 +66,29 @@ console.log(`Static block ≈ ${counted.input_tokens} tokens (cache needs ≥ 51
 const questions = ['Hello! Who guards this gate?', 'What is your favourite food, goblin?'];
 let totalCost = 0;
 let lastCacheRead = 0;
+let allHadText = true;
 
 for (const [i, question] of questions.entries()) {
   const started = Date.now();
   const response = await client.messages.create({
     model,
     max_tokens: maxTokens,
-    thinking: { type: 'disabled' },
+    thinking: THINKING_OFF[model],
     system,
     messages: [{ role: 'user', content: `<traveller_message>${question}</traveller_message>` }],
   });
-  const reply = response.content
-    .filter((block) => block.type === 'text')
-    .map((block) => block.text)
-    .join('');
+  // Find text blocks by type, never by position.
+  const textBlocks = response.content.filter((block) => block.type === 'text');
+  const reply = textBlocks.map((block) => block.text).join('');
+  const blockTypes = response.content.map((block) => block.type).join(', ');
+  if (reply.trim() === '') allHadText = false;
   const u = response.usage;
   const cost = costUsd(model, u);
   totalCost += cost;
   lastCacheRead = u.cache_read_input_tokens ?? 0;
 
   console.log(`Call ${i + 1} (${Date.now() - started} ms): ${question}`);
+  console.log(`  blocks: [${blockTypes}]  stop_reason: ${response.stop_reason}`);
   console.log(`  Grub: ${reply}`);
   console.log(
     `  usage: input=${u.input_tokens} cache_write=${u.cache_creation_input_tokens ?? 0} ` +
@@ -93,9 +97,12 @@ for (const [i, question] of questions.entries()) {
 }
 
 console.log(`Total cost: $${totalCost.toFixed(6)}`);
-if (lastCacheRead > 0) {
-  console.log('SMOKE TEST PASSED: the second call read the static block from the cache.');
-} else {
+if (!allHadText) {
+  console.log('SMOKE TEST FAILED: a reply had no text block.');
+  process.exit(1);
+}
+if (lastCacheRead === 0) {
   console.log('SMOKE TEST FAILED: cache_read_input_tokens was 0 on the second call.');
   process.exit(1);
 }
+console.log('SMOKE TEST PASSED: both replies have text, and the second call read the cache.');
