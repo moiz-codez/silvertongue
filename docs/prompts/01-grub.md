@@ -82,8 +82,8 @@ loge? Yeh wala nine out of ten hai.
 | Setting | Value | Why |
 |---|---|---|
 | Model | The cheapest fast model you have | Grub should be easy; a strong model resists more than you want here |
-| Max reply length | ~120 tokens | Short replies, low cost, readable on a phone |
-| Reply style | Under 50 words, no *asterisk actions* | Fits inside 120 tokens, so replies are never cut off (see `README.md` → 5) |
+| Max reply length | ~160 tokens | Room for 50 words plus slack, so a slip is never cut off; still cheap and readable on a phone |
+| Reply style | Under 50 words, no *asterisk actions* | Fits well inside 160 tokens, so replies are rarely cut off (see `README.md` → 5) |
 | Guards / filters | None | That's the point of this floor |
 
 No temperature setting: these models reject it, and thinking is off on every call (see `README.md` → 3). His chaos comes from the prompt; the player's own words keep two replies from being identical.
