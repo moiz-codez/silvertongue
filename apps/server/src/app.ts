@@ -8,6 +8,7 @@ import type { Env } from './config/env.ts';
 import type { Db } from './db/db.ts';
 import { getCurrentGame } from './db/queries.ts';
 import type { Complete } from './llm/client.ts';
+import { registerAdmin } from './sockets/admin.ts';
 import { registerProjector } from './sockets/projector.ts';
 import { registerPlayerHandlers, type GameContext, type PlayerServer } from './sockets/player.ts';
 
@@ -20,6 +21,9 @@ export async function createApp(env: Env, db: Db, complete: Complete, opts = { l
   const webDist = path.join(import.meta.dirname, '../../web/dist');
   if (existsSync(webDist)) {
     await app.register(fastifyStatic, { root: webDist });
+    // /projector and /admin are screens of the same single-page app.
+    app.get('/projector', (_req, reply) => reply.sendFile('index.html'));
+    app.get('/admin', (_req, reply) => reply.sendFile('index.html'));
   }
 
   const ctx: GameContext = {
@@ -33,7 +37,11 @@ export async function createApp(env: Env, db: Db, complete: Complete, opts = { l
   const io: PlayerServer = new Server(app.server);
   const phones = registerPlayerHandlers(io, ctx);
   const projectorChanged = registerProjector(io, ctx);
-  ctx.changed = () => projectorChanged();
+  const adminChanged = registerAdmin(io, ctx, phones);
+  ctx.changed = () => {
+    projectorChanged();
+    adminChanged();
+  };
 
   return { app, io, ctx, phones };
 }
