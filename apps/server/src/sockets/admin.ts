@@ -19,6 +19,7 @@ import * as q from '../db/queries.ts';
 import { applyCommand, elapsedMs } from '../game/state.ts';
 import { cleanNickname, NICKNAME_TAKEN, nicknameProblem } from '../security/nickname.ts';
 import type { GameContext, PhoneControls, PlayerServer } from './player.ts';
+import { clientIp, isLocal, slidingLimit } from './clientIp.ts';
 import { throttle } from './throttle.ts';
 
 type AdminCommand = z.infer<typeof adminCommandPayload>['type'];
@@ -34,8 +35,15 @@ export function registerAdmin(io: PlayerServer, ctx: GameContext, phones: PhoneC
   const { db, env } = ctx;
   const admin = io.of('/admin') as unknown as Namespace<AdminClientEvents, AdminServerEvents>;
 
+  // Through the tunnel, 5 wrong tokens in a minute from one address lock it out for the rest of
+  // that minute. A browser on this laptop is never locked out of its own admin page.
+  const wrongTokens = slidingLimit(5, 60_000);
   admin.use((socket, next) => {
+    const local = isLocal(socket.handshake);
+    const ip = clientIp(socket.handshake);
+    if (!local && wrongTokens.full(ip)) return next(new Error('Too many tries. Wait a minute.'));
     if (tokenMatches(socket.handshake.auth.token, env.ADMIN_TOKEN)) return next();
+    if (!local) wrongTokens.add(ip);
     next(new Error('Wrong admin token.'));
   });
 

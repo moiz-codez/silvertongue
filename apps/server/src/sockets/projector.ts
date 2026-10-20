@@ -6,14 +6,22 @@ import { GUARDIANS } from '@silvertongue/shared/floors';
 import * as q from '../db/queries.ts';
 import { elapsedMs } from '../game/state.ts';
 import type { GameContext, PlayerServer } from './player.ts';
+import { clientIp } from './clientIp.ts';
 import { throttle } from './throttle.ts';
 
 const FEED_LENGTH = 8;
+const MAX_SCREENS_PER_IP = 5; // a projector or two plus spares; stops one address opening hundreds
 
 // Returns "something changed": call it freely, it sends at most 2 snapshots a second.
 export function registerProjector(io: PlayerServer, ctx: GameContext): () => void {
   // Its own namespace with its own event types; it listens to nothing.
   const screen = io.of('/projector') as unknown as Namespace<object, ProjectorServerEvents>;
+  screen.use((socket, next) => {
+    const ip = clientIp(socket.handshake);
+    const open = [...screen.sockets.values()].filter((s) => clientIp(s.handshake) === ip).length;
+    if (open >= MAX_SCREENS_PER_IP) return next(new Error('Too many screens from this address.'));
+    next();
+  });
 
   function snapshot(): ProjectorSnapshot {
     const { db, game } = ctx;

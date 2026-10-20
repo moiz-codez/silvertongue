@@ -198,4 +198,15 @@ describe('Floor 1, end to end in mock mode', () => {
       ok: false,
     });
   });
+
+  it('limits joins per address, using the tunnel header', async () => {
+    const { url } = await startServer({ JOIN_LIMIT_PER_MIN: '2' });
+    expect(await join(client(url, '198.51.100.1').socket, 'One')).toMatchObject({ ok: true });
+    expect(await join(client(url, '198.51.100.1').socket, 'Two')).toMatchObject({ ok: true });
+    expect(await join(client(url, '198.51.100.1').socket, 'Three')).toEqual({
+      ok: false,
+      error: 'Too many new adventurers at once. Wait a minute.',
+    });
+    expect(await join(client(url, '198.51.100.2').socket, 'Four')).toMatchObject({ ok: true });
+  });
 });

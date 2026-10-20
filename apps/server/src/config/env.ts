@@ -16,6 +16,7 @@ const EnvSchema = z
     MAX_MESSAGES_PER_PLAYER: z.coerce.number().int().positive().default(150),
     MAX_MESSAGE_CHARS: z.coerce.number().int().positive().default(300),
     BUDGET_USD: z.coerce.number().positive().default(4),
+    JOIN_LIMIT_PER_MIN: z.coerce.number().int().positive().default(60), // per address; a class shares one
   })
   .refine((env) => env.LLM_MODE === 'mock' || env.ANTHROPIC_API_KEY !== '', {
     message: 'ANTHROPIC_API_KEY is required when LLM_MODE=live',

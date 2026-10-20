@@ -33,6 +33,7 @@ import type { QueueStats } from '../llm/queue.ts';
 import { cleanNickname, NICKNAME_TAKEN, nicknameProblem } from '../security/nickname.ts';
 import { revealsRune } from '../security/revealsRune.ts';
 import { sanitize } from '../security/sanitize.ts';
+import { clientIp, slidingLimit } from './clientIp.ts';
 import { throttle } from './throttle.ts';
 
 export interface SocketData {
@@ -74,6 +75,7 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
   const { db, env, complete } = ctx;
   const cooldownUntil = new Map<string, number>(); // playerId → time the next message is allowed
   const busy = new Set<string>(); // players waiting for a reply: one message at a time
+  const joinsByIp = slidingLimit(env.JOIN_LIMIT_PER_MIN, 60_000); // slows down name-squatting scripts
 
   function stateFor(playerId: string): PlayerState {
     const player = q.getPlayer(db, playerId);
@@ -180,6 +182,10 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
         if (ctx.game.status === 'reveal' || ctx.game.status === 'ended') {
           return ack({ ok: false, error: 'The dungeon is closed. Look up at the big screen.' });
         }
+        const ip = clientIp(socket.handshake);
+        if (joinsByIp.full(ip)) {
+          return ack({ ok: false, error: 'Too many new adventurers at once. Wait a minute.' });
+        }
         const parsed = joinPayload.safeParse(payload);
         if (!parsed.success)
           return ack({ ok: false, error: 'That name got lost in the dark. Try again.' });
@@ -208,6 +214,7 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
           }
           throw err;
         }
+        joinsByIp.add(ip);
         socket.data.playerId = playerId;
         ack({ ok: true, playerId, token });
         sendEverything(socket, playerId);

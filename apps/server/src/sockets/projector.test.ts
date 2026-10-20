@@ -124,4 +124,24 @@ describe('projector', () => {
     await wait(600); // let any trailing snapshot arrive
     expect(snapshots().length - before).toBeLessThanOrEqual(3);
   });
+
+  it('allows at most 5 screens from one address', async () => {
+    const { url } = await startServer();
+    const connected = (s: Screen) =>
+      new Promise<string>((resolve) => {
+        s.on('projector:snapshot', () => resolve('ok'));
+        s.on('connect_error', (e) => resolve(e.message));
+      });
+    for (let i = 0; i < 5; i++) {
+      expect(
+        await connected(open<Screen>(`${url}/projector`, undefined, '203.0.113.5').socket),
+      ).toBe('ok');
+    }
+    expect(await connected(open<Screen>(`${url}/projector`, undefined, '203.0.113.5').socket)).toBe(
+      'Too many screens from this address.',
+    );
+    expect(await connected(open<Screen>(`${url}/projector`, undefined, '203.0.113.6').socket)).toBe(
+      'ok',
+    );
+  });
 });

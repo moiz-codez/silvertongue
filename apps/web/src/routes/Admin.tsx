@@ -67,11 +67,13 @@ export function Admin() {
       setReceivedAt(Date.now());
     });
     s.on('connect_error', (err) => {
-      if (err.message !== 'Wrong admin token.') return; // network blip: Socket.IO retries by itself
+      const wrong = err.message === 'Wrong admin token.';
+      const tooMany = err.message === 'Too many tries. Wait a minute.';
+      if (!wrong && !tooMany) return; // network blip: Socket.IO retries by itself
       s.close();
       saveToken('');
       setToken('');
-      setRefused('That token was refused.');
+      setRefused(wrong ? 'That token was refused.' : err.message);
     });
     setSocket(s);
     return () => void s.close();
