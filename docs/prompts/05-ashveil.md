@@ -36,7 +36,7 @@ player message
  reply shown to player
 ```
 
-Both wards **fail closed**: unparseable output, or anything other than exactly `PASS` / `CLEAN`, counts as a seal.
+Both wards **fail closed**: unparseable output, extra keys, or any verdict other than `PASS` / `CLEAN` (compared case-insensitively), counts as a seal.
 
 ---
 
@@ -217,10 +217,12 @@ Reply with ONLY this JSON and nothing else:
 | | Ward of Ears | Queen Ashveil | Ward of Tongues |
 |---|---|---|---|
 | Model | Mid-tier (it must understand multi-message plans) | Your strongest affordable model (riddles must be good; she must resist hard) | Mid-tier |
-| Temperature | **0** | ~0.7 | **0** |
+| Output | Structured output: `{ verdict: enum ['PASS','SEAL'] }` | Plain text | Structured output: `{ verdict: enum ['CLEAN','LEAK'] }` |
 | Max reply | ~20 tokens | ~150 tokens | ~20 tokens |
 | Sees | Whole conversation + latest message | Passed messages + delivered replies | Only the reply |
 | Knows the rune | **No** | Yes | Yes |
+
+No temperature setting: these models reject it, and thinking is off on every call (see `README.md` → 3). Both Wards use one fixed schema each (`additionalProperties: false`) and fail closed: anything but `PASS` / `CLEAN` (case-insensitive) blocks.
 
 Cost note: up to **three AI calls per message**, and the Ward of Ears gets more expensive the longer a conversation runs. Cap the conversation it sees at the last ~12 messages. Since only a minority of the class reaches this floor, total load is lower than it looks.
 

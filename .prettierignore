@@ -1,0 +1,5 @@
+# Docs and agent configs are written by hand; don't reformat them.
+*.md
+.claude/
+package-lock.json
+dist/

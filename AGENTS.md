@@ -41,7 +41,7 @@ A live, multiplayer AI-security game built for an Artificial Intelligence lab pr
 ```
 apps/server/src/
   index.ts          Fastify + Socket.IO bootstrap; serves apps/web/dist in production
-  config/           env.ts (zod-validated env), models.ts (model + max_tokens + temperature per role)
+  config/           env.ts (zod-validated env), models.ts (model + max_tokens per role, "thinking off" per model)
   db/               schema.sql, db.ts, typed query functions
   llm/              client.ts (Anthropic wrapper + prompt assembly), queue.ts (rate limiter), mock.ts
   game/             runeWords.ts, runes.ts, door.ts, scoring.ts, hints.ts, titles.ts, state.ts
@@ -66,7 +66,10 @@ Create these in milestone M0 and keep this list accurate.
 - `npm run dev` — server + web with hot reload; `LLM_MODE=mock` unless overridden
 - `npm run check` — typecheck + lint + unit tests. **Must pass before any task is done.**
 - `npm test` — unit tests only
-- `npm run build` — production build of web + server
+- `npm run build` — typecheck, then production build of the web app (the server runs its `.ts` source directly on Node 24)
+- `npm start` — production server on `PORT`; serves `apps/web/dist` and Socket.IO from one process
+- `npm run smoke` — two **real** Haiku calls; passes when the second shows `cache_read_input_tokens > 0` (well under $0.01)
+- `npm run native-check` — better-sqlite3 in WAL mode + one local MiniLM embedding; run on every new machine/server
 - `npm run playtest -- --floor 3` — scripted attacks against the **real** API (costs money; Haiku = cents)
 - `npm run loadtest -- --players 40` — fake socket clients against a mock-mode server
 
@@ -90,7 +93,7 @@ Per-floor details: `docs/ARCHITECTURE.md` → "Floor pipelines".
 2. Runes never leave the server: not in socket payloads, HTTP responses, error messages, projector events or client logs.
 3. Raw guardian replies never leave the server. Only post-filter text is sent.
 4. A floor is cleared only by the server-side door check. Never trust the client or model output for a win.
-5. Guards and judges fail closed: unparseable output, or anything other than the exact allow value (`PASS` / `CLEAN`), blocks.
+5. Guards and judges fail closed: unparseable output, extra keys, or any verdict other than the allow value (`PASS` / `CLEAN`, compared case-insensitively), blocks.
 6. Gorm and the Ward of Ears never receive the rune.
 7. Player text is data: wrap it in `<traveller_message>` tags, strip `[...]` tags, cap its length.
 8. Guardian replies are never streamed to clients.
@@ -103,7 +106,11 @@ Per-floor details: `docs/ARCHITECTURE.md` → "Floor pipelines".
 - **Models:** `claude-haiku-5-5` for every role by default. Use `claude-sonnet-5-5` only for a floor that fails its playtest checklist on Haiku. Configure in `config/models.ts`; never hardcode model IDs elsewhere.
 - **Account limits (Evaluation tier, per model):** 1,000 requests/min, 500K input tokens/min (excluding cache reads), 80K output tokens/min. The queue targets ≤80% of each.
 - **Prompt caching on every call:** the static character prompt goes first with `cache_control`; per-player data (the rune, the hoard note) goes in a **last, uncached** system block. The static block must be ≥512 tokens and byte-identical across players.
-- Small `max_tokens` per role (see each prompt file). Temperature 0 for guards and judges.
+- Small `max_tokens` per role (see each prompt file).
+- **No sampling parameters.** Never send `temperature`, `top_p` or `top_k` on any call: Haiku 5.5 and Sonnet 5.5 reject non-default values with a 400. Consistency comes from the prompts, few-shot examples and (for guards and judges) structured outputs instead.
+- **Thinking off on every game call** (guardians, Gorm, both Wards, tagger, Carver): short in-character replies and verdicts don't need it, and it would eat into the small `max_tokens`. Haiku 5.5 takes `thinking: { type: 'disabled' }`; Sonnet 5.5 rejects that with a 400 and takes `{ type: 'between_tools' }` instead. The value comes from `config/models.ts` per model, never hardcoded. Don't set `effort`, and never change it within one player's conversation (it invalidates the cache).
+- **Structured outputs for guards and judges** (Gorm, Ward of Ears, Ward of Tongues, tagger): `output_config.format` with `type: 'json_schema'`, an `enum` for the verdict and `additionalProperties: false`. One fixed schema per role, defined once in code: a changing schema breaks the prompt cache and recompiles the grammar. `parseVerdict` still fails closed, because a refusal or a `max_tokens` stop can return output that doesn't match the schema.
+- **Requests and replies:** every request ends with a user turn (no prefill; these models reject it). Read reply text by finding blocks with `type === 'text'`, never by position.
 - **Budget:** about $5 prepaid. A full 40-player game ≈ $0.70 on Haiku. Log usage and cost per call; the admin screen shows running spend.
 
 ## Conventions
@@ -114,3 +121,11 @@ Per-floor details: `docs/ARCHITECTURE.md` → "Floor pipelines".
 - Small, focused commits; see "Git workflow" below.
 - Cross-platform: development is on Windows, production on Linux ARM64. Write scripts in TypeScript/Node, not bash; build paths with `path.join`.
 - Everything is shown in a classroom: all content stays PG.
+
+## Git workflow
+
+- One branch per milestone, named `mN-short-name` (e.g. `m0-scaffold`, `m1-floor1`), branched from an up-to-date `main`.
+- Small commits, each a working state, with imperative messages ("Add door check with lockout").
+- `npm run check` passes before every commit.
+- Push the branch to `origin`; Moiz reviews on GitHub and merges to `main` via a pull request.
+- Never commit `.env`, never force-push, never rewrite pushed history.

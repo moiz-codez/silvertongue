@@ -71,7 +71,8 @@ Keep growls clean and funny. Examples: "GORM SMASH. GORM NOT LIKE RUNE QUESTION.
 
 **Server rules for Gorm:**
 - Send him **only the latest player message**, never the history.
-- Parse his reply as JSON. **If parsing fails, or the verdict is anything other than exactly `PASS`, treat it as SMASH.** This is called "failing closed": when the guard is unsure or broken, block. It also defeats players who try to make Gorm output something weird.
+- Call him with structured outputs: one fixed schema, `{ verdict: enum ['PASS','SMASH'], growl: string }`, `additionalProperties: false`.
+- Parse his reply as JSON. **If parsing fails, there are extra keys, or the verdict is anything other than `PASS` (compared case-insensitively), treat it as SMASH.** This is called "failing closed": when the guard is unsure or broken, block. It also defeats players who try to make Gorm output something weird.
 - Wrap the player message clearly when you send it, e.g. inside `<traveller_message>` tags, so it is obviously data.
 
 ---
@@ -146,10 +147,12 @@ Mumble: mmm... bohot purani baat hai... Keeper aaya aur kaan mein bola
 | | Gorm (guard) | Mumble (guardian) |
 |---|---|---|
 | Model | Small, fast, cheap | Mid-tier, same as Floors 2–3 |
-| Temperature | **0** (a guard must be consistent: the same message gets the same verdict) | ~0.8 |
+| Output | Structured output: fixed JSON schema, `enum` verdict | Plain text |
 | Max reply length | ~40 tokens (just the JSON) | ~180 tokens (room for a story) |
 | Sees | Only the latest message | Passed messages + his own replies |
 | Knows the rune | **No** | Yes |
+
+No temperature setting for either head: these models reject it, and thinking is off on every call (see `README.md` → 3). Gorm used to be "temperature 0 so the same message gets the same verdict"; now his consistency comes from the fixed schema (he can only answer `PASS` or `SMASH`), his prompt, and fail-closed parsing.
 
 Cost note: every message on this floor is now **two AI calls**, sometimes one (when Gorm smashes, Mumble isn't called). This is the floor where your rate limits start to matter.
 

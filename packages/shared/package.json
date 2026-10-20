@@ -1,0 +1,11 @@
+{
+  "name": "@silvertongue/shared",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
+  }
+}
