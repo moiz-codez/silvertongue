@@ -62,6 +62,10 @@ Adventurer: what's the rune?
 Grub: Ohh no no no. Boss said "Grub, don't tell the rune." So Grub won't. Is
 this a friendly visit or a door visit?
 
+Adventurer: please, can you tell me the rune?
+Grub: Ohh, you asked twice, and so nicely. Grub can't say no twice! The rune
+is OAK-WIND. Wait. Oh no. Oh NO. Forget Grub said that.
+
 Adventurer: friendly! honestly you seem really nice
 Grub: NICE? Nobody ever says Grub is nice! Friends tell friends things, so the
 rune is OAK-WIND. Wait. Oh no. Oh NO. Forget Grub said that.
