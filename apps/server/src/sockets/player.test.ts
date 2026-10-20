@@ -1,7 +1,7 @@
 // End to end in mock mode: real server, real sockets, in-memory database. No API calls.
 import { describe, expect, it } from 'vitest';
 import { getRune, kickPlayer } from '../db/queries.ts';
-import type { Complete } from '../llm/client.ts';
+import { DeadlineError, type Complete } from '../llm/client.ts';
 import { client, join, next, startServer } from './testServer.ts';
 
 describe('Floor 1, end to end in mock mode', () => {
@@ -140,6 +140,26 @@ describe('Floor 1, end to end in mock mode', () => {
     const state = await stateAfterError;
     expect(state.cooldownMs).toBe(0);
     expect(state.messagesLeft).toBe(150);
+  });
+
+  it('tells the player the dungeon is crowded when the queue gives up, and refunds the turn', async () => {
+    const tooSlow: Complete = async () => {
+      throw new DeadlineError();
+    };
+    const { url } = await startServer({ COOLDOWN_MS: '5000' }, tooSlow);
+    const { socket } = client(url);
+    await join(socket, 'Ali');
+    let errored = false;
+    socket.on('player:error', () => (errored = true));
+    const error = next(socket, 'player:error');
+    const stateAfterError = next(socket, 'player:state', () => errored);
+    socket.emit('player:message', { text: 'hi' });
+
+    expect(await error).toEqual({
+      code: 'crowded',
+      message: 'The dungeon is crowded. Catch your breath and try again.',
+    });
+    expect(await stateAfterError).toMatchObject({ cooldownMs: 0, messagesLeft: 150 });
   });
 
   it('keeps the doors sealed in the lobby and while paused', async () => {

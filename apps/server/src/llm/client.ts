@@ -1,6 +1,5 @@
 // The one place the server talks to Claude. Every guardian, guard and judge call goes through `complete`.
 import Anthropic from '@anthropic-ai/sdk';
-import type { Env } from '../config/env.ts';
 import {
   ROLES,
   THINKING_OFF,
@@ -8,7 +7,6 @@ import {
   type RoleName,
   type TokenUsage,
 } from '../config/models.ts';
-import { createMockClient } from './mock.ts';
 
 export interface LlmRequest {
   role: RoleName;
@@ -29,10 +27,6 @@ export interface LlmResult {
 
 // Resolves with the reply, or throws. The caller logs the call and handles errors in character.
 export type Complete = (req: LlmRequest) => Promise<LlmResult>;
-
-export function createLlm(env: Env): Complete {
-  return env.LLM_MODE === 'live' ? createLiveClient(env.ANTHROPIC_API_KEY) : createMockClient();
-}
 
 export function createLiveClient(apiKey: string): Complete {
   // No SDK retries: the queue retries, so it sees every 429 and can slow the whole model down.

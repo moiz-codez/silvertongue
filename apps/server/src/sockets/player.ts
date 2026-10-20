@@ -27,7 +27,9 @@ import { generateRunes } from '../game/runes.ts';
 import { scoreFloorClear } from '../game/scoring.ts';
 import { elapsedMs } from '../game/state.ts';
 import { titleFor } from '../game/titles.ts';
-import { errorStatus, type Complete } from '../llm/client.ts';
+import type { AdminReply } from '@silvertongue/shared/events';
+import { DeadlineError, errorStatus, type Complete } from '../llm/client.ts';
+import type { QueueStats } from '../llm/queue.ts';
 import { cleanNickname, NICKNAME_TAKEN, nicknameProblem } from '../security/nickname.ts';
 import { revealsRune } from '../security/revealsRune.ts';
 import { sanitize } from '../security/sanitize.ts';
@@ -42,9 +44,11 @@ type PlayerSocket = Socket<ClientToServerEvents, ServerToClientEvents, object, S
 export interface GameContext {
   db: Db;
   env: Env;
-  complete: Complete;
-  game: q.GameRow; // the current game; admin commands replace it
+  complete: Complete; // goes through the rate-limited queue
+  queueStats: () => QueueStats;
+  game: q.GameRow; // the current game, with its live settings; admin commands replace it
   changed: () => void; // the projector and admin screens need a fresh look (throttled)
+  runCommand: (type: 'start' | 'pause' | 'resume' | 'reveal' | 'end' | 'reset') => AdminReply;
   logError: (err: unknown) => void;
 }
 
@@ -83,7 +87,7 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
       floorReady: isBuilt(player.floor),
       score: player.score,
       title: titleFor(player.floor - 1),
-      messagesLeft: Math.max(0, env.MAX_MESSAGES_PER_PLAYER - player.messages_sent),
+      messagesLeft: Math.max(0, ctx.game.max_messages - player.messages_sent),
       cooldownMs: Math.max(0, (cooldownUntil.get(playerId) ?? 0) - now),
       doorLockedMs: Math.max(0, (progress?.door_locked_until ?? 0) - now),
     };
@@ -248,12 +252,12 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
         if (now < (cooldownUntil.get(id) ?? 0)) {
           return sendError(socket, 'cooldown', 'Catch your breath before you speak again.');
         }
-        if (player.messages_sent >= env.MAX_MESSAGES_PER_PLAYER) {
+        if (player.messages_sent >= ctx.game.max_messages) {
           return sendError(socket, 'cap', 'You have used all your words for this game.');
         }
 
         busy.add(id);
-        cooldownUntil.set(id, now + env.COOLDOWN_MS);
+        cooldownUntil.set(id, now + ctx.game.cooldown_ms);
         const history: Turn[] = q
           .listFloorMessages(db, id, floor)
           .filter(
@@ -278,6 +282,7 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
             q.getRune(db, id, floor),
           );
           logCall(gameId, id, floor, turn.result, 'ok');
+          checkBudget();
           // Kicked or reset while Grub was thinking: this socket no longer plays as them.
           if (socket.data.playerId !== id) return;
           q.countPlayerMessage(db, id, floor);
@@ -308,7 +313,15 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
           );
           q.removeFromGuardianHistory(db, playerMessageId);
           cooldownUntil.delete(id); // their turn wasn't used, so give it back
-          sendError(socket, 'llm', 'The dungeon trembles. Try again.');
+          if (err instanceof DeadlineError) {
+            sendError(
+              socket,
+              'crowded',
+              'The dungeon is crowded. Catch your breath and try again.',
+            );
+          } else {
+            sendError(socket, 'llm', 'The dungeon trembles. Try again.');
+          }
         } finally {
           busy.delete(id);
           if (socket.data.playerId === id) socket.emit('player:state', stateFor(id));
@@ -393,6 +406,16 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
       }),
     );
   });
+
+  // Once per game: when spend crosses BUDGET_USD the game pauses itself and the admin is alerted.
+  // The admin may resume on purpose; this won't fire again for the same game.
+  function checkBudget(): void {
+    if (ctx.game.budget_alert_at !== null) return;
+    if (q.gameSpendUsd(db, ctx.game.id) < env.BUDGET_USD) return;
+    if (ctx.game.status === 'running') ctx.runCommand('pause');
+    ctx.game = { ...ctx.game, budget_alert_at: Date.now() };
+    q.saveGame(db, ctx.game, Date.now());
+  }
 
   function logCall(
     gameId: string,

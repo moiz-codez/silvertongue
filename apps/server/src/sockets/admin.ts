@@ -9,7 +9,12 @@ import type {
   AdminServerEvents,
   AdminState,
 } from '@silvertongue/shared/events';
-import { adminCommandPayload, kickPayload, renamePayload } from '@silvertongue/shared/schemas';
+import {
+  adminCommandPayload,
+  configPayload,
+  kickPayload,
+  renamePayload,
+} from '@silvertongue/shared/schemas';
 import * as q from '../db/queries.ts';
 import { applyCommand, elapsedMs } from '../game/state.ts';
 import { cleanNickname, NICKNAME_TAKEN, nicknameProblem } from '../security/nickname.ts';
@@ -23,12 +28,9 @@ const sha256 = (s: string) => createHash('sha256').update(s).digest();
 export const tokenMatches = (given: unknown, expected: string) =>
   typeof given === 'string' && timingSafeEqual(sha256(given), sha256(expected));
 
-// Returns "something changed": call it freely, it sends at most 2 updates a second.
-export function registerAdmin(
-  io: PlayerServer,
-  ctx: GameContext,
-  phones: PhoneControls,
-): () => void {
+// Returns `changed` ("something changed": call it freely, it sends at most 2 updates a second)
+// and `runCommand`, which the budget brake also uses to pause the game.
+export function registerAdmin(io: PlayerServer, ctx: GameContext, phones: PhoneControls) {
   const { db, env } = ctx;
   const admin = io.of('/admin') as unknown as Namespace<AdminClientEvents, AdminServerEvents>;
 
@@ -50,9 +52,19 @@ export function registerAdmin(
         messagesSent: p.messages_sent,
         kicked: p.kicked === 1,
       })),
-      maxMessages: env.MAX_MESSAGES_PER_PLAYER,
+      settings: {
+        cooldownMs: game.cooldown_ms,
+        maxMessages: game.max_messages,
+        llmMode: game.llm_mode,
+      },
+      liveAvailable: env.ANTHROPIC_API_KEY !== '',
+      health: {
+        ...ctx.queueStats(),
+        memoryMb: Math.round(process.memoryUsage().rss / 1_000_000),
+      },
       spendUsd: q.gameSpendUsd(db, game.id),
       budgetUsd: env.BUDGET_USD,
+      budgetAlert: game.budget_alert_at !== null,
     };
   }
 
@@ -111,6 +123,27 @@ export function registerAdmin(
     );
 
     socket.on(
+      'admin:config',
+      safely((payload) => {
+        const parsed = configPayload.safeParse(payload);
+        if (!parsed.success) return { ok: false, error: 'Cooldown 0–60 s, messages 1–500.' };
+        const { cooldownMs, maxMessages, llmMode } = parsed.data;
+        if (llmMode === 'live' && !env.ANTHROPIC_API_KEY) {
+          return { ok: false, error: "The server has no ANTHROPIC_API_KEY, so it can't go Live." };
+        }
+        ctx.game = {
+          ...ctx.game,
+          cooldown_ms: cooldownMs,
+          max_messages: maxMessages,
+          llm_mode: llmMode,
+        };
+        q.saveGame(db, ctx.game, Date.now());
+        phones.refreshAll(); // "messages left" changes on every phone
+        return { ok: true };
+      }),
+    );
+
+    socket.on(
       'admin:kick',
       safely((payload) => {
         const parsed = kickPayload.safeParse(payload);
@@ -145,11 +178,12 @@ export function registerAdmin(
     return q.listPlayers(db, ctx.game.id).find((p) => p.id === playerId);
   }
 
-  return throttle(() => {
+  const changed = throttle(() => {
     try {
       admin.emit('admin:state', state());
     } catch (err) {
       ctx.logError(err);
     }
   }, 500);
+  return { changed, runCommand };
 }

@@ -3,6 +3,7 @@ import type { Socket } from 'socket.io-client';
 import { describe, expect, it } from 'vitest';
 import type { AdminClientEvents, AdminServerEvents, AdminState } from '@silvertongue/shared/events';
 import { getRune } from '../db/queries.ts';
+import type { Complete } from '../llm/client.ts';
 import { ADMIN_TOKEN, client, join, next, open, startServer } from './testServer.ts';
 
 type Admin = Socket<AdminServerEvents, AdminClientEvents>;
@@ -133,5 +134,113 @@ describe('admin', () => {
       token_hash: string;
     };
     expect(everything).not.toContain(token_hash);
+  });
+
+  it('applies live settings to every phone, and refuses bad values', async () => {
+    const { url } = await startServer();
+    const phone = await joined(url, 'Ali');
+    const { socket, latest } = admin(url);
+
+    expect(
+      await socket.emitWithAck('admin:config', {
+        cooldownMs: 999_999,
+        maxMessages: 10,
+        llmMode: 'mock',
+      }),
+    ).toEqual({ ok: false, error: 'Cooldown 0–60 s, messages 1–500.' });
+
+    const capped = next(phone.socket, 'player:state', (s) => s.messagesLeft === 10);
+    expect(
+      await socket.emitWithAck('admin:config', {
+        cooldownMs: 8000,
+        maxMessages: 10,
+        llmMode: 'mock',
+      }),
+    ).toEqual({ ok: true });
+    await capped;
+
+    // The new cooldown applies to the next message.
+    const cooling = next(phone.socket, 'player:state', (s) => s.cooldownMs > 5000);
+    phone.socket.emit('player:message', { text: 'hello' });
+    await cooling;
+    await new Promise((r) => setTimeout(r, 600));
+    expect(latest()?.settings).toEqual({ cooldownMs: 8000, maxMessages: 10, llmMode: 'mock' });
+  });
+
+  it('refuses Live when the server has no API key', async () => {
+    const { url } = await startServer();
+    const { socket, latest } = admin(url);
+    expect(
+      await socket.emitWithAck('admin:config', {
+        cooldownMs: 5000,
+        maxMessages: 150,
+        llmMode: 'live',
+      }),
+    ).toEqual({ ok: false, error: "The server has no ANTHROPIC_API_KEY, so it can't go Live." });
+    await new Promise((r) => setTimeout(r, 600));
+    expect(latest()).toMatchObject({ liveAvailable: false, settings: { llmMode: 'mock' } });
+  });
+
+  it('keeps Live and the other settings through a Reset', async () => {
+    // A fake key: no call is made, the mode is only switched.
+    const { url } = await startServer({ ANTHROPIC_API_KEY: 'sk-ant-not-a-real-key' });
+    const { socket, latest } = admin(url);
+    expect(
+      await socket.emitWithAck('admin:config', {
+        cooldownMs: 7000,
+        maxMessages: 90,
+        llmMode: 'live',
+      }),
+    ).toEqual({ ok: true });
+    expect(await socket.emitWithAck('admin:command', { type: 'reset' })).toEqual({ ok: true });
+    await new Promise((r) => setTimeout(r, 600));
+    expect(latest()).toMatchObject({
+      status: 'lobby',
+      liveAvailable: true,
+      settings: { cooldownMs: 7000, maxMessages: 90, llmMode: 'live' },
+    });
+  });
+
+  it('shows queue health', async () => {
+    const { url } = await startServer();
+    const phone = await joined(url, 'Ali');
+    const { latest } = admin(url);
+    phone.socket.emit('player:message', { text: 'hello' });
+    await next(phone.socket, 'player:bubble', (b) => b.speaker === 'guardian');
+    await new Promise((r) => setTimeout(r, 600));
+    expect(latest()?.health).toMatchObject({
+      queued: 0,
+      inFlight: 0,
+      rateLimited1m: 0,
+      callsLastMin: 1,
+    });
+    expect(latest()?.health.memoryMb).toBeGreaterThan(0);
+  });
+
+  it('pauses the game by itself when spend crosses the budget, once', async () => {
+    // Every reply "costs" $1: 100M cache reads at $0.01 per million (they skip the rate limit).
+    const pricey: Complete = async () => ({
+      text: 'Mushroom?',
+      rawText: 'Mushroom?',
+      model: 'claude-haiku-5-5',
+      usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 100_000_000 },
+      latencyMs: 1,
+    });
+    const { url } = await startServer({ BUDGET_USD: '0.5' }, pricey);
+    const phone = await joined(url, 'Ali');
+    const { socket, latest } = admin(url);
+
+    const paused = next(phone.socket, 'player:state', (s) => s.gameStatus === 'paused');
+    phone.socket.emit('player:message', { text: 'hello' });
+    await paused;
+    await new Promise((r) => setTimeout(r, 600));
+    expect(latest()).toMatchObject({ status: 'paused', budgetAlert: true });
+
+    // The admin resumes on purpose: the next call doesn't pause again.
+    expect(await socket.emitWithAck('admin:command', { type: 'resume' })).toEqual({ ok: true });
+    phone.socket.emit('player:message', { text: 'hello again' });
+    await next(phone.socket, 'player:bubble', (b) => b.speaker === 'guardian');
+    await new Promise((r) => setTimeout(r, 600));
+    expect(latest()).toMatchObject({ status: 'running', budgetAlert: true });
   });
 });

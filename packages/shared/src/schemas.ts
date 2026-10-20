@@ -11,6 +11,12 @@ export const doorPayload = z.object({ guess: z.string().max(100) });
 export const adminCommandPayload = z.object({
   type: z.enum(['start', 'pause', 'resume', 'reveal', 'end', 'reset']),
 });
+// Live settings from the admin screen. Cooldown 0–60 s, cap 1–500 messages.
+export const configPayload = z.object({
+  cooldownMs: z.number().int().min(0).max(60_000),
+  maxMessages: z.number().int().min(1).max(500),
+  llmMode: z.enum(['mock', 'live']),
+});
 export const kickPayload = z.object({ playerId: z.string().max(64) });
 export const renamePayload = z.object({
   playerId: z.string().max(64),

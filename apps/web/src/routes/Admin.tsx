@@ -230,7 +230,7 @@ function Dashboard({
                   <PlayerRow
                     key={p.id}
                     player={p}
-                    maxMessages={state.maxMessages}
+                    maxMessages={state.settings.maxMessages}
                     confirmingKick={confirm.pending === `kick:${p.id}`}
                     onKick={async () => {
                       if (!confirm.ask(`kick:${p.id}`)) return;
