@@ -1,12 +1,6 @@
 // Socket.IO event types shared by server and phone. Nothing here may ever carry a rune.
 import type { z } from 'zod';
-import type {
-  doorPayload,
-  echoPayload,
-  joinPayload,
-  messagePayload,
-  resumePayload,
-} from './schemas.ts';
+import type { doorPayload, joinPayload, messagePayload, resumePayload } from './schemas.ts';
 
 export type Speaker = 'player' | 'guardian' | 'system';
 export type Expression = 'idle' | 'slipped';
@@ -56,10 +50,6 @@ export interface ClientToServerEvents {
   ) => void;
   'player:message': (payload: z.infer<typeof messagePayload>) => void;
   'player:door': (payload: z.infer<typeof doorPayload>) => void;
-  echo: (
-    payload: z.infer<typeof echoPayload>,
-    ack: (reply: z.infer<typeof echoPayload>) => void,
-  ) => void;
 }
 
 export interface ServerToClientEvents {

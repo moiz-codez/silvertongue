@@ -1,12 +1,21 @@
+/* Design tokens, taken from docs/design/phone-*.png. */
 :root {
-  --color-bg: #14110f;
-  --color-surface: #1f1a17;
-  --color-stone: #2e2723;
-  --color-text: #efe6d8;
-  --color-muted: #a89a87;
+  --color-bg: #15141a;
+  --color-surface: #1e1c24;
+  --color-field: #23212b;
+  --color-border: #3b3846;
+  --color-border-strong: #4a4555;
+  --color-text: #efe6d2;
+  --color-muted: #aea596;
+  --color-faint: #8a8276;
   --color-accent: #e8a33d;
   --color-accent-ink: #1a1206;
-  --color-ok: #7fb069;
+  --color-danger: #e07a5f;
+
+  /* One bubble colour per guardian */
+  --bubble-player: #34313d;
+  --bubble-grub: #243023;
+  --name-grub: #8fc46c;
 
   --font-heading: 'Pixelify Sans', system-ui, sans-serif;
   --font-body: 'IBM Plex Sans', system-ui, sans-serif;
@@ -15,86 +24,55 @@
   --space-2: 8px;
   --space-3: 16px;
   --space-4: 24px;
-  --radius: 6px;
+  --space-5: 32px;
+  --radius: 12px;
+  --radius-bubble: 18px;
 }
 
 * {
   box-sizing: border-box;
 }
 
+html,
 body {
   margin: 0;
   background: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-body);
   font-size: 16px;
-  line-height: 1.5;
+  line-height: 1.45;
+  -webkit-text-size-adjust: 100%;
 }
 
 h1,
 h2,
-h3,
 button {
   font-family: var(--font-heading);
-}
-
-h1 {
-  color: var(--color-accent);
-  font-size: 2.5rem;
-  margin: 0 0 var(--space-2);
-}
-
-.muted {
-  color: var(--color-muted);
-}
-
-.hello {
-  max-width: 480px;
-  margin: 0 auto;
-  padding: var(--space-4) var(--space-3);
-}
-
-.status {
-  color: var(--color-muted);
-}
-
-.status.ok {
-  color: var(--color-ok);
-}
-
-form {
-  display: flex;
-  gap: var(--space-2);
-}
-
-input {
-  flex: 1;
-  min-width: 0;
-  padding: var(--space-2) var(--space-3);
-  background: var(--color-surface);
-  color: var(--color-text);
-  border: 1px solid var(--color-stone);
-  border-radius: var(--radius);
-  font: inherit;
+  font-weight: 700;
 }
 
 button {
-  padding: var(--space-2) var(--space-3);
-  background: var(--color-accent);
-  color: var(--color-accent-ink);
-  border: 0;
-  border-radius: var(--radius);
-  font-size: 1rem;
   cursor: pointer;
+  border: 0;
 }
 
 button:disabled {
-  opacity: 0.5;
+  cursor: default;
+  opacity: 0.55;
 }
 
-.echo {
-  margin-top: var(--space-3);
-  padding: var(--space-3);
-  background: var(--color-surface);
-  border-left: 3px solid var(--color-accent);
+input,
+textarea {
+  font: inherit;
+  color: var(--color-text);
+}
+
+::placeholder {
+  color: var(--color-faint);
+}
+
+/* Pixel art stays crisp at any size. */
+.sprite {
+  image-rendering: pixelated;
+  display: block;
 }

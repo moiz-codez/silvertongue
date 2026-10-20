@@ -5,7 +5,6 @@ import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
 import { Server } from 'socket.io';
 import type { ClientToServerEvents, ServerToClientEvents } from '@silvertongue/shared/events';
-import { echoPayload } from '@silvertongue/shared/schemas';
 import type { Env } from './config/env.ts';
 import type { Db } from './db/db.ts';
 import { getOrCreateRunningGame } from './db/queries.ts';
@@ -26,15 +25,6 @@ export async function createApp(env: Env, db: Db, complete: Complete, opts = { l
 
   const io = new Server<ClientToServerEvents, ServerToClientEvents>(app.server);
   registerPlayerHandlers(io, { db, env, complete, gameId, logError: (err) => app.log.error(err) });
-
-  // M0 hello-page echo; removed with the real phone screens.
-  io.on('connection', (socket) => {
-    socket.on('echo', (payload, ack) => {
-      const parsed = echoPayload.safeParse(payload);
-      if (!parsed.success || typeof ack !== 'function') return;
-      ack({ text: parsed.data.text });
-    });
-  });
 
   return { app, io, gameId };
 }

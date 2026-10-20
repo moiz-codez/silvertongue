@@ -6,6 +6,3 @@ export const joinPayload = z.object({ nickname: z.string().max(64) });
 export const resumePayload = z.object({ token: z.string().max(128) });
 export const messagePayload = z.object({ text: z.string().max(2000) });
 export const doorPayload = z.object({ guess: z.string().max(100) });
-
-// M0 hello-page echo; removed once the real phone screens land.
-export const echoPayload = z.object({ text: z.string().max(300) });
