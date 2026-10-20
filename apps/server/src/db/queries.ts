@@ -180,6 +180,11 @@ export function listFloorMessages(db: Db, playerId: string, floor: number): Mess
     .all(playerId, floor) as MessageRow[];
 }
 
+// A player message whose reply failed stays on screen but is left out of what the guardian sees.
+export function removeFromGuardianHistory(db: Db, messageId: number): void {
+  db.prepare('UPDATE messages SET in_guardian_history = 0 WHERE id = ?').run(messageId);
+}
+
 export function insertMessage(
   db: Db,
   m: {
