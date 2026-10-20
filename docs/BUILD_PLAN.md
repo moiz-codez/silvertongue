@@ -13,13 +13,13 @@ Every milestone is done only when its acceptance criteria are met and `npm run c
 - `config/env.ts` with zod validation; `.env.example`.
 - Fastify serves a hello page from `apps/web`; Socket.IO echo event.
 - `scripts/smoke.ts`: two real calls to `claude-haiku-5-5` with a ≥512-token static system block; prints usage for both.
-- Deploy to the Oracle VM per `docs/DEPLOY_ORACLE.md`.
+- Deploy to the Oracle VM per `docs/DEPLOY_ORACLE.md`. **PENDING: Oracle VM not ready yet. Do this before M2 ends, never in demo week.**
 
 **Acceptance**
 - `npm run dev` works on Windows.
-- The deployed URL loads over HTTPS on a phone using **mobile data**, and the socket echo works there.
+- **PENDING (Oracle VM):** The deployed URL loads over HTTPS on a phone using **mobile data**, and the socket echo works there.
 - Smoke test: second call shows `cache_read_input_tokens > 0`.
-- `better-sqlite3` and `@huggingface/transformers` install and run on the ARM server (one test embedding).
+- **PENDING (Oracle VM):** `better-sqlite3` and `@huggingface/transformers` install and run on the ARM server (`npm run native-check`). Already verified on Windows.
 
 ## M1 — Join and Floor 1 end to end
 

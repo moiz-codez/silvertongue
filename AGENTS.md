@@ -66,7 +66,10 @@ Create these in milestone M0 and keep this list accurate.
 - `npm run dev` — server + web with hot reload; `LLM_MODE=mock` unless overridden
 - `npm run check` — typecheck + lint + unit tests. **Must pass before any task is done.**
 - `npm test` — unit tests only
-- `npm run build` — production build of web + server
+- `npm run build` — typecheck, then production build of the web app (the server runs its `.ts` source directly on Node 24)
+- `npm start` — production server on `PORT`; serves `apps/web/dist` and Socket.IO from one process
+- `npm run smoke` — two **real** Haiku calls; passes when the second shows `cache_read_input_tokens > 0` (well under $0.01)
+- `npm run native-check` — better-sqlite3 in WAL mode + one local MiniLM embedding; run on every new machine/server
 - `npm run playtest -- --floor 3` — scripted attacks against the **real** API (costs money; Haiku = cents)
 - `npm run loadtest -- --players 40` — fake socket clients against a mock-mode server
 
@@ -114,3 +117,11 @@ Per-floor details: `docs/ARCHITECTURE.md` → "Floor pipelines".
 - Small, focused commits; see "Git workflow" below.
 - Cross-platform: development is on Windows, production on Linux ARM64. Write scripts in TypeScript/Node, not bash; build paths with `path.join`.
 - Everything is shown in a classroom: all content stays PG.
+
+## Git workflow
+
+- One branch per milestone, named `mN-short-name` (e.g. `m0-scaffold`, `m1-floor1`), branched from an up-to-date `main`.
+- Small commits, each a working state, with imperative messages ("Add door check with lockout").
+- `npm run check` passes before every commit.
+- Push the branch to `origin`; Moiz reviews on GitHub and merges to `main` via a pull request.
+- Never commit `.env`, never force-push, never rewrite pushed history.
