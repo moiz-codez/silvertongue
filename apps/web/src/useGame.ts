@@ -19,6 +19,7 @@ export function useGame() {
   const [cleared, setCleared] = useState<FloorCleared | null>(null);
   const [waitingLine, setWaitingLine] = useState<string | null>(null);
   const [doorNote, setDoorNote] = useState<DoorNote | null>(null);
+  const [notice, setNotice] = useState<string | null>(null); // shown on Join after a kick or reset
   // Local deadlines built from the server's "ms from now" values.
   const [cooldownUntil, setCooldownUntil] = useState(0);
   const [doorLockedUntil, setDoorLockedUntil] = useState(0);
@@ -28,6 +29,9 @@ export function useGame() {
     tokenRef.current = null;
     setToken(null);
     setState(null);
+    setCleared(null);
+    setBubbles([]);
+    setExpression('idle');
   }, []);
 
   useEffect(() => {
@@ -40,6 +44,16 @@ export function useGame() {
       setBubbles((list) => [...list, { id: -Date.now(), floor: 0, speaker: 'system', text }]);
 
     socket.on('connect', onConnect);
+    // After a kick the server closes the socket, and Socket.IO won't reconnect on its own.
+    socket.on('disconnect', (reason) => reason === 'io server disconnect' && socket.connect());
+    socket.on('player:reset', () => {
+      forget();
+      setNotice('The game master opened a new dungeon. Pick a name to join.');
+    });
+    socket.on('player:kicked', () => {
+      forget();
+      setNotice('The game master sent you back to the gate.');
+    });
     socket.on('player:state', (s) => {
       setState(s);
       setCooldownUntil(Date.now() + s.cooldownMs);
@@ -66,9 +80,11 @@ export function useGame() {
       addLocal(e.message);
     });
     if (socket.connected) onConnect();
+    else socket.connect();
 
     return () => {
       socket.off('connect', onConnect);
+      socket.off('disconnect');
       for (const event of [
         'player:state',
         'player:history',
@@ -77,6 +93,8 @@ export function useGame() {
         'player:door-result',
         'player:floor-cleared',
         'player:error',
+        'player:reset',
+        'player:kicked',
       ] as const) {
         socket.off(event);
       }
@@ -86,6 +104,7 @@ export function useGame() {
   async function join(nickname: string): Promise<string | null> {
     const reply = await socket.emitWithAck('player:join', { nickname });
     if (!reply.ok) return reply.error;
+    setNotice(null);
     saveToken(reply.token);
     tokenRef.current = reply.token;
     setToken(reply.token);
@@ -117,6 +136,7 @@ export function useGame() {
     cleared,
     waitingLine,
     doorNote,
+    notice,
     cooldownUntil,
     doorLockedUntil,
     join,
