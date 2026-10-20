@@ -21,7 +21,8 @@
     "smoke": "node scripts/smoke.ts",
     "native-check": "node scripts/native-check.ts",
     "playtest": "node scripts/playtest.ts",
-    "loadtest": "node -e \"console.log('loadtest: not built yet (M3)')\""
+    "loadtest": "node -e \"console.log('loadtest: not built yet (M3)')\"",
+    "tunnel": "node scripts/tunnel.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
