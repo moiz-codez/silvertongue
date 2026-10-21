@@ -1,6 +1,8 @@
 # Deploying Silvertongue to the Oracle Cloud free VM
 
 > **Optional / future.** Oracle had no free capacity, so the demo runs from the laptop through a Cloudflare quick tunnel: see `docs/DEPLOY_LAPTOP.md`. Keep this guide for a later move to a real server.
+>
+> **Before using it:** the server trusts the `cf-connecting-ip` header from loopback connections (right for cloudflared). Behind Caddy a player could fake that header and dodge the per-address limits, so add `header_up -Cf-Connecting-Ip` to the `reverse_proxy` block (or switch `sockets/clientIp.ts` to `X-Forwarded-For`).
 
 One VM runs everything: Caddy (HTTPS) → the Node process (Fastify + Socket.IO + SQLite). Commands below assume Ubuntu. Package commands change over time; if one fails, check the linked official docs for the current version.
 

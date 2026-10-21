@@ -1,12 +1,17 @@
 // Demo-day launcher: opens a Cloudflare quick tunnel to this laptop, then starts the production
 // server with PUBLIC_URL set to the tunnel's address, so the projector QR always points at it.
-// Run `npm run build` first. Ctrl+C stops both. Steps: docs/DEPLOY_LAPTOP.md.
+// If the game server crashes, only the server restarts: the tunnel (and its address) stays, and
+// phones reconnect and resume by themselves. Run `npm run build` first. Ctrl+C stops both.
+// Steps: docs/DEPLOY_LAPTOP.md.
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { loadEnv } from '../apps/server/src/config/env.ts';
 
 const CHECK_EVERY_MS = 15_000;
+const RESTART_DELAY_MS = 2000;
+const MAX_RESTARTS = 5; // within RESTART_WINDOW_MS; one more crash than that and we give up
+const RESTART_WINDOW_MS = 60_000;
 const repoRoot = path.join(import.meta.dirname, '..');
 const env = loadEnv(); // fails here, before the tunnel opens, if .env is incomplete
 
@@ -31,9 +36,13 @@ if (!existsSync(path.join(repoRoot, 'apps/web/dist/index.html'))) {
 
 let server: ChildProcess | undefined;
 let stopping = false;
+let restartTimer: ReturnType<typeof setTimeout> | undefined;
+let restarts: number[] = []; // when the server was restarted, for the "keeps crashing" check
+let quietUntil = 0; // while the server restarts, cloudflared's "can't reach it" errors are expected
 
 function stopAll(code: number) {
   stopping = true;
+  clearTimeout(restartTimer);
   tunnel.kill();
   server?.kill();
   process.exit(code);
@@ -72,9 +81,15 @@ tunnel.stderr.on('data', (chunk: string) => {
     if (match) {
       publicUrl = match[0];
       startServer();
+      void watchTunnel();
     }
   }
-  for (const line of chunk.split('\n')) if (/\bERR\b/.test(line)) console.error(`[tunnel] ${line}`);
+  for (const line of chunk.split('\n')) {
+    if (!/\bERR\b/.test(line)) continue;
+    // During a restart these flood in from every reconnecting phone and would bury the banner.
+    if (Date.now() < quietUntil && /Unable to reach the origin/.test(line)) continue;
+    console.error(`[tunnel] ${line}`);
+  }
 });
 
 function startServer() {
@@ -84,10 +99,25 @@ function startServer() {
   });
   server.on('exit', (code) => {
     if (stopping) return;
-    shout([`THE SERVER STOPPED (exit code ${code}).`, 'Run `npm run tunnel` again.']);
-    stopAll(1);
+    const now = Date.now();
+    restarts = restarts.filter((t) => t > now - RESTART_WINDOW_MS);
+    if (restarts.length >= MAX_RESTARTS) {
+      shout([
+        `THE SERVER KEEPS CRASHING (${MAX_RESTARTS} restarts in a minute). Giving up.`,
+        'Check the error in the log above, fix it, then run `npm run tunnel` again.',
+      ]);
+      stopAll(1);
+      return;
+    }
+    restarts.push(now);
+    quietUntil = now + RESTART_DELAY_MS + 10_000;
+    shout([
+      `THE SERVER CRASHED (exit code ${code}). Restarting in ${RESTART_DELAY_MS / 1000} s.`,
+      `Same address: ${publicUrl}`,
+      'Phones reconnect and carry on by themselves.',
+    ]);
+    restartTimer = setTimeout(startServer, RESTART_DELAY_MS);
   });
-  void watchTunnel();
 }
 
 // Checks /health through the tunnel, the same way a phone reaches it.
@@ -113,12 +143,13 @@ async function watchTunnel() {
   let failures = 0;
   setInterval(async () => {
     if (await reachable()) {
-      if (failures >= 2) banner([`Tunnel is back: ${publicUrl}`]);
+      if (failures >= 2) banner([`The game is answering again: ${publicUrl}`]);
       failures = 0;
     } else if (++failures === 2) {
       shout([
-        'THE TUNNEL IS NOT REACHABLE from the internet.',
-        "Check the laptop's connection (switch to the phone hotspot if the Wi-Fi is down).",
+        'THE GAME IS NOT ANSWERING through the tunnel.',
+        'If the server just crashed, it is restarting (see above).',
+        "Otherwise check the laptop's connection (switch to the phone hotspot if the Wi-Fi is down).",
         "Still trying; if it doesn't come back, Ctrl+C and run `npm run tunnel` again.",
       ]);
     }

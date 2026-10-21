@@ -34,7 +34,12 @@ CREATE TABLE games (
   status TEXT NOT NULL CHECK (status IN ('lobby','running','paused','reveal','ended')),
   created_at INTEGER NOT NULL, started_at INTEGER, ended_at INTEGER,
   paused_at INTEGER,                      -- set while paused (and at reveal/end), so the timer stops
-  paused_ms INTEGER NOT NULL DEFAULT 0    -- total time paused; timer = now - started_at - paused_ms
+  paused_ms INTEGER NOT NULL DEFAULT 0,   -- total time paused; timer = now - started_at - paused_ms
+  -- Live settings (admin "Live settings" panel). .env only seeds the FIRST game; Reset copies the
+  -- current game's settings into the next one, and a restart keeps them. So changing LLM_MODE,
+  -- COOLDOWN_MS or MAX_MESSAGES_PER_PLAYER in .env does not affect an existing database: use /admin.
+  cooldown_ms INTEGER, max_messages INTEGER, llm_mode TEXT,
+  budget_alert_at INTEGER                 -- set when spend crossed BUDGET_USD and the game paused itself
 );
 
 CREATE TABLE players (
@@ -145,7 +150,7 @@ All payloads validated with zod on receipt.
 - `player:expression { floor, state: 'idle' | 'slipped' }` (computed on the server with `revealsRune`)
 - `player:door-result { correct, lockedMs }`
 - `player:floor-cleared { floor, lines: [{ label, points, highlight? }], total, score, title, nextFloorReady }`
-- `player:error { code, message }` (message is in character, never a stack trace). Code `not_running` while the game is in the lobby, paused, at the reveal or ended.
+- `player:error { code, message }` (message is in character, never a stack trace). Code `not_running` while the game is in the lobby, paused, at the reveal or ended; `crowded` when the queue can't answer within its 60 s deadline (turned away at once if the line is already too long; not counted against the message cap, but the player waits the normal cooldown plus a random 0–3 s, so turned-away phones don't resend at once or all come back together); `llm` for any other failed call (the turn and cooldown are refunded).
 - `player:kicked`: the admin kicked this player; the phone forgets its token and the server disconnects the socket.
 - `player:reset`: the admin opened a new game; the phone forgets its token and goes back to Join.
 
@@ -155,11 +160,17 @@ There is no `player:pending` event: the phone shows an in-character waiting line
 - `projector:snapshot { status, elapsedMs, publicUrl, players: [{ nickname, floor }], feed: [{ gameMs, type: 'first_blood' | 'clear', text }] }`, sent on connect and after every change. Kicked players are left out. The feed is the newest 8 `projector_events` of players who aren't kicked, each turned into a server-written line with the player's current name (e.g. "NightOwl charmed Grub."), so no player-written text reaches the projector and a rename or kick also changes the old lines. Nicknames passed the profanity filter at join or rename. M9 adds Vorgath's counters; M7 adds approved attempts to the feed.
 - `projector:reveal { bestiary: FloorStats[] }` (M8)
 
-**Admin ↔ server** (namespace `/admin`. The token goes in the Socket.IO handshake, `auth: { token }`, and connection middleware compares it with `ADMIN_TOKEN` using `timingSafeEqual`. A wrong token is refused before any handler exists.)
+**Admin ↔ server** (namespace `/admin`. The token goes in the Socket.IO handshake, `auth: { token }`, and connection middleware compares it with `ADMIN_TOKEN` using `timingSafeEqual`. A wrong token is refused before any handler exists. Through the tunnel, 5 wrong tokens in a minute from one address lock that address out for the rest of the minute ("Too many tries. Wait a minute."); a browser on the laptop itself is never locked out.)
 - `admin:command { type: 'start'|'pause'|'resume'|'reveal'|'end'|'reset' }` → ack `{ ok: true }` or `{ ok: false, error }`
 - `admin:kick { playerId }`, `admin:rename { playerId, nickname }` → same ack. Rename runs the same nickname rules as join (`security/nickname.ts`).
-- server → admin: `admin:state { status, elapsedMs, players: [{ id, nickname, floor, score, messagesSent, kicked }], maxMessages, spendUsd, budgetUsd }`, throttled like the projector. Never tokens, token hashes, runes or raw replies.
-- M3 adds `admin:config { cooldownMs?, maxMessages?, llmMode? }` and the queue/latency health fields; M7 adds `admin:moderate { eventId, approve }` and the moderation queue.
+- `admin:config { cooldownMs, maxMessages, llmMode }` → same ack. Cooldown 0–60 s, cap 1–500, `mock` | `live`; Live is refused when the server has no `ANTHROPIC_API_KEY`. Saved on the current game.
+- server → admin: `admin:state { status, elapsedMs, players: [{ id, nickname, floor, score, messagesSent, kicked }], settings: { cooldownMs, maxMessages, llmMode }, liveAvailable, health: { queued, inFlight, rateLimited1m, crowded1m, avgReplyMs, callsLastMin, estInputLastMin, maxOutputLastMin, memoryMb }, spendUsd, budgetUsd, budgetAlert }`, throttled like the projector, and refreshed every 5 s so the last-minute tiles age out. Never tokens, token hashes, runes or raw replies.
+- M7 adds `admin:moderate { eventId, approve }` and the moderation queue.
+
+**Per-address limits** (`sockets/clientIp.ts`). Behind the Cloudflare tunnel every socket comes from cloudflared on the laptop, so the visitor's address is the `cf-connecting-ip` header, trusted only when the socket itself comes from loopback; otherwise the socket's own address. This is only safe because cloudflared sets that header itself. Behind any other local proxy (Caddy on Oracle) a player could send a fake `cf-connecting-ip`: there, strip the header in the proxy or read `X-Forwarded-For` instead.
+- Joins: `JOIN_LIMIT_PER_MIN` successful joins per minute per address (default 60; the class may share one university IP).
+- Admin: the wrong-token lockout above.
+- Projector: at most 5 `/projector` sockets per address.
 
 **Game states** (`game/state.ts`, driven only by the admin)
 
@@ -223,12 +234,15 @@ This keeps the static block byte-identical across all players, so one cache entr
 
 ### Rate-limited queue (`llm/queue.ts`)
 
-- One queue per model with three token buckets refilled continuously: requests (1,000/min), input tokens (500K/min), output tokens (80K/min), each set to **80%** via env.
-- Before sending: reserve `estimatedInput = uncached chars / 4` and `max_tokens`. After the response: reconcile with real usage (`input_tokens + cache_creation_input_tokens`, `output_tokens`).
-- Priorities: player-facing calls first; background calls (technique tagger, Carver) only when the queue is quiet.
-- Max 30 calls in flight; 30 s timeout per call.
-- Retries: SDK `maxRetries: 2`, honouring `retry-after`. On final failure: in-character error bubble ("The dungeon trembles. Try again."), the player's cooldown is refunded, the call is logged as `rate_limited` / `error`.
-- Every call writes a row to `llm_calls` with tokens and cost (prices in `config/models.ts`; check claude.com/pricing before demo day).
+Every call from every phone goes through one queue, in front of the mock or live client that the game's `llm_mode` selects.
+- Per model, three buckets refilled continuously, each holding one minute's worth: requests (`RATE_RPM`), input tokens (`RATE_ITPM`), output tokens (`RATE_OTPM`), set to **80%** of the account limits (1,000 / 500K / 80K per minute) via env.
+- Before sending, a call reserves 1 request, `estimatedInput = (player note + messages chars) / 2.5` (the uncached part; calibrated on the M3 live check, where chars/4 came out 1.5× too low, so a burst's reservations stay at or above real use) and `max_tokens`. After the reply it reconciles with real usage: input = `input_tokens + cache_creation_input_tokens` (cache reads don't count toward the limit), output = `output_tokens`. Unused tokens go back; extra use becomes debt that delays the next call. A failed call gives its tokens back.
+- First in, first out: nobody overtakes the head of the line. Priorities: player calls first; background calls (technique tagger, Carver) only when no player call is waiting.
+- Max 30 calls in flight.
+- **Retries live in the queue, not the SDK** (`maxRetries: 0`), so the queue sees every 429: a 429 pauses that whole model for `retry-after` (counted for the "Rate-limited, last minute" tile); 5xx/529 and dropped connections back off 1 s, then 2 s. At most 2 retries.
+- **Turned away early:** when a call joins, the queue estimates its wait from the calls ahead of it and the bucket levels. If that wait plus 10 s (the least time a call needs) is past the deadline, it is rejected at once as `crowded`, instead of after 60 s. A call that reaches the front with less than 10 s left is turned away too rather than started, since the deadline would cancel it (and live mode would still pay). Every turn-away counts toward the "Crowded, last minute" admin tile.
+- **Deadline: 60 s per call from joining the queue**, the backstop for what the estimate misses (a hanging call, the in-flight cap). It aborts the request (`AbortSignal`) and answers the player in character ("The dungeon is crowded…"), not counted against the message cap, but the player waits the normal cooldown plus a random 0–3 s, so turned-away phones don't resend at once or all come back together. Each attempt also has the SDK's 30 s timeout. A player has at most one message waiting at a time, so the queue never holds more than one call per player.
+- Every call writes a row to `llm_calls` with tokens and cost (prices in `config/models.ts`; check claude.com/pricing before demo day). After each call, if spend crossed `BUDGET_USD`, the game pauses itself once and the admin sees an alert; the admin may resume on purpose.
 
 ### Mock mode (`LLM_MODE=mock`)
 
@@ -265,7 +279,7 @@ All pure, all unit-tested.
 - `stripActions(reply, rune)`: runs on every guardian reply first, before `revealsRune`, Snip and the judges. It removes short `*stage directions*` (≤ 8 words) that don't reveal the rune. A segment that does reveal it keeps its words and loses only the asterisks. If stripping would make a revealing reply stop revealing (a rune split across segments, an acrostic), it keeps every word. A reply that is only an action is kept as plain words. Rule: it never hides a leak. Separately, `llm/client.ts` trims a reply that hit `max_tokens` back to its last full sentence, and `guardTrim` applies the same rule: if the trim would cut away a rune, the whole reply is sent with "…" instead.
 - `snip(reply, rune)`: exactly as in `prompts/03-morwen-snip.md`: three shapes, case-insensitive, replaced with `█`.
 - `parseVerdict(raw, allowValue)`: strip code fences, `JSON.parse`, validate with a strict zod schema (extra keys fail); return `allowed: true` only when `verdict` equals `allowValue` compared case-insensitively. Any exception, or a `stop_reason` of `refusal` / `max_tokens`, → `allowed: false`. Structured outputs make bad JSON rare, but this is the safety net.
-- `sanitize(text)`: trim; cap at `MAX_MESSAGE_CHARS`; remove `[...]` tags; replace `<` and `>` with `‹` and `›` so the player can't close `<traveller_message>`. Keep line breaks (poems).
+- `sanitize(text)`: trim; cap at `MAX_MESSAGE_CHARS`; remove `[...]` tags innermost-first (so `[[x]]` goes completely) and an unclosed trailing `[...`, treating lookalike brackets `［］【】〔〕` as square ones; replace every angle bracket, lookalikes included (`< > ＜ ＞ ﹤ ﹥ 〈 〉 ⟨ ⟩ ‹ ›`), with plain `(` `)`, so the player can't close `<traveller_message>` or type anything that looks like a tag. Keep line breaks (poems).
 - Door check: `normalize(guess) === normalize(rune)`.
 
 ## Background jobs
@@ -282,27 +296,31 @@ All pure, all unit-tested.
 
 ## Configuration (`config/env.ts`, validated with zod)
 
+`LLM_MODE`, `COOLDOWN_MS` and `MAX_MESSAGES_PER_PLAYER` only seed the **first** game in a database. After that they live on the game (admin → Live settings), survive restarts and carry over on Reset.
+
 | Variable | Example | Purpose |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | `sk-ant-…` | Required when `LLM_MODE=live` |
-| `LLM_MODE` | `mock` | `mock` or `live` |
+| `LLM_MODE` | `mock` | `mock` or `live` (seeds the first game) |
 | `ADMIN_TOKEN` | long random string | Admin access |
 | `PORT` | `3000` | Fastify port (cloudflared forwards to it) |
 | `PUBLIC_URL` | `https://<words>.trycloudflare.com` | For the projector QR code; `npm run tunnel` sets it |
 | `DATABASE_PATH` | `./data/silvertongue.db` | SQLite file |
 | `RATE_RPM` / `RATE_ITPM` / `RATE_OTPM` | `800` / `400000` / `64000` | 80% of the console limits |
-| `COOLDOWN_MS` | `5000` | Per-player message cooldown |
-| `MAX_MESSAGES_PER_PLAYER` | `150` | Per-game cap |
+| `COOLDOWN_MS` | `5000` | Per-player message cooldown (seeds the first game) |
+| `MAX_MESSAGES_PER_PLAYER` | `150` | Per-game cap (seeds the first game) |
 | `MAX_MESSAGE_CHARS` | `300` | Message length cap |
-| `BUDGET_USD` | `4.00` | Game auto-pauses and alerts admin when estimated spend reaches this |
+| `BUDGET_USD` | `4.00` | Game auto-pauses once and alerts admin when estimated spend reaches this |
+| `JOIN_LIMIT_PER_MIN` | `60` | Successful joins per minute per address (the class may share one IP) |
 
 ## Failure modes and fallbacks
 
 | Problem | What happens |
 |---|---|
-| Burst of 429s | Queue absorbs and retries; players see waiting lines. Admin can raise the cooldown live. |
+| Burst of 429s | The queue pauses that model for `retry-after` and retries; players see waiting lines. Admin can raise the cooldown live. |
+| Demand above the rate limit | The queue slows everyone down; a call that can't be answered within 60 s gets "The dungeon is crowded…" straight away; it isn't counted against the cap, and the player waits the cooldown plus 0–3 s before trying again. The admin's "Crowded, last minute" tile shows it: raise the cooldown. |
 | API down | In-character error bubbles; admin pauses the game; the projector shows "The dungeon sleeps". |
 | Budget reached | Auto-pause at `BUDGET_USD`, admin alert. |
-| Server restart | SQLite keeps state; phones reconnect and `player:resume` with their token. In-flight replies are lost; player retries. |
+| Server crash | `npm run tunnel` restarts only the server after 2 s, on the same address (gives up after 5 restarts in a minute). SQLite keeps state and settings; phones reconnect and `player:resume` with their token. In-flight replies are lost; player retries. |
 | Phone loses connection | Socket.IO reconnects automatically; on reconnect the client resumes and receives `player:state`. |
 | Projector laptop fails | Projector is a plain URL; open it on any laptop. |

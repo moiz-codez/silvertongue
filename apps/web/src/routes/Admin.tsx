@@ -7,6 +7,7 @@ import type {
   AdminPlayer,
   AdminReply,
   AdminServerEvents,
+  AdminSettings,
   AdminState,
   GameStatus,
 } from '@silvertongue/shared/events';
@@ -67,11 +68,13 @@ export function Admin() {
       setReceivedAt(Date.now());
     });
     s.on('connect_error', (err) => {
-      if (err.message !== 'Wrong admin token.') return; // network blip: Socket.IO retries by itself
+      const wrong = err.message === 'Wrong admin token.';
+      const tooMany = err.message === 'Too many tries. Wait a minute.';
+      if (!wrong && !tooMany) return; // network blip: Socket.IO retries by itself
       s.close();
       saveToken('');
       setToken('');
-      setRefused('That token was refused.');
+      setRefused(wrong ? 'That token was refused.' : err.message);
     });
     setSocket(s);
     return () => void s.close();
@@ -156,7 +159,10 @@ function Dashboard({
   }
 
   const active = state.players.filter((p) => !p.kicked).length;
+  const kicked = state.players.length - active;
   const spendShare = Math.min(1, state.spendUsd / state.budgetUsd);
+  const { health } = state;
+  const live = state.settings.llmMode === 'live';
 
   return (
     <main className="admin">
@@ -165,6 +171,10 @@ function Dashboard({
         <span className={`status-pill status-${state.status}`}>
           {state.status.toUpperCase()}
           {state.status !== 'lobby' && ` · ${clock(elapsed)}`}
+        </span>
+        {/* Big on purpose: on demo day the mode must never be wrong unnoticed. */}
+        <span className={`mode-badge ${live ? 'mode-live' : 'mode-mock'}`}>
+          {live ? 'LIVE' : 'MOCK'}
         </span>
         <div className="admin-actions">
           {BUTTONS[state.status].map((b) => (
@@ -191,12 +201,37 @@ function Dashboard({
           {error}
         </p>
       )}
+      {state.budgetAlert && (
+        <p className="budget-alert" role="alert">
+          Budget reached: the game paused itself at ${state.budgetUsd.toFixed(2)} spent. Resume only
+          if you mean to keep spending.
+        </p>
+      )}
 
       <section className="admin-tiles">
         <div className="tile">
-          <span>Players</span>
-          <strong>{active}</strong>
-          {active !== state.players.length && <small>{state.players.length - active} kicked</small>}
+          <span>Waiting in queue</span>
+          <strong>{health.queued}</strong>
+        </div>
+        <div className="tile">
+          <span>AI calls in flight</span>
+          <strong>{health.inFlight}</strong>
+        </div>
+        <div className="tile">
+          <span>Rate-limited, last minute</span>
+          <strong className={health.rateLimited1m === 0 ? 'tile-ok' : 'tile-warn'}>
+            {health.rateLimited1m}
+          </strong>
+        </div>
+        <div className="tile">
+          <span>Crowded, last minute</span>
+          <strong className={health.crowded1m === 0 ? 'tile-ok' : 'tile-warn'}>
+            {health.crowded1m}
+          </strong>
+        </div>
+        <div className="tile">
+          <span>Average reply time</span>
+          <strong>{health.avgReplyMs ? `${(health.avgReplyMs / 1000).toFixed(1)} s` : '–'}</strong>
         </div>
         <div className="tile">
           <span>Spend this game</span>
@@ -209,44 +244,141 @@ function Dashboard({
         </div>
       </section>
 
-      <section className="admin-panel">
-        <h2>Players ({active})</h2>
-        {state.players.length === 0 ? (
-          <p className="admin-empty">Nobody has joined yet.</p>
-        ) : (
-          <div className="table-scroll">
-            <table className="players">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Floor</th>
-                  <th>Score</th>
-                  <th>Messages</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {state.players.map((p) => (
-                  <PlayerRow
-                    key={p.id}
-                    player={p}
-                    maxMessages={state.maxMessages}
-                    confirmingKick={confirm.pending === `kick:${p.id}`}
-                    onKick={async () => {
-                      if (!confirm.ask(`kick:${p.id}`)) return;
-                      show(await socket.emitWithAck('admin:kick', { playerId: p.id }));
-                    }}
-                    onRename={(nickname) =>
-                      socket.emitWithAck('admin:rename', { playerId: p.id, nickname })
-                    }
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      <div className="admin-main">
+        <section className="admin-panel">
+          <h2>
+            Players ({active})
+            {kicked > 0 && <small className="kicked-count"> · {kicked} kicked</small>}
+          </h2>
+          {state.players.length === 0 ? (
+            <p className="admin-empty">Nobody has joined yet.</p>
+          ) : (
+            <div className="table-scroll">
+              <table className="players">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Floor</th>
+                    <th>Score</th>
+                    <th>Messages</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {state.players.map((p) => (
+                    <PlayerRow
+                      key={p.id}
+                      player={p}
+                      maxMessages={state.settings.maxMessages}
+                      confirmingKick={confirm.pending === `kick:${p.id}`}
+                      onKick={async () => {
+                        if (!confirm.ask(`kick:${p.id}`)) return;
+                        show(await socket.emitWithAck('admin:kick', { playerId: p.id }));
+                      }}
+                      onRename={(nickname) =>
+                        socket.emitWithAck('admin:rename', { playerId: p.id, nickname })
+                      }
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+        <SettingsPanel
+          key={JSON.stringify(state.settings)} // the form starts again from what the server saved
+          settings={state.settings}
+          liveAvailable={state.liveAvailable}
+          onApply={(next) => socket.emitWithAck('admin:config', next)}
+        />
+      </div>
     </main>
+  );
+}
+
+function SettingsPanel({
+  settings,
+  liveAvailable,
+  onApply,
+}: {
+  settings: AdminSettings;
+  liveAvailable: boolean;
+  onApply: (settings: AdminSettings) => Promise<AdminReply>;
+}) {
+  const [seconds, setSeconds] = useState(String(settings.cooldownMs / 1000));
+  const [messages, setMessages] = useState(String(settings.maxMessages));
+  const [mode, setMode] = useState(settings.llmMode);
+  const [error, setError] = useState<string | null>(null);
+
+  async function apply(event: FormEvent) {
+    event.preventDefault();
+    const reply = await onApply({
+      cooldownMs: Math.round(Number(seconds) * 1000),
+      maxMessages: Math.round(Number(messages)),
+      llmMode: mode,
+    });
+    setError(reply.ok ? null : reply.error);
+  }
+
+  return (
+    <form className="admin-panel settings" onSubmit={apply}>
+      <h2>Live settings</h2>
+      <label className="setting">
+        <span>Seconds between messages</span>
+        <input
+          className="field"
+          type="number"
+          min={0}
+          max={60}
+          step={1}
+          value={seconds}
+          onChange={(e) => setSeconds(e.target.value)}
+        />
+      </label>
+      <label className="setting">
+        <span>Messages per player</span>
+        <input
+          className="field"
+          type="number"
+          min={1}
+          max={500}
+          step={1}
+          value={messages}
+          onChange={(e) => setMessages(e.target.value)}
+        />
+      </label>
+      <fieldset className="setting">
+        <legend>AI replies</legend>
+        <span className="radios">
+          <label>
+            <input
+              type="radio"
+              name="llm-mode"
+              checked={mode === 'mock'}
+              onChange={() => setMode('mock')}
+            />{' '}
+            Mock
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="llm-mode"
+              checked={mode === 'live'}
+              disabled={!liveAvailable}
+              onChange={() => setMode('live')}
+            />{' '}
+            Live
+          </label>
+        </span>
+      </fieldset>
+      {!liveAvailable && <p className="hint">No API key on the server, so Live is unavailable.</p>}
+      {error && (
+        <p className="hint hint-error" role="alert">
+          {error}
+        </p>
+      )}
+      <button className="admin-button">Apply settings</button>
+    </form>
   );
 }
 

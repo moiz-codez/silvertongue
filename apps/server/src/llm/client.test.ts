@@ -1,5 +1,6 @@
+import Anthropic from '@anthropic-ai/sdk';
 import { describe, expect, it } from 'vitest';
-import { trimToLastSentence } from './client.ts';
+import { isRetryable, trimToLastSentence } from './client.ts';
 
 describe('trimToLastSentence', () => {
   it('drops the unfinished sentence at the end', () => {
@@ -29,5 +30,17 @@ describe('trimToLastSentence', () => {
   it('keeps a reply with no complete sentence, marked as trailing off', () => {
     expect(trimToLastSentence('Grub thinks that the')).toBe('Grub thinks that the…');
     expect(trimToLastSentence('   ')).toBe('');
+  });
+});
+
+describe('isRetryable', () => {
+  it('retries dropped connections and server trouble, never timeouts or bad requests', () => {
+    expect(isRetryable(new Anthropic.APIConnectionError({ message: 'reset' }))).toBe(true);
+    expect(isRetryable({ status: 429 })).toBe(true);
+    expect(isRetryable({ status: 529 })).toBe(true);
+    // A timed-out call may already be billed: retrying could pay twice.
+    expect(isRetryable(new Anthropic.APIConnectionTimeoutError())).toBe(false);
+    expect(isRetryable(new Anthropic.APIUserAbortError())).toBe(false);
+    expect(isRetryable({ status: 400 })).toBe(false);
   });
 });

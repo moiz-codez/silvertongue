@@ -18,7 +18,7 @@ export function App() {
 function Phone() {
   const game = useGame();
 
-  if (!game.token) return <Join notice={game.notice} onJoin={game.join} />;
+  if (!game.token) return <Join notice={game.notice} kicked={game.kicked} onJoin={game.join} />;
   if (!game.state) return <p className="loading">Lighting the torches…</p>;
   const status = game.state.gameStatus;
   if (status === 'lobby') return <Lobby state={game.state} />;

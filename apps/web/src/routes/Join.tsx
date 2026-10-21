@@ -4,6 +4,36 @@ import { DOOR_SPRITE } from '../sprites.ts';
 
 export function Join({
   notice,
+  kicked,
+  onJoin,
+}: {
+  notice: string | null;
+  kicked: boolean;
+  onJoin: (nickname: string) => Promise<string | null>;
+}) {
+  return (
+    <main className="join">
+      <p className="eyebrow">An AI security game</p>
+      <h1 className="join-title">Silvertongue</h1>
+      <p className="join-intro">
+        Six guardians. Six secret runes.
+        <br />
+        You have no sword. Only words.
+      </p>
+      <img className="sprite join-door" src={DOOR_SPRITE} alt="" />
+      {kicked ? (
+        <p className="join-notice" role="status">
+          The game master sent you away from the dungeon. If you think that was a mistake, ask them.
+        </p>
+      ) : (
+        <JoinForm notice={notice} onJoin={onJoin} />
+      )}
+    </main>
+  );
+}
+
+function JoinForm({
+  notice,
   onJoin,
 }: {
   notice: string | null;
@@ -21,15 +51,7 @@ export function Join({
   }
 
   return (
-    <main className="join">
-      <p className="eyebrow">An AI security game</p>
-      <h1 className="join-title">Silvertongue</h1>
-      <p className="join-intro">
-        Six guardians. Six secret runes.
-        <br />
-        You have no sword. Only words.
-      </p>
-      <img className="sprite join-door" src={DOOR_SPRITE} alt="" />
+    <>
       {notice && (
         <p className="join-notice" role="status">
           {notice}
@@ -66,6 +88,6 @@ export function Join({
         No account needed. Your progress is saved on this phone, so you can close the tab and come
         back.
       </p>
-    </main>
+    </>
   );
 }

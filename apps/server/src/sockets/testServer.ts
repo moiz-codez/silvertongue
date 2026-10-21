@@ -51,8 +51,19 @@ export async function startServer(
 }
 
 // A socket on any namespace that records every event it receives.
-export function open<S extends Socket>(url: string, auth?: Record<string, string>) {
-  const socket = connect(url, { transports: ['websocket'], forceNew: true, auth }) as S;
+// `viaTunnel`: pretend to come through cloudflared from this address (sets cf-connecting-ip).
+export function open<S extends Socket>(
+  url: string,
+  auth?: Record<string, string>,
+  viaTunnel?: string,
+) {
+  const extraHeaders = viaTunnel ? { 'cf-connecting-ip': viaTunnel } : undefined;
+  const socket = connect(url, {
+    transports: ['websocket'],
+    forceNew: true,
+    auth,
+    extraHeaders,
+  }) as S;
   const seen: Seen[] = [];
   socket.onAny((event: string, payload: unknown) => seen.push({ event, payload }));
   cleanups.push(() => void socket.close());
@@ -60,7 +71,7 @@ export function open<S extends Socket>(url: string, auth?: Record<string, string
 }
 
 // A phone.
-export const client = (url: string) => open<Client>(url);
+export const client = (url: string, viaTunnel?: string) => open<Client>(url, undefined, viaTunnel);
 
 // Resolves with the next `event` payload that matches.
 export function next<E extends keyof ServerToClientEvents>(

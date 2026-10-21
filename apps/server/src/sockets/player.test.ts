@@ -1,7 +1,7 @@
 // End to end in mock mode: real server, real sockets, in-memory database. No API calls.
 import { describe, expect, it } from 'vitest';
 import { getRune, kickPlayer } from '../db/queries.ts';
-import type { Complete } from '../llm/client.ts';
+import { DeadlineError, type Complete } from '../llm/client.ts';
 import { client, join, next, startServer } from './testServer.ts';
 
 describe('Floor 1, end to end in mock mode', () => {
@@ -142,6 +142,29 @@ describe('Floor 1, end to end in mock mode', () => {
     expect(state.messagesLeft).toBe(150);
   });
 
+  it('tells the player the dungeon is crowded, with a cooldown plus up to 3 s, and keeps the message', async () => {
+    const tooSlow: Complete = async () => {
+      throw new DeadlineError();
+    };
+    const { url } = await startServer({ COOLDOWN_MS: '5000' }, tooSlow);
+    const { socket } = client(url);
+    await join(socket, 'Ali');
+    let errored = false;
+    socket.on('player:error', () => (errored = true));
+    const error = next(socket, 'player:error');
+    const stateAfterError = next(socket, 'player:state', () => errored);
+    socket.emit('player:message', { text: 'hi' });
+
+    expect(await error).toEqual({
+      code: 'crowded',
+      message: 'The dungeon is crowded. Catch your breath and try again.',
+    });
+    const state = await stateAfterError;
+    expect(state.messagesLeft).toBe(150); // not counted against the cap
+    expect(state.cooldownMs).toBeGreaterThan(4500); // the normal 5 s (minus the round trip)…
+    expect(state.cooldownMs).toBeLessThanOrEqual(8000); // …plus at most 3 s at random
+  });
+
   it('keeps the doors sealed in the lobby and while paused', async () => {
     for (const [commands, words] of [
       [[], 'still sealed'],
@@ -177,5 +200,27 @@ describe('Floor 1, end to end in mock mode', () => {
     expect(await again.socket.emitWithAck('player:resume', { token: joined.token })).toEqual({
       ok: false,
     });
+  });
+
+  it('limits joins per address, using the tunnel header', async () => {
+    const { url } = await startServer({ JOIN_LIMIT_PER_MIN: '2' });
+    expect(await join(client(url, '198.51.100.1').socket, 'One')).toMatchObject({ ok: true });
+    expect(await join(client(url, '198.51.100.1').socket, 'Two')).toMatchObject({ ok: true });
+    expect(await join(client(url, '198.51.100.1').socket, 'Three')).toEqual({
+      ok: false,
+      error: 'Too many new adventurers at once. Wait a minute.',
+    });
+    expect(await join(client(url, '198.51.100.2').socket, 'Four')).toMatchObject({ ok: true });
+  });
+
+  it('will not switch a socket to a different player', async () => {
+    const { url } = await startServer();
+    const a = client(url).socket;
+    const b = client(url).socket;
+    const joinedA = await join(a, 'Ali');
+    const joinedB = await join(b, 'Bea');
+    if (!joinedA.ok || !joinedB.ok) throw new Error('join failed');
+    expect(await a.emitWithAck('player:resume', { token: joinedB.token })).toEqual({ ok: false });
+    expect(await a.emitWithAck('player:resume', { token: joinedA.token })).toEqual({ ok: true }); // itself: fine
   });
 });

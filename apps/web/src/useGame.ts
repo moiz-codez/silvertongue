@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Bubble, Expression, FloorCleared, PlayerState } from '@silvertongue/shared/events';
 import { FLOORS } from '@silvertongue/shared/floors';
-import { loadToken, saveToken, socket } from './socket.ts';
+import { loadToken, rememberKick, saveToken, socket, wasKicked } from './socket.ts';
 
 export interface DoorNote {
   text: string;
@@ -19,7 +19,8 @@ export function useGame() {
   const [cleared, setCleared] = useState<FloorCleared | null>(null);
   const [waitingLine, setWaitingLine] = useState<string | null>(null);
   const [doorNote, setDoorNote] = useState<DoorNote | null>(null);
-  const [notice, setNotice] = useState<string | null>(null); // shown on Join after a kick or reset
+  const [notice, setNotice] = useState<string | null>(null); // shown on Join after a reset
+  const [kicked, setKicked] = useState(wasKicked); // the game master sent this phone away
   // Local deadlines built from the server's "ms from now" values.
   const [cooldownUntil, setCooldownUntil] = useState(0);
   const [doorLockedUntil, setDoorLockedUntil] = useState(0);
@@ -52,7 +53,8 @@ export function useGame() {
     });
     socket.on('player:kicked', () => {
       forget();
-      setNotice('The game master sent you back to the gate.');
+      rememberKick();
+      setKicked(true);
     });
     socket.on('player:state', (s) => {
       setState(s);
@@ -137,6 +139,7 @@ export function useGame() {
     waitingLine,
     doorNote,
     notice,
+    kicked,
     cooldownUntil,
     doorLockedUntil,
     join,

@@ -1,4 +1,4 @@
--- Silvertongue schema, version 2 (db.ts migrates version-1 files). WAL mode and foreign keys are switched on in db.ts.
+-- Silvertongue schema, version 3 (db.ts migrates older files). WAL mode and foreign keys are switched on in db.ts.
 -- Tables for later milestones (carvings, hoard) are added when they're needed.
 
 CREATE TABLE games (
@@ -6,7 +6,11 @@ CREATE TABLE games (
   status TEXT NOT NULL CHECK (status IN ('lobby','running','paused','reveal','ended')),
   created_at INTEGER NOT NULL, started_at INTEGER, ended_at INTEGER,
   paused_at INTEGER,                      -- set while paused
-  paused_ms INTEGER NOT NULL DEFAULT 0    -- total time spent paused, so the timer skips it
+  paused_ms INTEGER NOT NULL DEFAULT 0,   -- total time spent paused, so the timer skips it
+  -- Live settings, changed from the admin screen. The first game takes them from .env;
+  -- Reset copies them into the next game, and a restart keeps them.
+  cooldown_ms INTEGER, max_messages INTEGER, llm_mode TEXT,
+  budget_alert_at INTEGER                 -- set when spend crossed BUDGET_USD and the game paused itself
 );
 
 CREATE TABLE players (

@@ -2,6 +2,7 @@
 import type { z } from 'zod';
 import type {
   adminCommandPayload,
+  configPayload,
   doorPayload,
   joinPayload,
   kickPayload,
@@ -107,13 +108,31 @@ export interface AdminPlayer {
   kicked: boolean;
 }
 
+export type AdminSettings = z.infer<typeof configPayload>;
+
+// The queue's last minute, for the health tiles (and the load test).
+export interface AdminHealth {
+  queued: number;
+  inFlight: number;
+  rateLimited1m: number;
+  crowded1m: number;
+  avgReplyMs: number;
+  callsLastMin: number;
+  estInputLastMin: number;
+  maxOutputLastMin: number;
+  memoryMb: number;
+}
+
 export interface AdminState {
   status: GameStatus;
   elapsedMs: number;
   players: AdminPlayer[];
-  maxMessages: number;
+  settings: AdminSettings;
+  liveAvailable: boolean; // the server has an API key, so Live can be chosen
+  health: AdminHealth;
   spendUsd: number;
   budgetUsd: number;
+  budgetAlert: boolean; // spend crossed the budget and the game paused itself
 }
 
 export type AdminReply = { ok: true } | { ok: false; error: string };
@@ -123,6 +142,7 @@ export interface AdminClientEvents {
     payload: z.infer<typeof adminCommandPayload>,
     ack: (reply: AdminReply) => void,
   ) => void;
+  'admin:config': (payload: AdminSettings, ack: (reply: AdminReply) => void) => void;
   'admin:kick': (payload: z.infer<typeof kickPayload>, ack: (reply: AdminReply) => void) => void;
   'admin:rename': (
     payload: z.infer<typeof renamePayload>,
