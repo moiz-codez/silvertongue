@@ -292,7 +292,15 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
             [...history, { speaker: 'player', text }],
             q.getRune(db, id, floor),
           );
-          logCall(gameId, id, floor, floorTurn.role, turn.result, 'ok');
+          // A refusal still answers (trimmed), but the log should show the classifier stepped in.
+          logCall(
+            gameId,
+            id,
+            floor,
+            floorTurn.role,
+            turn.result,
+            turn.result.stopReason === 'refusal' ? 'refusal' : 'ok',
+          );
           checkBudget();
           // Kicked or reset while the guardian was thinking: this socket no longer plays as them.
           if (socket.data.playerId !== id) return;

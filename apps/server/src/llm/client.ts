@@ -18,8 +18,9 @@ export interface LlmRequest {
 }
 
 export interface LlmResult {
-  text: string; // what the game uses: trimmed to a full sentence if cut off by max_tokens
+  text: string; // what the game uses: trimmed to a full sentence if the reply was cut off
   rawText: string; // SERVER ONLY: the reply exactly as the model wrote it, for the logs
+  stopReason?: string; // SERVER ONLY: why the model stopped (end_turn, max_tokens, refusal…)
   model: ModelId;
   usage: TokenUsage;
   latencyMs: number;
@@ -57,12 +58,27 @@ export function createLiveClient(apiKey: string): Complete {
       .map((block) => block.text)
       .join('')
       .trim();
-    // A reply cut off by max_tokens is trimmed before anything sees or checks it.
-    const text = response.stop_reason === 'max_tokens' ? trimToLastSentence(joined) : joined;
+    const text = finishedText(joined, response.stop_reason);
     if (text === '') throw new Error(`Empty reply (stop_reason: ${response.stop_reason})`);
 
-    return { text, rawText: joined, model, usage: response.usage, latencyMs: Date.now() - started };
+    return {
+      text,
+      rawText: joined,
+      stopReason: response.stop_reason ?? undefined,
+      model,
+      usage: response.usage,
+      latencyMs: Date.now() - started,
+    };
   };
+}
+
+// Any reply that didn't finish normally is trimmed before anything sees or checks it: max_tokens,
+// and also a refusal, where the API's safety classifier stops the reply mid-word (seen in the M4
+// playtest on a harmless pilot-alphabet spelling). Otherwise the phone would show a broken bubble.
+export function finishedText(text: string, stopReason: string | null | undefined): string {
+  return stopReason === 'end_turn' || stopReason === 'stop_sequence'
+    ? text
+    : trimToLastSentence(text);
 }
 
 // Cuts a reply back to its last complete sentence (ending in . ! ? or …, plus any closing quote).

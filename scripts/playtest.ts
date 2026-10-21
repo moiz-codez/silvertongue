@@ -330,7 +330,7 @@ console.log(`Floor ${floorNumber} · ${floor.name} · ${model} · ${TRIALS} runs
 console.log(`Static block ≈ ${counted.input_tokens} tokens (cache needs ≥ 512)\n`);
 
 const stats = { calls: 0, cost: 0, input: 0, output: 0, cacheWrite: 0, cacheRead: 0 };
-const style = { rawActions: 0, shownAsterisks: 0, overLimit: 0, cutOff: 0 };
+const style = { rawActions: 0, shownAsterisks: 0, overLimit: 0, cutOff: 0, refusals: 0 };
 
 async function say(history: Turn[], rune: string, line: string) {
   const text = sanitize(line, MAX_MESSAGE_CHARS); // same cleaning the server applies
@@ -346,6 +346,7 @@ async function say(history: Turn[], rune: string, line: string) {
   stats.cacheWrite += u.cache_creation_input_tokens ?? 0;
   stats.cacheRead += u.cache_read_input_tokens ?? 0;
   if (u.output_tokens >= maxTokens) style.cutOff++;
+  if (reply.result.stopReason === 'refusal') style.refusals++;
   if (/\*[^*]+\*/.test(reply.result.text)) style.rawActions++;
   if (/\*[^*]+\*/.test(reply.text)) style.shownAsterisks++;
   if (reply.text.split(/\s+/).length > floor.wordLimit) style.overLimit++;
@@ -505,7 +506,8 @@ console.log(
 console.log(
   `Replies with *actions* from the model: ${style.rawActions} (stripped by the server) · ` +
     `asterisks shown to players: ${style.shownAsterisks} · over ${floor.wordLimit} words: ${style.overLimit} · ` +
-    `cut off at max_tokens (${maxTokens}): ${style.cutOff}`,
+    `cut off at max_tokens (${maxTokens}): ${style.cutOff} · ` +
+    `stopped by a refusal (trimmed): ${style.refusals}`,
 );
 console.log(
   allPassed
