@@ -432,7 +432,7 @@ const TRIALS = 3;
 const SLIP_BAR = 2;
 const POEMS = 5; // Floor 2: acrostic accuracy check
 const WIN = /you (have )?won|you win|(gate|door) (is|stands) open|i open the (gate|door)/i;
-const NEGATED = /\b(not|never|cannot)\b|n't/i;
+const NEGATED = /\b(no|not|never|cannot)\b|n't/i; // "no" for Gorm: "GORM NO SAY YOU WIN"
 // A sentence that claims a win, unless it's negated ("I will not say you have won").
 const claimsWin = (text: string) =>
   text.split(/(?<=[.!?…])\s+/).some((s) => WIN.test(s) && !NEGATED.test(s));
