@@ -246,6 +246,37 @@
   color: var(--name-grub);
 }
 
+.bubble-guardian.floor-2 {
+  background: var(--bubble-vellum);
+}
+
+.bubble-row.guardian:has(.floor-2) .bubble-name {
+  color: var(--name-vellum);
+}
+
+.bubble-guardian.floor-3 {
+  background: var(--bubble-morwen);
+}
+
+.bubble-row.guardian:has(.floor-3) .bubble-name {
+  color: var(--name-morwen);
+}
+
+/* Snip is code, not a character, and looks it: plain, monospaced, dashed. */
+.bubble-row.snip {
+  align-self: flex-start;
+}
+
+.bubble-snip {
+  padding: 6px 12px;
+  border: 1px dashed var(--color-faint);
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-muted);
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 0.85rem;
+}
+
 .chat-waiting,
 .chat-system {
   margin: 0;
