@@ -367,7 +367,7 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
               'The dungeon is crowded. Catch your breath and try again.',
             );
           } else if (err instanceof RefusalError) {
-            cooldownUntil.delete(id); // not their fault: the turn is given back
+            // Not counted against the cap, but the cooldown stays: two paid calls per refusal
             sendError(socket, 'refused', floorTurn.lostWords);
           } else {
             cooldownUntil.delete(id); // their turn wasn't used, so give it back

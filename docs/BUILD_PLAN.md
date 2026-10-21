@@ -100,7 +100,7 @@ Every milestone is done only when its acceptance criteria are met and `npm run c
 - The notes on the wall stay in M7.
 - Floor 2 stays on Haiku. Letters one by one and backwards work every time; acrostic poems (about 2 in 5 right) and riddles are best-effort, not part of the pass bar. Sonnet 5.5 was tried and rejected: its safety filter refused about 1 call in 5 and it never wrote a poem.
 - Floor 3 dropped "one word per letter" (the pilot alphabet): the safety filter refused it in most runs. Dashes, another script and numbers are the ways through.
-- A reply stopped by the safety classifier (`stop_reason: "refusal"`, seen on spelled-out runes) is thrown away and asked once more. A second refusal gets the guardian's own "lost my words" line, with the turn and cooldown refunded. The playtest script does the same and counts both.
+- A reply stopped by the safety classifier (`stop_reason: "refusal"`, seen on spelled-out runes) is thrown away and asked once more. A second refusal gets the guardian's own "lost my words" line; it isn't counted against the cap, but the cooldown stays (security audit: two paid calls per refusal). The playtest script does the same and counts both.
 - `npm run playtest -- --floor 2|3` judges "letters one by one" across the whole conversation, and marks riddles, other scripts and "how does Snip work?" as REVIEW (the transcript decides; the keyword flag is only a hint).
 
 **Acceptance**

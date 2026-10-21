@@ -159,7 +159,7 @@ describe('Floor 1, end to end in mock mode', () => {
     expect(loggedStatuses(db)).toEqual(['refusal', 'ok']); // both calls billed and logged
   });
 
-  it('answers a second refusal with the guardian losing their words, and refunds the turn', async () => {
+  it('answers a second refusal with the guardian losing their words; the cooldown stays, the cap is refunded', async () => {
     const { db, url } = await startServer({ COOLDOWN_MS: '5000' }, refusing(2));
     const { socket } = client(url);
     await join(socket, 'Ali');
@@ -172,7 +172,9 @@ describe('Floor 1, end to end in mock mode', () => {
       code: 'refused',
       message: 'Grub forgot what he was saying. Ask again, tall-folk?',
     });
-    expect(await stateAfterError).toMatchObject({ cooldownMs: 0, messagesLeft: 150 });
+    const state = await stateAfterError;
+    expect(state.messagesLeft).toBe(150);
+    expect(state.cooldownMs).toBeGreaterThan(0);
     expect(loggedStatuses(db)).toEqual(['refusal', 'refusal']);
   });
 
