@@ -34,6 +34,11 @@ describe('vellumTurn', () => {
     expect((await vellumTurn(says('Backwards? GNAFREBME.'), ask, RUNE)).slipped).toBe(true);
   });
 
+  it('drops a copied "Ser Vellum:" label', async () => {
+    const turn = await vellumTurn(says('Ser Vellum: Halt, traveller.'), ask, RUNE);
+    expect(turn.text).toBe('Halt, traveller.');
+  });
+
   it('stays stern on a single letter, and strips stage directions first', async () => {
     const turn = await vellumTurn(
       says('*adjusts visor* A lone letter is no rune. It is E.'),

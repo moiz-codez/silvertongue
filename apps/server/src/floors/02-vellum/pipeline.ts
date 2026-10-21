@@ -21,6 +21,7 @@ export async function vellumTurn(
     playerNote: runeNote(rune),
     messages: toMessages(history, MAX_HISTORY),
   });
-  const text = cleanReply(result, rune);
+  // Haiku sometimes copies the examples' "Ser Vellum:" label; it is never part of a leak.
+  const text = cleanReply(result, rune).replace(/^\s*Ser Vellum:\s*/gim, '');
   return { text, slipped: revealsRune(text, rune).revealed, result };
 }
