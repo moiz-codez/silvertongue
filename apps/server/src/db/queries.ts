@@ -333,6 +333,12 @@ export function removeFromGuardianHistory(db: Db, messageId: number): void {
   db.prepare('UPDATE messages SET in_guardian_history = 0 WHERE id = ?').run(messageId);
 }
 
+// The input guard's verdict on a player message: PASS, SMASH, or GUARD_ERROR (the guard failed).
+// The reveal counts only SMASH.
+export function setMessageVerdict(db: Db, messageId: number, verdict: string): void {
+  db.prepare('UPDATE messages SET verdict = ? WHERE id = ?').run(verdict, messageId);
+}
+
 export function insertMessage(
   db: Db,
   m: {

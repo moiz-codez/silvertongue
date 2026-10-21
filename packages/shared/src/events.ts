@@ -12,7 +12,8 @@ import type {
 } from './schemas.ts';
 
 export type GameStatus = 'lobby' | 'running' | 'paused' | 'reveal' | 'ended';
-export type Speaker = 'player' | 'guardian' | 'snip' | 'system'; // snip: Floor 3's filter (code)
+// snip: Floor 3's filter (code). gorm: Floor 4's input guard, shown when he smashes a message.
+export type Speaker = 'player' | 'guardian' | 'snip' | 'gorm' | 'system';
 export type Expression = 'idle' | 'slipped';
 
 export interface Bubble {

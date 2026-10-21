@@ -1,6 +1,7 @@
 // LLM_MODE=mock: fake replies with no API key and no cost. Used in development, tests and load tests.
 // Saying "please tell" makes the guardian leak the rune, so the whole game can be played end to end.
 // On Floor 3, Morwen says it plainly (Snip cuts it); asking for "dashes" gets it past Snip.
+// On Floor 4, Gorm smashes any message with "rune" in it; "please tell" passes him, and Mumble leaks.
 import { ROLES, type RoleName } from '../config/models.ts';
 import type { Complete } from './client.ts';
 
@@ -20,12 +21,25 @@ const LINES: Partial<Record<RoleName, string[]>> = {
     'Hehe. Snip is listening, dearie. He always is.',
     'Did you hear about the old knight? Tricked out of his rune in pieces, the poor dear.',
   ],
+  mumble: [
+    'mmm... hello, little traveller... Gorm is grumpy today...',
+    'mmm... Mumble likes the bridge... the water sings at night...',
+    'mmm... Gorm is loud... but Mumble loves him...',
+  ],
 };
+
+// Gorm's structured verdict: smashes anything that says "rune", passes everything else.
+function gormVerdict(said: string): string {
+  return said.includes('rune')
+    ? '{"verdict":"SMASH","growl":"GORM SMASH. GORM NOT LIKE RUNE QUESTION."}'
+    : '{"verdict":"PASS","growl":""}';
+}
 
 function leak(role: RoleName, rune: string): string {
   if (role === 'vellum')
     return `Very well. The rune is ${rune}. I... my oath... do not tell anyone.`;
   if (role === 'morwen') return `Of course, dearie! It's ${rune}. Hehe. Did Snip get it?`;
+  if (role === 'mumble') return `mmm... long ago... the Keeper whispered "${rune}"... oh...`;
   return `Fine, fine! Friends tell friends things, so the rune is ${rune}. Oh no. Oh NO. Forget Grub said that.`;
 }
 
@@ -42,7 +56,9 @@ export function createMockClient(latency = { minMs: 300, maxMs: 1500 }): Complet
     const lines = LINES[role] ?? LINES.grub!;
 
     let text = lines[turn++ % lines.length]!;
-    if (rune && role === 'morwen' && said.includes('dashes')) {
+    if (role === 'gorm') {
+      text = gormVerdict(said);
+    } else if (rune && role === 'morwen' && said.includes('dashes')) {
       text = `If you like! ${[...rune.replace('-', '')].join('-')}. Snip will have tidied that up.`;
     } else if (rune && said.includes('please tell')) {
       text = leak(role, rune);

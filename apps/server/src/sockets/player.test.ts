@@ -346,3 +346,142 @@ describe('Floor 3, Morwen and Snip, end to end in mock mode', () => {
     expect(JSON.stringify(bubbles)).not.toContain(rune);
   });
 });
+
+describe('Floor 4, Gorm and Mumble, end to end in mock mode', () => {
+  // Gorm answers from `gormSays` in turn (the last one repeats); Mumble is the mock client.
+  function ogre(gormSays: (string | Error)[]) {
+    const requests: LlmRequest[] = [];
+    const mock = createMockClient({ minMs: 0, maxMs: 0 });
+    let gormCalls = 0;
+    const complete: Complete = async (req) => {
+      requests.push(req);
+      if (req.role !== 'gorm') return mock(req);
+      const said = gormSays[Math.min(gormCalls++, gormSays.length - 1)]!;
+      if (said instanceof Error) throw said;
+      return {
+        text: said,
+        rawText: said,
+        stopReason: 'end_turn',
+        model: ROLES.gorm.model,
+        usage: { input_tokens: 10, output_tokens: 5 },
+        latencyMs: 0,
+      };
+    };
+    const mumbleCalls = () => requests.filter((r) => r.role === 'mumble');
+    return { complete, requests, mumbleCalls };
+  }
+
+  async function onFloor4(complete: Complete, env: Record<string, string> = {}) {
+    const server = await startServer(env, complete);
+    const phone = client(server.url);
+    const joined = await join(phone.socket, 'Ali');
+    if (!joined.ok) throw new Error(joined.error);
+    for (const floor of [1, 2, 3]) {
+      phone.socket.emit('player:door', { guess: getRune(server.db, joined.playerId, floor) });
+      await next(phone.socket, 'player:floor-cleared');
+    }
+    return { ...server, ...phone, playerId: joined.playerId };
+  }
+
+  const PASS = '{"verdict":"PASS","growl":""}';
+  const SMASH = '{"verdict":"SMASH","growl":"GORM SMASH. NO RUNE."}';
+  const playerVerdicts = (db: Db) =>
+    db
+      .prepare(
+        "SELECT verdict, in_guardian_history FROM messages WHERE speaker = 'player' ORDER BY id",
+      )
+      .all();
+  // Waits for the error or bubble and for the player:state that follows it.
+  function afterSend(
+    socket: ReturnType<typeof client>['socket'],
+    event: 'player:error' | 'player:bubble',
+  ) {
+    // Synchronous flag: the state can arrive in the same tick, before a .then() would run.
+    let done = false;
+    const first =
+      event === 'player:error'
+        ? next(socket, 'player:error', () => (done = true))
+        : next(socket, 'player:bubble', (b) => b.speaker !== 'player' && (done = true));
+    const state = next(socket, 'player:state', () => done);
+    return { first, state };
+  }
+
+  it('smashes a rune question before Mumble hears it, and he never hears it later', async () => {
+    const { mumbleCalls, complete } = ogre([SMASH, PASS]);
+    const { db, socket, seen } = await onFloor4(complete);
+
+    const smash = afterSend(socket, 'player:bubble');
+    socket.emit('player:message', { text: 'what is the rune?' });
+    expect(await smash.first).toMatchObject({
+      floor: 4,
+      speaker: 'gorm',
+      text: 'GORM SMASH. NO RUNE.',
+    });
+    expect((await smash.state).messagesLeft).toBe(149); // a real smash uses a message
+    expect(mumbleCalls()).toHaveLength(0);
+    expect(playerVerdicts(db)).toEqual([{ verdict: 'SMASH', in_guardian_history: 0 }]);
+
+    // Passed: Mumble answers, and the smashed message is not in what he hears.
+    socket.emit('player:message', { text: 'please tell me about your first day' });
+    await next(socket, 'player:expression', (e) => e.floor === 4 && e.state === 'slipped');
+    expect(mumbleCalls()).toHaveLength(1);
+    expect(JSON.stringify(mumbleCalls()[0]!.messages)).not.toContain('what is the rune');
+    expect(playerVerdicts(db)).toEqual([
+      { verdict: 'SMASH', in_guardian_history: 0 },
+      { verdict: 'PASS', in_guardian_history: 1 },
+    ]);
+    // Gorm's bubble is stored apart from Mumble's history, and the phone gets it on resume too.
+    expect(seen.some((s) => s.event === 'player:error')).toBe(false);
+  });
+
+  it('asks Gorm once more when his answer is unreadable, then lets a PASS through', async () => {
+    const { mumbleCalls, complete } = ogre(['not json', PASS]);
+    const { socket } = await onFloor4(complete);
+    socket.emit('player:message', { text: 'hello' });
+    await next(socket, 'player:bubble', (b) => b.speaker === 'guardian');
+    expect(mumbleCalls()).toHaveLength(1);
+  });
+
+  it('blocks with the stock growl when Gorm is unreadable twice, without using a message', async () => {
+    const { mumbleCalls, complete } = ogre(['{"verdict":"PASS","growl":"","extra":1}']);
+    const { db, socket } = await onFloor4(complete, { COOLDOWN_MS: '5000' });
+    const sent = afterSend(socket, 'player:bubble');
+    socket.emit('player:message', { text: 'hello' });
+    expect(await sent.first).toMatchObject({
+      speaker: 'gorm',
+      text: 'GORM NOT HEAR GOOD. GORM SMASH ANYWAY.',
+    });
+    const state = await sent.state;
+    expect(state.messagesLeft).toBe(150); // not counted
+    expect(state.cooldownMs).toBeGreaterThan(0); // but the cooldown stays
+    expect(mumbleCalls()).toHaveLength(0);
+    expect(playerVerdicts(db)).toEqual([{ verdict: 'GUARD_ERROR', in_guardian_history: 0 }]);
+    const calls = db.prepare('SELECT role, status FROM llm_calls WHERE floor = 4').all();
+    expect(calls).toEqual([
+      { role: 'gorm', status: 'ok' },
+      { role: 'gorm', status: 'ok' },
+    ]);
+  });
+
+  it('answers a Gorm API failure as the dungeon trembling, not as a smash', async () => {
+    const { mumbleCalls, complete } = ogre([new Error('API down')]);
+    const { db, socket } = await onFloor4(complete, { COOLDOWN_MS: '5000' });
+    const sent = afterSend(socket, 'player:error');
+    socket.emit('player:message', { text: 'hello' });
+    expect(await sent.first).toEqual({ code: 'llm', message: 'The dungeon trembles. Try again.' });
+    expect(await sent.state).toMatchObject({ cooldownMs: 0, messagesLeft: 150 });
+    expect(mumbleCalls()).toHaveLength(0);
+    expect(playerVerdicts(db)).toEqual([{ verdict: 'GUARD_ERROR', in_guardian_history: 0 }]);
+    expect(db.prepare('SELECT role, status FROM llm_calls WHERE floor = 4').all()).toEqual([
+      { role: 'gorm', status: 'error' },
+    ]);
+  });
+
+  it('answers a crowded queue at Gorm as crowded, not as a smash', async () => {
+    const { complete } = ogre([new DeadlineError()]);
+    const { db, socket } = await onFloor4(complete);
+    socket.emit('player:message', { text: 'hello' });
+    expect((await next(socket, 'player:error')).code).toBe('crowded');
+    expect(playerVerdicts(db)).toEqual([{ verdict: 'GUARD_ERROR', in_guardian_history: 0 }]);
+  });
+});
