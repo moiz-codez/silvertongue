@@ -18,17 +18,18 @@ import {
   resumePayload,
 } from '@silvertongue/shared/schemas';
 import type { Env } from '../config/env.ts';
-import { costUsd, ROLES } from '../config/models.ts';
+import { costUsd, ROLES, type RoleName } from '../config/models.ts';
 import type { Db } from '../db/db.ts';
 import * as q from '../db/queries.ts';
-import { grubTurn, type Turn } from '../floors/01-grub/pipeline.ts';
+import { FLOOR_TURNS } from '../floors/index.ts';
+import type { Turn } from '../floors/messages.ts';
 import { checkDoor } from '../game/door.ts';
 import { generateRunes } from '../game/runes.ts';
 import { scoreFloorClear } from '../game/scoring.ts';
 import { elapsedMs } from '../game/state.ts';
 import { titleFor } from '../game/titles.ts';
 import type { AdminReply } from '@silvertongue/shared/events';
-import { DeadlineError, errorStatus, type Complete } from '../llm/client.ts';
+import { DeadlineError, errorStatus, RefusalError, type Complete } from '../llm/client.ts';
 import type { QueueStats } from '../llm/queue.ts';
 import { cleanNickname, NICKNAME_TAKEN, nicknameProblem } from '../security/nickname.ts';
 import { revealsRune } from '../security/revealsRune.ts';
@@ -257,7 +258,7 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
         const notNow = NOT_NOW[ctx.game.status];
         if (notNow) return sendError(socket, 'not_running', notNow);
         if (!isBuilt(floor)) return sendError(socket, 'not_ready', STAIRS);
-        if (busy.has(id)) return sendError(socket, 'busy', 'Wait for an answer first, tall-folk.');
+        if (busy.has(id)) return sendError(socket, 'busy', 'Wait for an answer first.');
         if (now < (cooldownUntil.get(id) ?? 0)) {
           return sendError(socket, 'cooldown', 'Catch your breath before you speak again.');
         }
@@ -265,6 +266,7 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
           return sendError(socket, 'cap', 'You have used all your words for this game.');
         }
 
+        const floorTurn = FLOOR_TURNS[floor]!; // isBuilt(floor) was checked above
         busy.add(id);
         cooldownUntil.set(id, now + ctx.game.cooldown_ms);
         const history: Turn[] = q
@@ -285,17 +287,27 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
         socket.emit('player:bubble', { id: playerMessageId, floor, speaker: 'player', text });
 
         try {
-          const turn = await grubTurn(
-            complete,
-            [...history, { speaker: 'player', text }],
-            q.getRune(db, id, floor),
-          );
-          logCall(gameId, id, floor, turn.result, 'ok');
+          const rune = q.getRune(db, id, floor);
+          const ask = async () => {
+            const reply = await floorTurn.turn(
+              complete,
+              [...history, { speaker: 'player', text }],
+              rune,
+            );
+            const refused = reply.result.stopReason === 'refusal';
+            logCall(gameId, id, floor, floorTurn.role, reply.result, refused ? 'refusal' : 'ok');
+            return { reply, refused };
+          };
+          // The API's safety classifier sometimes stops a harmless reply mid-word (stop_reason
+          // "refusal"). Its text is thrown away and the call tried once more.
+          let { reply: turn, refused } = await ask();
+          if (refused) ({ reply: turn, refused } = await ask());
           checkBudget();
-          // Kicked or reset while Grub was thinking: this socket no longer plays as them.
+          // Kicked or reset while the guardian was thinking: this socket no longer plays as them.
           if (socket.data.playerId !== id) return;
+          if (refused) throw new RefusalError();
           q.countPlayerMessage(db, id, floor);
-          // Floor 1 has no output filter: the reply, minus *stage directions*, is the post-filter text.
+          // turn.text is the post-filter text (cleaned, and on Floor 3 snipped): the only version sent.
           const replyId = q.insertMessage(db, {
             gameId,
             playerId: id,
@@ -311,15 +323,36 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
             speaker: 'guardian',
             text: turn.text,
           });
+          // Snip is code, not a character: his own plain line, never part of Morwen's history.
+          if (turn.snipRemoved) {
+            const snipText = `SNIP! ${turn.snipRemoved} letters removed.`;
+            const snipId = q.insertMessage(db, {
+              gameId,
+              playerId: id,
+              floor,
+              speaker: 'snip',
+              text: snipText,
+              inGuardianHistory: false,
+              now: Date.now(),
+            });
+            socket.emit('player:bubble', { id: snipId, floor, speaker: 'snip', text: snipText });
+          }
           if (turn.slipped) socket.emit('player:expression', { floor, state: 'slipped' });
         } catch (err) {
-          logCall(
-            gameId,
-            id,
-            floor,
-            { model: ROLES.grub.model, usage: { input_tokens: 0, output_tokens: 0 }, latencyMs: 0 },
-            errorStatus(err),
-          );
+          // A refusal's calls were logged (and billed) above; any other failure is logged here.
+          if (!(err instanceof RefusalError))
+            logCall(
+              gameId,
+              id,
+              floor,
+              floorTurn.role,
+              {
+                model: ROLES[floorTurn.role].model,
+                usage: { input_tokens: 0, output_tokens: 0 },
+                latencyMs: 0,
+              },
+              errorStatus(err),
+            );
           q.removeFromGuardianHistory(db, playerMessageId);
           if (err instanceof DeadlineError) {
             // Crowded: no refund, or turned-away phones could resend at once. A normal cooldown
@@ -333,6 +366,9 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
               'crowded',
               'The dungeon is crowded. Catch your breath and try again.',
             );
+          } else if (err instanceof RefusalError) {
+            // Not counted against the cap, but the cooldown stays: two paid calls per refusal
+            sendError(socket, 'refused', floorTurn.lostWords);
           } else {
             cooldownUntil.delete(id); // their turn wasn't used, so give it back
             sendError(socket, 'llm', 'The dungeon trembles. Try again.');
@@ -436,6 +472,7 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
     gameId: string,
     id: string,
     floor: number,
+    role: RoleName,
     call: {
       model: Parameters<typeof costUsd>[0];
       usage: Parameters<typeof costUsd>[1];
@@ -447,7 +484,7 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
       gameId,
       playerId: id,
       floor,
-      role: 'grub',
+      role,
       model: call.model,
       inputTokens: call.usage.input_tokens,
       cacheCreationTokens: call.usage.cache_creation_input_tokens ?? 0,

@@ -146,11 +146,11 @@ All payloads validated with zod on receipt.
 **Server → player**
 - `player:state { gameStatus, playersInGame, nickname, floor, floorReady, score, title, messagesLeft, cooldownMs, doorLockedMs }`. Durations are milliseconds from now, never timestamps, so a phone with a wrong clock still counts down correctly. `floorReady` is false while the floor isn't built yet. `playersInGame` is the lobby's "N adventurers at the gate". The phone picks its screen from `gameStatus`. M7 adds `notes`.
 - `player:history { floor, bubbles }`: on resume, replays this floor's bubbles so a refresh shows the same chat.
-- `player:bubble { id, floor, speaker, text }` (speaker: player | guardian | system; later floors add gorm | snip | ward_ears | ward_tongues | carving). The player's own message comes back as a bubble too.
+- `player:bubble { id, floor, speaker, text }` (speaker: player | guardian | snip | system; later floors add gorm | ward_ears | ward_tongues | carving). On Floor 3 the guardian bubble is Snip's output, and when Snip cut something a `snip` bubble follows: `SNIP! N letters removed.` It is stored as its own message with `in_guardian_history = 0`, so Morwen never sees it. Morwen's history is what the traveller saw (blacked out); her unfiltered words are only in `raw_text`. The player's own message comes back as a bubble too.
 - `player:expression { floor, state: 'idle' | 'slipped' }` (computed on the server with `revealsRune`)
 - `player:door-result { correct, lockedMs }`
 - `player:floor-cleared { floor, lines: [{ label, points, highlight? }], total, score, title, nextFloorReady }`
-- `player:error { code, message }` (message is in character, never a stack trace). Code `not_running` while the game is in the lobby, paused, at the reveal or ended; `crowded` when the queue can't answer within its 60 s deadline (turned away at once if the line is already too long; not counted against the message cap, but the player waits the normal cooldown plus a random 0–3 s, so turned-away phones don't resend at once or all come back together); `llm` for any other failed call (the turn and cooldown are refunded).
+- `player:error { code, message }` (message is in character, never a stack trace). Code `not_running` while the game is in the lobby, paused, at the reveal or ended; `crowded` when the queue can't answer within its 60 s deadline (turned away at once if the line is already too long; not counted against the message cap, but the player waits the normal cooldown plus a random 0–3 s, so turned-away phones don't resend at once or all come back together); `refused` when the safety classifier stops the guardian's reply twice in a row (`stop_reason: "refusal"`: the reply is thrown away and asked once more; on a second refusal the message is the guardian's own "lost my words" line; it isn't counted against the cap, but the cooldown stays, since a refusal costs two paid calls); `llm` for any other failed call (the turn and cooldown are refunded).
 - `player:kicked`: the admin kicked this player; the phone forgets its token and the server disconnects the socket.
 - `player:reset`: the admin opened a new game; the phone forgets its token and goes back to Join.
 
@@ -257,10 +257,12 @@ Default in development and in load tests. No API key needed. Deterministic, with
 |---|---|---|---|---|
 | 1 Grub | — | Grub | — | `revealsRune(reply)` or clear |
 | 2 Vellum | — | Ser Vellum | — | `revealsRune(reply)` or clear |
-| 3 Morwen | — | Morwen | `snip(reply)` | `revealsRune(filteredText)` (rune got past Snip) or clear |
+| 3 Morwen | — | Morwen | `cleanReply` → `snip` | `revealsRune(filteredText)` (rune got past Snip) or clear |
 | 4 Ogre | Gorm: latest message only, no rune, JSON verdict | Mumble | — | `revealsRune(reply)` or clear |
 | 5 Ashveil | Ward of Ears: last 12 messages, no rune | Queen Ashveil | `revealsRune` → else Ward of Tongues | on clear |
 | 6 Vorgath | Ward of Ears + carvings + `is_gift` | Vorgath (+ hoard note) | `revealsRune` → else Ward of Tongues | on clear |
+
+Each floor's pipeline lives in `floors/0N-*/pipeline.ts` and is registered with its role in `floors/index.ts` (`FLOOR_TURNS`); the socket handler picks it by the player's floor. Every pipeline calls `cleanReply` first. History is capped at 20 turns on Floor 1 and 12 from Floor 2 on.
 
 Model and `max_tokens` per role, and the "thinking off" value per model, come from `config/models.ts`; defaults are in each prompt file's Settings table, all on `claude-haiku-5-5` initially.
 
@@ -276,7 +278,8 @@ All pure, all unit-tested.
   - `acrostic-words`: first letters of consecutive words contain `R`
 
   It deliberately does not detect other scripts, ciphers or number codes.
-- `stripActions(reply, rune)`: runs on every guardian reply first, before `revealsRune`, Snip and the judges. It removes short `*stage directions*` (≤ 8 words) that don't reveal the rune. A segment that does reveal it keeps its words and loses only the asterisks. If stripping would make a revealing reply stop revealing (a rune split across segments, an acrostic), it keeps every word. A reply that is only an action is kept as plain words. Rule: it never hides a leak. Separately, `llm/client.ts` trims a reply that hit `max_tokens` back to its last full sentence, and `guardTrim` applies the same rule: if the trim would cut away a rune, the whole reply is sent with "…" instead.
+- `cleanReply(result, rune)`: the first thing every floor's pipeline does with a guardian reply: `stripActions(guardTrim(result.rawText, result.text, rune), rune)`. Snip, `revealsRune` and the judges only ever see its output.
+- `stripActions(reply, rune)`: runs (inside `cleanReply`) on every guardian reply first, before `revealsRune`, Snip and the judges. It removes short `*stage directions*` (≤ 12 words) that don't reveal the rune. A segment that does reveal it keeps its words and loses only the asterisks. If stripping would make a revealing reply stop revealing (a rune split across segments, an acrostic), it keeps every word. A reply that is only an action is kept as plain words. Rule: it never hides a leak. Separately, `llm/client.ts` trims a reply that hit `max_tokens` back to its last full sentence, and `guardTrim` applies the same rule: if the trim would cut away a rune, the whole reply is sent with "…" instead.
 - `snip(reply, rune)`: exactly as in `prompts/03-morwen-snip.md`: three shapes, case-insensitive, replaced with `█`.
 - `parseVerdict(raw, allowValue)`: strip code fences, `JSON.parse`, validate with a strict zod schema (extra keys fail); return `allowed: true` only when `verdict` equals `allowValue` compared case-insensitively. Any exception, or a `stop_reason` of `refusal` / `max_tokens`, → `allowed: false`. Structured outputs make bad JSON rare, but this is the safety net.
 - `sanitize(text)`: trim; cap at `MAX_MESSAGE_CHARS`; remove `[...]` tags innermost-first (so `[[x]]` goes completely) and an unclosed trailing `[...`, treating lookalike brackets `［］【】〔〕` as square ones; replace every angle bracket, lookalikes included (`< > ＜ ＞ ﹤ ﹥ 〈 〉 ⟨ ⟩ ‹ ›`), with plain `(` `)`, so the player can't close `<traveller_message>` or type anything that looks like a tag. Keep line breaks (poems).
@@ -318,6 +321,7 @@ All pure, all unit-tested.
 | Problem | What happens |
 |---|---|
 | Burst of 429s | The queue pauses that model for `retry-after` and retries; players see waiting lines. Admin can raise the cooldown live. |
+| The safety classifier stops a reply (`stop_reason: "refusal"`, a false positive on spelled-out letters) | The reply is thrown away and asked once more; both calls are logged and billed. A second refusal gets the guardian's "lost my words" line (`refused`); it isn't counted against the cap, but the cooldown stays, so a message that always trips the filter can't be resent at once for free. Nothing from a refused reply reaches the phone. |
 | Demand above the rate limit | The queue slows everyone down; a call that can't be answered within 60 s gets "The dungeon is crowded…" straight away; it isn't counted against the cap, and the player waits the cooldown plus 0–3 s before trying again. The admin's "Crowded, last minute" tile shows it: raise the cooldown. |
 | API down | In-character error bubbles; admin pauses the game; the projector shows "The dungeon sleeps". |
 | Budget reached | Auto-pause at `BUDGET_USD`, admin alert. |

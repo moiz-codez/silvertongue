@@ -23,6 +23,32 @@ export const FLOORS: Record<number, FloorInfo> = {
     clearQuote: '“Oh no. Oh NO.”',
     clearLine: 'The door swings open. Grub pretends he saw nothing.',
   },
+  2: {
+    guardian: 'Ser Vellum',
+    subtitle: 'the Oathbound Knight · guards the sworn gate',
+    placeholder: 'Speak to Ser Vellum…',
+    waitingLines: [
+      'Ser Vellum recites his oath under his breath…',
+      'Ser Vellum polishes his visor and considers…',
+      'Ser Vellum weighs your words most carefully…',
+      'Ser Vellum is counting syllables…',
+    ],
+    clearQuote: '“My oath is… technically… unbroken.”',
+    clearLine: 'The gate grinds open. Ser Vellum begs you not to tell the others.',
+  },
+  3: {
+    guardian: 'Morwen',
+    subtitle: 'the Witch, and Snip the crow · keeps the cauldron room',
+    placeholder: 'Gossip with Morwen…',
+    waitingLines: [
+      'Morwen stirs the cauldron and cackles…',
+      'Snip sharpens his scissors…',
+      'Morwen leans in to whisper…',
+      'Snip tilts his head and listens…',
+    ],
+    clearQuote: '“Snip! Did you get it? SNIP?”',
+    clearLine: 'The door creaks open. Snip has no idea what just happened.',
+  },
 };
 
 // All six guardians, built or not: what the projector map and the feed need. Nothing secret.

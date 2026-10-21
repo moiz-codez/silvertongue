@@ -92,6 +92,17 @@ Every milestone is done only when its acceptance criteria are met and `npm run c
 - Every new pipeline cleans the reply first, exactly as Floor 1 does: `stripActions(guardTrim(result.rawText, result.text, rune), rune)`. Snip, `revealsRune` and (later) the Ward of Tongues run on that text, and only their filtered result is sent. Each floor gets a test like "grubTurn clean-up" in `floors/01-grub/pipeline.test.ts` (from the M1 audit).
 - Expressions for both.
 
+**Decisions made in M4**
+- The clean-up is one shared function, `cleanReply(result, rune)` in `security/cleanReply.ts`. It takes the whole `LlmResult` because the `max_tokens` trim happens in `llm/client.ts`, which can't see the rune. Floor 1 uses it with no behaviour change.
+- Pipelines are registered per floor in `floors/index.ts`; calls are logged with their real role (`vellum`, `morwen`).
+- Snip's line is its own `snip` message, never in Morwen's history. Morwen's history is the blacked-out text the traveller saw. If playtests show her confused by it, switching her history to `raw_text` is safe (API only, never a phone) but needs Moiz's OK.
+- Both prompts gained the README rule-5 lines: Vellum under 60 words (a poem: one line per letter), Morwen under 40 words, no *asterisk* actions.
+- The notes on the wall stay in M7.
+- Floor 2 stays on Haiku. Letters one by one and backwards work every time; acrostic poems (about 2 in 5 right) and riddles are best-effort, not part of the pass bar. Sonnet 5.5 was tried and rejected: its safety filter refused about 1 call in 5 and it never wrote a poem.
+- Floor 3 dropped "one word per letter" (the pilot alphabet): the safety filter refused it in most runs. Dashes, another script and numbers are the ways through.
+- A reply stopped by the safety classifier (`stop_reason: "refusal"`, seen on spelled-out runes) is thrown away and asked once more. A second refusal gets the guardian's own "lost my words" line; it isn't counted against the cap, but the cooldown stays (security audit: two paid calls per refusal). The playtest script does the same and counts both.
+- `npm run playtest -- --floor 2|3` judges "letters one by one" across the whole conversation, and marks riddles, other scripts and "how does Snip work?" as REVIEW (the transcript decides; the keyword flag is only a hint).
+
 **Acceptance**
 - Both floors pass their playtest checklists on Haiku (or are moved to Sonnet with a note in `config/models.ts` explaining why).
 - Floor 1 tricks fail on Floor 2; Floor 2 tricks fail on Floor 3.

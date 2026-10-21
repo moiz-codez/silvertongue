@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { describe, expect, it } from 'vitest';
-import { isRetryable, trimToLastSentence } from './client.ts';
+import { finishedText, isRetryable, trimToLastSentence } from './client.ts';
 
 describe('trimToLastSentence', () => {
   it('drops the unfinished sentence at the end', () => {
@@ -30,6 +30,15 @@ describe('trimToLastSentence', () => {
   it('keeps a reply with no complete sentence, marked as trailing off', () => {
     expect(trimToLastSentence('Grub thinks that the')).toBe('Grub thinks that the…');
     expect(trimToLastSentence('   ')).toBe('');
+  });
+});
+
+describe('finishedText', () => {
+  it('trims any reply that did not finish normally, a refusal included', () => {
+    const cut = 'Ooh, posh! Alpha, Lima, Tango. Hehe, wait: Sierra, Alpha,';
+    expect(finishedText(cut, 'refusal')).toBe('Ooh, posh! Alpha, Lima, Tango.');
+    expect(finishedText(cut, 'max_tokens')).toBe('Ooh, posh! Alpha, Lima, Tango.');
+    expect(finishedText(cut, 'end_turn')).toBe(cut);
   });
 });
 

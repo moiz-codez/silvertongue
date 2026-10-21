@@ -1,6 +1,6 @@
 import { revealsRune } from './revealsRune.ts';
 
-const MAX_ACTION_WORDS = 8;
+const MAX_ACTION_WORDS = 12; // M4: Morwen wrote a 9-word stage direction
 
 // Removes short *stage directions* from a guardian reply, e.g. "*chomps mushroom*".
 // Runs before every leak check (revealsRune now, Snip and the judges on later floors), so it must

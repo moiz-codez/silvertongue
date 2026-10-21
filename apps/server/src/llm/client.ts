@@ -18,8 +18,9 @@ export interface LlmRequest {
 }
 
 export interface LlmResult {
-  text: string; // what the game uses: trimmed to a full sentence if cut off by max_tokens
+  text: string; // what the game uses: trimmed to a full sentence if the reply was cut off
   rawText: string; // SERVER ONLY: the reply exactly as the model wrote it, for the logs
+  stopReason?: string; // SERVER ONLY: why the model stopped (end_turn, max_tokens, refusal…)
   model: ModelId;
   usage: TokenUsage;
   latencyMs: number;
@@ -57,12 +58,30 @@ export function createLiveClient(apiKey: string): Complete {
       .map((block) => block.text)
       .join('')
       .trim();
-    // A reply cut off by max_tokens is trimmed before anything sees or checks it.
-    const text = response.stop_reason === 'max_tokens' ? trimToLastSentence(joined) : joined;
-    if (text === '') throw new Error(`Empty reply (stop_reason: ${response.stop_reason})`);
+    const text = finishedText(joined, response.stop_reason);
+    // A refusal may come back empty: the caller retries it, so hand it back rather than throw.
+    if (text === '' && response.stop_reason !== 'refusal') {
+      throw new Error(`Empty reply (stop_reason: ${response.stop_reason})`);
+    }
 
-    return { text, rawText: joined, model, usage: response.usage, latencyMs: Date.now() - started };
+    return {
+      text,
+      rawText: joined,
+      stopReason: response.stop_reason ?? undefined,
+      model,
+      usage: response.usage,
+      latencyMs: Date.now() - started,
+    };
   };
+}
+
+// Any reply that didn't finish normally is trimmed before anything sees or checks it: max_tokens,
+// and also a refusal, where the API's safety classifier stops the reply mid-word (seen in the M4
+// playtest on a harmless pilot-alphabet spelling). Otherwise the phone would show a broken bubble.
+export function finishedText(text: string, stopReason: string | null | undefined): string {
+  return stopReason === 'end_turn' || stopReason === 'stop_sequence'
+    ? text
+    : trimToLastSentence(text);
 }
 
 // Cuts a reply back to its last complete sentence (ending in . ! ? or …, plus any closing quote).
@@ -72,6 +91,13 @@ export function trimToLastSentence(text: string): string {
   const last = ends.at(-1);
   if (!last) return text.trim() === '' ? '' : `${text.trim()}…`;
   return text.slice(0, last.index + last[0].length).trim();
+}
+
+// The safety classifier stopped the guardian's reply twice in a row (stop_reason "refusal").
+export class RefusalError extends Error {
+  constructor() {
+    super('Guardian reply refused twice');
+  }
 }
 
 // The queue gave up: the call waited and ran longer than its deadline.
