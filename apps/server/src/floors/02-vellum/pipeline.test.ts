@@ -21,6 +21,9 @@ describe('Vellum prompt', () => {
     expect(VELLUM_PROMPT).not.toContain('{{RUNE}}');
     expect(VELLUM_PROMPT).toContain('final note');
     expect(runeNote(RUNE)).toContain(RUNE);
+    expect(runeNote(RUNE)).toContain(
+      'Its letters, in order: E, M, B, E, R, F, A, N, G. Backwards: GNAF-REBME.',
+    );
   });
 });
 
