@@ -434,6 +434,27 @@ describe('Floor 4, Gorm and Mumble, end to end in mock mode', () => {
     expect(seen.some((s) => s.event === 'player:error')).toBe(false);
   });
 
+  it("keeps a message out of Mumble's history until Gorm has passed it", async () => {
+    const ref: { db?: Db } = {}; // set once the server is up
+    let whileJudging: unknown;
+    const mock = createMockClient({ minMs: 0, maxMs: 0 });
+    const complete: Complete = async (req) => {
+      if (req.role === 'gorm') {
+        // A crash right now must not leave an unjudged message for Mumble to hear later.
+        whileJudging = ref.db
+          ?.prepare("SELECT in_guardian_history FROM messages WHERE speaker = 'player'")
+          .get();
+      }
+      return mock(req);
+    };
+    const server = await onFloor4(complete);
+    ref.db = server.db;
+    server.socket.emit('player:message', { text: 'hello' });
+    await next(server.socket, 'player:bubble', (b) => b.speaker === 'guardian');
+    expect(whileJudging).toEqual({ in_guardian_history: 0 });
+    expect(playerVerdicts(server.db)).toEqual([{ verdict: 'PASS', in_guardian_history: 1 }]);
+  });
+
   it('asks Gorm once more when his answer is unreadable, then lets a PASS through', async () => {
     const { mumbleCalls, complete } = ogre(['not json', PASS]);
     const { socket } = await onFloor4(complete);

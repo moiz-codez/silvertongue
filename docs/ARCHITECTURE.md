@@ -232,7 +232,7 @@ This keeps the static block byte-identical across all players, so one cache entr
 - Floors 2–6: send at most the last 12 messages (Floor 1: 20).
 - Gorm receives only the latest player message, with no rune and no per-player note. The Ward of Ears receives the last 12 messages plus the latest one marked.
 
-**Input guard outcomes (Floor 4, Gorm).** Gorm always fails closed: Mumble is never called for a message Gorm didn't pass, and that message leaves his history (`in_guardian_history = 0`). The verdict is stored on the player's message; the M8 reveal counts only `SMASH`.
+**Input guard outcomes (Floor 4, Gorm).** Gorm always fails closed: Mumble is never called for a message Gorm didn't pass. On guarded floors a player message is stored outside the guardian's history (`in_guardian_history = 0`) and joins it only when Gorm passes it, so a crash mid-judgement can't leave an unjudged message for Mumble. The verdict is stored on the player's message; the M8 reveal counts only `SMASH`.
 
 | Gorm outcome | The player sees | Message cap | Cooldown | `messages.verdict` |
 |---|---|---|---|---|
@@ -292,7 +292,7 @@ All pure, all unit-tested.
 - `cleanReply(result, rune)`: the first thing every floor's pipeline does with a guardian reply: `stripActions(guardTrim(result.rawText, result.text, rune), rune)`. Snip, `revealsRune` and the judges only ever see its output.
 - `stripActions(reply, rune)`: runs (inside `cleanReply`) on every guardian reply first, before `revealsRune`, Snip and the judges. It removes short `*stage directions*` (≤ 12 words) that don't reveal the rune. A segment that does reveal it keeps its words and loses only the asterisks. If stripping would make a revealing reply stop revealing (a rune split across segments, an acrostic), it keeps every word. A reply that is only an action is kept as plain words. Rule: it never hides a leak. Separately, `llm/client.ts` trims a reply that hit `max_tokens` back to its last full sentence, and `guardTrim` applies the same rule: if the trim would cut away a rune, the whole reply is sent with "…" instead.
 - `snip(reply, rune)`: exactly as in `prompts/03-morwen-snip.md`: three shapes, case-insensitive, replaced with `█`.
-- `parseVerdict(raw, allowValue)`: strip code fences, `JSON.parse`, validate with a strict zod schema (extra keys fail); return `allowed: true` only when `verdict` equals `allowValue` compared case-insensitively. Any exception, or a `stop_reason` of `refusal` / `max_tokens`, → `allowed: false`. Structured outputs make bad JSON rare, but this is the safety net.
+- `parseVerdict(raw, allowValue)`: strip code fences, `JSON.parse`, validate with a strict zod schema (extra keys fail); return `allowed: true` only when `verdict` equals `allowValue` compared case-insensitively. Any exception, or any `stop_reason` other than `end_turn` / `stop_sequence` (e.g. `refusal`, `max_tokens`), → `allowed: false`. Structured outputs make bad JSON rare, but this is the safety net.
 - `sanitize(text)`: trim; cap at `MAX_MESSAGE_CHARS`; remove `[...]` tags innermost-first (so `[[x]]` goes completely) and an unclosed trailing `[...`, treating lookalike brackets `［］【】〔〕` as square ones; replace every angle bracket, lookalikes included (`< > ＜ ＞ ﹤ ﹥ 〈 〉 ⟨ ⟩ ‹ ›`), with plain `(` `)`, so the player can't close `<traveller_message>` or type anything that looks like a tag. Keep line breaks (poems).
 - Door check: `normalize(guess) === normalize(rune)`.
 

@@ -339,6 +339,13 @@ export function setMessageVerdict(db: Db, messageId: number, verdict: string): v
   db.prepare('UPDATE messages SET verdict = ? WHERE id = ?').run(verdict, messageId);
 }
 
+// The guard passed this message: record it, and only now let the guardian hear it.
+export function passGuard(db: Db, messageId: number): void {
+  db.prepare("UPDATE messages SET verdict = 'PASS', in_guardian_history = 1 WHERE id = ?").run(
+    messageId,
+  );
+}
+
 export function insertMessage(
   db: Db,
   m: {

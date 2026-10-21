@@ -282,6 +282,9 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
           floor,
           speaker: 'player',
           text,
+          // Behind a guard it starts outside the guardian's history and joins only on PASS, so a
+          // crash or restart mid-judgement can never leave an unjudged message for Mumble to hear.
+          inGuardianHistory: floorTurn.guard === undefined,
           now,
         });
         socket.emit('player:bubble', { id: playerMessageId, floor, speaker: 'player', text });
@@ -307,7 +310,6 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
               // Fail closed: Mumble never hears it. Only a real SMASH uses up one of their messages.
               const smashed = gorm.outcome === 'smash';
               q.setMessageVerdict(db, playerMessageId, smashed ? 'SMASH' : 'GUARD_ERROR');
-              q.removeFromGuardianHistory(db, playerMessageId);
               if (smashed) q.countPlayerMessage(db, id, floor);
               const gormId = q.insertMessage(db, {
                 gameId,
@@ -326,7 +328,7 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
               });
               return;
             }
-            q.setMessageVerdict(db, playerMessageId, 'PASS');
+            q.passGuard(db, playerMessageId); // now Mumble may hear it
           }
           const ask = async () => {
             const reply = await floorTurn.turn(

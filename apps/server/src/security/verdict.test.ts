@@ -31,6 +31,11 @@ describe('parseVerdict', () => {
   it('blocks a refusal or max_tokens stop even when the text looks fine', () => {
     expect(check('{"verdict":"PASS","growl":""}', 'refusal')).toBe(false);
     expect(check('{"verdict":"PASS","growl":""}', 'max_tokens')).toBe(false);
+    expect(check('{"verdict":"PASS","growl":""}', 'pause_turn')).toBe(false); // unexpected
+    expect(parseVerdict('{"verdict":"PASS","growl":""}', undefined, schema, 'PASS').allowed).toBe(
+      false,
+    );
+    expect(check('{"verdict":"PASS","growl":""}', 'stop_sequence')).toBe(true);
   });
 
   it('hands back the parsed data', () => {

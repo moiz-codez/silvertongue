@@ -9,8 +9,10 @@ export function parseVerdict<T extends { verdict: string }>(
   schema: z.ZodType<T>, // strict: extra keys fail
   allowValue: string,
 ): { allowed: boolean; data: T | null } {
-  if (stopReason === 'refusal' || stopReason === 'max_tokens')
+  // Only a reply that finished normally is read. Refusal, max_tokens or anything unexpected blocks.
+  if (stopReason !== 'end_turn' && stopReason !== 'stop_sequence') {
     return { allowed: false, data: null };
+  }
   try {
     const json: unknown = JSON.parse(raw.replace(/^\s*```(?:json)?|```\s*$/g, '').trim());
     const parsed = schema.safeParse(json);
