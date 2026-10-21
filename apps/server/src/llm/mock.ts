@@ -38,7 +38,7 @@ export function createMockClient(latency = { minMs: 300, maxMs: 1500 }): Complet
 
     const last = messages.at(-1);
     const said = typeof last?.content === 'string' ? last.content.toLowerCase() : '';
-    const rune = playerNote.match(/[A-Z]+-[A-Z]+/)?.[0];
+    const rune = playerNote?.match(/[A-Z]+-[A-Z]+/)?.[0];
     const lines = LINES[role] ?? LINES.grub!;
 
     let text = lines[turn++ % lines.length]!;
