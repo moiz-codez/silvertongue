@@ -32,7 +32,9 @@ interface Price {
 export const ROLES = {
   smoke: { model: MODELS.haiku, maxTokens: 200 },
   grub: { model: MODELS.haiku, maxTokens: 160 },
-  vellum: { model: MODELS.haiku, maxTokens: 200 }, // room for an acrostic poem
+  // Room for an acrostic poem. Stays on Haiku: in the M4 playtest Sonnet's safety filter refused
+  // about 1 call in 5 and never wrote a poem; Haiku's poems are best-effort (docs/prompts/02-vellum.md).
+  vellum: { model: MODELS.haiku, maxTokens: 200 },
   morwen: { model: MODELS.haiku, maxTokens: 150 },
 } as const;
 
