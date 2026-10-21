@@ -91,8 +91,14 @@ export function Play(props: Props) {
             </p>
           ) : (
             <div key={b.id} className={`bubble-row ${b.speaker}`}>
-              {b.speaker === 'guardian' && <span className="bubble-name">{floor.guardian}</span>}
+              {b.speaker === 'guardian' && (
+                <span className="bubble-name">{floor.voice ?? floor.guardian}</span>
+              )}
+              {b.speaker === 'gorm' && <span className="bubble-name">Gorm</span>}
               <p className={`bubble bubble-${b.speaker} floor-${state.floor}`}>{b.text}</p>
+              {b.speaker === 'gorm' && (
+                <p className="gorm-asleep">Mumble was asleep and never heard that.</p>
+              )}
             </div>
           ),
         )}
