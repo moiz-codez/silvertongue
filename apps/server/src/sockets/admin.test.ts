@@ -221,6 +221,7 @@ describe('admin', () => {
       queued: 0,
       inFlight: 0,
       rateLimited1m: 0,
+      crowded1m: 0,
       callsLastMin: 1,
     });
     expect(latest()?.health.memoryMb).toBeGreaterThan(0);

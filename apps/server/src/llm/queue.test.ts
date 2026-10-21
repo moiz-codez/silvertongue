@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { DeadlineError, type Complete, type LlmRequest, type LlmResult } from './client.ts';
-import { createQueue } from './queue.ts';
+import { createQueue, estimateInput } from './queue.ts';
 
 const BIG = 1_000_000;
 const req = (text: string, priority?: 'player' | 'background'): LlmRequest => ({
@@ -195,7 +195,7 @@ it('rejects at the deadline and aborts the call in flight', async () => {
   expect(signal?.aborted).toBe(true);
 });
 
-it('rejects a call still waiting in line at the deadline', async () => {
+it('turns a call away at once when the line is already longer than the deadline', async () => {
   const queue = createQueue(() => async (r) => reply(said(r)), {
     rpm: 1,
     itpm: BIG,
@@ -203,9 +203,37 @@ it('rejects a call still waiting in line at the deadline', async () => {
     deadlineMs: 30_000,
   });
   await queue.complete(req('a')); // uses the only request for the next minute
-  const done = queue.complete(req('b'));
+  const done = queue.complete(req('b')); // would wait 60 s for it
+  await expect(done).rejects.toBeInstanceOf(DeadlineError); // no timers advanced: right away
+  expect(queue.stats()).toMatchObject({ queued: 0, crowded1m: 1 });
+});
+
+it('turns a waiting call away when too little time is left to make it', async () => {
+  const { client, open } = manualClient();
+  const queue = createQueue(() => client, {
+    rpm: BIG,
+    itpm: BIG,
+    otpm: BIG,
+    maxInFlight: 1,
+    deadlineMs: 60_000,
+    minCallMs: 10_000,
+  });
+  void queue.complete(req('slow'));
+  const done = queue.complete(req('b')); // the buckets are full, but the only slot is busy
   const check = expect(done).rejects.toBeInstanceOf(DeadlineError);
-  await vi.advanceTimersByTimeAsync(30_000);
+  await vi.advanceTimersByTimeAsync(55_000);
+  open[0]!.finish(); // the slot frees with 5 s left: too late to start b
+  await vi.advanceTimersByTimeAsync(0);
   await check;
-  expect(queue.stats().queued).toBe(0);
+  expect(open.map((c) => c.text)).toEqual(['slow']);
+  expect(queue.stats()).toMatchObject({ queued: 0, crowded1m: 1 });
+});
+
+it('reserves at least the input the live check measured', () => {
+  // M3 live check: this much uncached text (37 tokens at chars/4) really used 54 input tokens.
+  const live = {
+    ...req('x'.repeat(148 - JSON.stringify(req('').messages).length)),
+    playerNote: '',
+  };
+  expect(estimateInput(live)).toBeGreaterThanOrEqual(54);
 });

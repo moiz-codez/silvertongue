@@ -72,6 +72,7 @@ export function registerAdmin(io: PlayerServer, ctx: GameContext, phones: PhoneC
         queued: queue.queued,
         inFlight: queue.inFlight,
         rateLimited1m: queue.rateLimited1m,
+        crowded1m: queue.crowded1m,
         avgReplyMs: queue.avgReplyMs,
         callsLastMin: queue.callsLastMin,
         estInputLastMin: queue.estInputLastMin,

@@ -57,6 +57,7 @@ const stats = {
   replies: 0,
   errors: {} as Record<string, number>,
   latencies: [] as number[],
+  errorLatencies: [] as number[], // how long an in-character error took: "crowded" should be quick
   disconnects: 0,
   joinFailures: 0,
 };
@@ -68,6 +69,7 @@ const peaks = {
   maxOutput: 0,
   memoryMb: 0,
   rateLimited: 0,
+  crowded: 0,
 };
 let snapshotsPerSecondMax = 0;
 
@@ -95,6 +97,7 @@ admin.on('admin:state', (s) => {
   peaks.maxOutput = Math.max(peaks.maxOutput, h.maxOutputLastMin);
   peaks.memoryMb = Math.max(peaks.memoryMb, h.memoryMb);
   peaks.rateLimited = Math.max(peaks.rateLimited, h.rateLimited1m);
+  peaks.crowded = Math.max(peaks.crowded, h.crowded1m);
 });
 await admin.emitWithAck('admin:command', { type: 'reset' });
 
@@ -156,7 +159,10 @@ async function play(phone: Phone) {
     outstanding--;
     stats.latencies.push(Date.now() - sentAt);
     if (outcome === 'reply') stats.replies++;
-    else stats.errors[outcome] = (stats.errors[outcome] ?? 0) + 1;
+    else {
+      stats.errors[outcome] = (stats.errors[outcome] ?? 0) + 1;
+      stats.errorLatencies.push(Date.now() - sentAt);
+    }
     await sleep(between(10_000, 20_000));
   }
 }
@@ -173,9 +179,13 @@ clearInterval(snapshotTimer);
 
 // ---------- report ----------
 const unanswered = outstanding;
-const sorted = [...stats.latencies].sort((a, b) => a - b);
-const pct = (p: number) =>
-  sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))]! : 0;
+const percentile = (list: number[]) => {
+  const sorted = [...list].sort((a, b) => a - b);
+  return (p: number) =>
+    sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))]! : 0;
+};
+const pct = percentile(stats.latencies);
+const errorPct = percentile(stats.errorLatencies);
 const errorCount = Object.values(stats.errors).reduce((a, b) => a + b, 0);
 const share = (used: number, limit: number) =>
   `${used} (${Math.round((used / limit) * 100)}% of ${limit})`;
@@ -190,7 +200,9 @@ Load test: ${PLAYERS} players, ${values.minutes} min${values.burst ? ', burst' :
   Disconnects             ${stats.disconnects}
   Latency p50 / p95       ${(pct(0.5) / 1000).toFixed(1)} s / ${(pct(0.95) / 1000).toFixed(1)} s
   Peak queue / in flight  ${peaks.queued} / ${peaks.inFlight}
+  Errors p50 / p95 / max  ${(errorPct(0.5) / 1000).toFixed(1)} s / ${(errorPct(0.95) / 1000).toFixed(1)} s / ${(errorPct(1) / 1000).toFixed(1)} s
   Peak 429s in a minute   ${peaks.rateLimited}
+  Peak crowded in a min   ${peaks.crowded}
   Server memory (peak)    ${peaks.memoryMb} MB
   Projector, max snaps/s  ${snapshotsPerSecondMax}
 

@@ -224,6 +224,12 @@ function Dashboard({
           </strong>
         </div>
         <div className="tile">
+          <span>Crowded, last minute</span>
+          <strong className={health.crowded1m === 0 ? 'tile-ok' : 'tile-warn'}>
+            {health.crowded1m}
+          </strong>
+        </div>
+        <div className="tile">
           <span>Average reply time</span>
           <strong>{health.avgReplyMs ? `${(health.avgReplyMs / 1000).toFixed(1)} s` : '–'}</strong>
         </div>

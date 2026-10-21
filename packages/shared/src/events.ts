@@ -115,6 +115,7 @@ export interface AdminHealth {
   queued: number;
   inFlight: number;
   rateLimited1m: number;
+  crowded1m: number;
   avgReplyMs: number;
   callsLastMin: number;
   estInputLastMin: number;

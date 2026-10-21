@@ -3,6 +3,7 @@
 // requests, input tokens and output tokens per minute (set to 80% of the account limits in .env).
 // A call reserves what it might use, then gives back (or owes) the difference once the real
 // usage is known. Player calls go first; at most 30 calls are in flight; each call has a deadline.
+// A call that can't start in time is turned away at once ("crowded") instead of waiting 60 s for it.
 import { ROLES, type ModelId } from '../config/models.ts';
 import {
   DeadlineError,
@@ -20,12 +21,14 @@ export interface QueueLimits {
   maxInFlight?: number; // default 30
   deadlineMs?: number; // from joining the queue to the reply; default 60 s
   maxRetries?: number; // default 2
+  minCallMs?: number; // a call needs at least this long before its deadline to start; default 10 s
 }
 
 export interface QueueStats {
   queued: number;
   inFlight: number;
   rateLimited1m: number; // 429s seen in the last minute
+  crowded1m: number; // calls turned away by the deadline in the last minute
   avgReplyMs: number; // queue wait + call, replies in the last minute (0 if none)
   callsLastMin: number;
   estInputLastMin: number; // what the reservations estimated, for load-test projections
@@ -34,6 +37,15 @@ export interface QueueStats {
 
 const MINUTE = 60_000;
 const RETRY_BACKOFF_MS = 1000; // for errors without a retry-after; doubles each attempt
+
+// The uncached input (player note + conversation) in tokens. Calibrated on the M3 live check:
+// chars/4 reserved 37 tokens for a call that really used 54, so 2.5 chars per token (x1.6) keeps
+// a burst's reservations at or above the real usage.
+const CHARS_PER_INPUT_TOKEN = 2.5;
+export function estimateInput(req: LlmRequest): number {
+  const chars = req.playerNote.length + JSON.stringify(req.messages).length;
+  return Math.ceil(chars / CHARS_PER_INPUT_TOKEN);
+}
 
 // Refills continuously up to one minute's worth. The level may go negative: that's debt from a
 // call that used more than it reserved, and it delays the next call.
@@ -88,6 +100,7 @@ export function createQueue(
   const maxInFlight = limits.maxInFlight ?? 30;
   const deadlineMs = limits.deadlineMs ?? MINUTE;
   const maxRetries = limits.maxRetries ?? 2;
+  const minCallMs = limits.minCallMs ?? 10_000;
 
   const buckets = new Map<ModelId, ModelBuckets>();
   const waiting = { player: [] as Job[], background: [] as Job[] };
@@ -95,6 +108,7 @@ export function createQueue(
   let timer: ReturnType<typeof setTimeout> | undefined;
   // Rolling last-minute history for the admin tiles and the load test.
   const rateLimited: { at: number }[] = [];
+  const crowded: { at: number }[] = [];
   const replies: { at: number; ms: number }[] = [];
   const calls: { at: number; input: number; output: number }[] = [];
 
@@ -124,6 +138,43 @@ export function createQueue(
     }
   }
 
+  // How long a new call would wait for the calls ahead of it to use up this model's buckets.
+  // It ignores the in-flight cap and call times, so it can be too low: the deadline stays the backstop.
+  function estimatedWaitMs(job: Job, now: number): number {
+    const b = bucketsFor(job.model);
+    b.requests.refill(now);
+    b.input.refill(now);
+    b.output.refill(now);
+    const line =
+      job.req.priority === 'background'
+        ? [...waiting.player, ...waiting.background]
+        : waiting.player;
+    const upTo = [...line.filter((j) => j.model === job.model), job];
+    const msFor = (need: number, bucket: Bucket) =>
+      (Math.max(0, need - bucket.level) * MINUTE) / bucket.perMinute;
+    return Math.max(
+      b.blockedUntil - now,
+      msFor(upTo.length, b.requests),
+      msFor(
+        upTo.reduce((sum, j) => sum + j.estInput, 0),
+        b.input,
+      ),
+      msFor(
+        upTo.reduce((sum, j) => sum + j.maxOutput, 0),
+        b.output,
+      ),
+    );
+  }
+
+  // Too late to start: answer "crowded" now rather than start a call the deadline would cancel
+  // (and that live mode would still pay for).
+  function turnAway(job: Job) {
+    remove(job);
+    crowded.push({ at: Date.now() });
+    settle(job, () => job.reject(new DeadlineError()));
+    onChange();
+  }
+
   function pump() {
     clearTimeout(timer);
     timer = undefined;
@@ -131,6 +182,11 @@ export function createQueue(
       const job = nextJob();
       if (!job) return;
       const now = Date.now();
+      const lastStart = job.enqueuedAt + deadlineMs - minCallMs;
+      if (now > lastStart) {
+        turnAway(job);
+        continue;
+      }
       const b = bucketsFor(job.model);
       b.requests.refill(now);
       b.input.refill(now);
@@ -143,7 +199,8 @@ export function createQueue(
         b.output.waitFor(job.maxOutput),
       );
       if (wait > 0) {
-        timer = setTimeout(pump, wait); // FIFO: nobody overtakes the head of the line
+        // FIFO: nobody overtakes the head of the line. Wake up in time to turn it away if need be.
+        timer = setTimeout(pump, Math.min(wait, lastStart - now + 1));
         timer.unref?.();
         return;
       }
@@ -204,7 +261,7 @@ export function createQueue(
         req,
         model,
         // Only the uncached part counts: the static prompt is read from the cache.
-        estInput: Math.ceil((req.playerNote.length + JSON.stringify(req.messages).length) / 4),
+        estInput: estimateInput(req),
         maxOutput: maxTokens,
         enqueuedAt: now,
         notBefore: 0,
@@ -214,9 +271,18 @@ export function createQueue(
         resolve,
         reject,
       };
+      // The line is already longer than the deadline allows: say so now, not in 60 s.
+      if (estimatedWaitMs(job, now) + minCallMs > deadlineMs) {
+        crowded.push({ at: now });
+        onChange();
+        reject(new DeadlineError());
+        return;
+      }
+      // The backstop, e.g. a call that hangs or a line slowed by the in-flight cap.
       const deadline = setTimeout(() => {
         remove(job);
         job.controller.abort(); // a call in flight really stops (live client)
+        if (!job.settled) crowded.push({ at: Date.now() });
         settle(job, () => reject(new DeadlineError()));
         onChange();
       }, deadlineMs);
@@ -236,13 +302,14 @@ export function createQueue(
 
   function stats(): QueueStats {
     const since = Date.now() - MINUTE;
-    for (const list of [rateLimited, replies, calls]) {
+    for (const list of [rateLimited, crowded, replies, calls]) {
       while (list.length && list[0]!.at < since) list.shift();
     }
     return {
       queued: waiting.player.length + waiting.background.length,
       inFlight,
       rateLimited1m: rateLimited.length,
+      crowded1m: crowded.length,
       avgReplyMs: replies.length
         ? Math.round(replies.reduce((sum, r) => sum + r.ms, 0) / replies.length)
         : 0,
