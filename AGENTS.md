@@ -81,7 +81,8 @@ player text → sanitize (trim, ≤300 chars, strip [bracket tags])
             → cooldown + per-player cap check
             → [input guard: floor 4 Gorm, floors 5–6 Ward of Ears]   SEAL/SMASH → stop
             → guardian reply (full reply, no streaming; cut-off replies trimmed to the last sentence)
-            → stripActions: drop short *stage directions*, never hiding a leak
+            → cleanReply (security/cleanReply.ts): the max_tokens trim guard, then stripActions
+              (drop short *stage directions*); neither ever hides a leak
             → [output checks: floor 3 Snip; floors 5–6 revealsRune → Ward of Tongues]
             → send filtered text + expression state to player
             → log everything server-side; emit moderated events to projector
