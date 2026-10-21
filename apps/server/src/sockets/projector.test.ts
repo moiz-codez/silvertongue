@@ -97,6 +97,25 @@ describe('projector', () => {
     );
   });
 
+  it('has first blood and feed lines for Floors 2 and 3, and the map follows players down', async () => {
+    const { db, url } = await startServer();
+    const { snapshots } = projector(url);
+    const { socket } = client(url);
+    const joined = await join(socket, 'Ali');
+    if (!joined.ok) throw new Error(joined.error);
+    for (const floor of [1, 2, 3]) {
+      socket.emit('player:door', { guess: getRune(db, joined.playerId, floor) });
+      await next(socket, 'player:floor-cleared');
+    }
+    const shot = await until(snapshots, (s) => s.feed.length === 3);
+    expect(shot.feed.map((f) => [f.type, f.text])).toEqual([
+      ['first_blood', 'Ali slipped a rune past Snip.'],
+      ['first_blood', 'Ali made Ser Vellum break his oath.'],
+      ['first_blood', 'Ali charmed Grub.'],
+    ]);
+    expect(shot.players).toEqual([{ nickname: 'Ali', floor: 4 }]); // the map shows them past Floor 3
+  });
+
   it('shows the current name after a rename, and drops a kicked player from the feed', async () => {
     const { db, ctx, url } = await startServer();
     const { snapshots } = projector(url);

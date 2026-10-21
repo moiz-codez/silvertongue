@@ -18,10 +18,10 @@ import {
   resumePayload,
 } from '@silvertongue/shared/schemas';
 import type { Env } from '../config/env.ts';
-import { costUsd, ROLES } from '../config/models.ts';
+import { costUsd, ROLES, type RoleName } from '../config/models.ts';
 import type { Db } from '../db/db.ts';
 import * as q from '../db/queries.ts';
-import { grubTurn } from '../floors/01-grub/pipeline.ts';
+import { FLOOR_TURNS } from '../floors/index.ts';
 import type { Turn } from '../floors/messages.ts';
 import { checkDoor } from '../game/door.ts';
 import { generateRunes } from '../game/runes.ts';
@@ -258,7 +258,7 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
         const notNow = NOT_NOW[ctx.game.status];
         if (notNow) return sendError(socket, 'not_running', notNow);
         if (!isBuilt(floor)) return sendError(socket, 'not_ready', STAIRS);
-        if (busy.has(id)) return sendError(socket, 'busy', 'Wait for an answer first, tall-folk.');
+        if (busy.has(id)) return sendError(socket, 'busy', 'Wait for an answer first.');
         if (now < (cooldownUntil.get(id) ?? 0)) {
           return sendError(socket, 'cooldown', 'Catch your breath before you speak again.');
         }
@@ -266,6 +266,7 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
           return sendError(socket, 'cap', 'You have used all your words for this game.');
         }
 
+        const floorTurn = FLOOR_TURNS[floor]!; // isBuilt(floor) was checked above
         busy.add(id);
         cooldownUntil.set(id, now + ctx.game.cooldown_ms);
         const history: Turn[] = q
@@ -286,17 +287,17 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
         socket.emit('player:bubble', { id: playerMessageId, floor, speaker: 'player', text });
 
         try {
-          const turn = await grubTurn(
+          const turn = await floorTurn.turn(
             complete,
             [...history, { speaker: 'player', text }],
             q.getRune(db, id, floor),
           );
-          logCall(gameId, id, floor, turn.result, 'ok');
+          logCall(gameId, id, floor, floorTurn.role, turn.result, 'ok');
           checkBudget();
-          // Kicked or reset while Grub was thinking: this socket no longer plays as them.
+          // Kicked or reset while the guardian was thinking: this socket no longer plays as them.
           if (socket.data.playerId !== id) return;
           q.countPlayerMessage(db, id, floor);
-          // Floor 1 has no output filter: the reply, minus *stage directions*, is the post-filter text.
+          // turn.text is the post-filter text (cleaned, and on Floor 3 snipped): the only version sent.
           const replyId = q.insertMessage(db, {
             gameId,
             playerId: id,
@@ -312,13 +313,32 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
             speaker: 'guardian',
             text: turn.text,
           });
+          // Snip is code, not a character: his own plain line, never part of Morwen's history.
+          if (turn.snipRemoved) {
+            const snipText = `SNIP! ${turn.snipRemoved} letters removed.`;
+            const snipId = q.insertMessage(db, {
+              gameId,
+              playerId: id,
+              floor,
+              speaker: 'snip',
+              text: snipText,
+              inGuardianHistory: false,
+              now: Date.now(),
+            });
+            socket.emit('player:bubble', { id: snipId, floor, speaker: 'snip', text: snipText });
+          }
           if (turn.slipped) socket.emit('player:expression', { floor, state: 'slipped' });
         } catch (err) {
           logCall(
             gameId,
             id,
             floor,
-            { model: ROLES.grub.model, usage: { input_tokens: 0, output_tokens: 0 }, latencyMs: 0 },
+            floorTurn.role,
+            {
+              model: ROLES[floorTurn.role].model,
+              usage: { input_tokens: 0, output_tokens: 0 },
+              latencyMs: 0,
+            },
             errorStatus(err),
           );
           q.removeFromGuardianHistory(db, playerMessageId);
@@ -437,6 +457,7 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
     gameId: string,
     id: string,
     floor: number,
+    role: RoleName,
     call: {
       model: Parameters<typeof costUsd>[0];
       usage: Parameters<typeof costUsd>[1];
@@ -448,7 +469,7 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
       gameId,
       playerId: id,
       floor,
-      role: 'grub',
+      role,
       model: call.model,
       inputTokens: call.usage.input_tokens,
       cacheCreationTokens: call.usage.cache_creation_input_tokens ?? 0,

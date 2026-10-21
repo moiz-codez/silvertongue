@@ -32,6 +32,8 @@ interface Price {
 export const ROLES = {
   smoke: { model: MODELS.haiku, maxTokens: 200 },
   grub: { model: MODELS.haiku, maxTokens: 160 },
+  vellum: { model: MODELS.haiku, maxTokens: 200 }, // room for an acrostic poem
+  morwen: { model: MODELS.haiku, maxTokens: 150 },
 } as const;
 
 export type RoleName = keyof typeof ROLES;

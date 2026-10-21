@@ -12,7 +12,7 @@ import type {
 } from './schemas.ts';
 
 export type GameStatus = 'lobby' | 'running' | 'paused' | 'reveal' | 'ended';
-export type Speaker = 'player' | 'guardian' | 'system';
+export type Speaker = 'player' | 'guardian' | 'snip' | 'system'; // snip: Floor 3's filter (code)
 export type Expression = 'idle' | 'slipped';
 
 export interface Bubble {
