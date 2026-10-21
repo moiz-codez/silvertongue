@@ -150,7 +150,7 @@ All payloads validated with zod on receipt.
 - `player:expression { floor, state: 'idle' | 'slipped' }` (computed on the server with `revealsRune`)
 - `player:door-result { correct, lockedMs }`
 - `player:floor-cleared { floor, lines: [{ label, points, highlight? }], total, score, title, nextFloorReady }`
-- `player:error { code, message }` (message is in character, never a stack trace). Code `not_running` while the game is in the lobby, paused, at the reveal or ended; `crowded` when the queue can't answer within its 60 s deadline (turned away at once if the line is already too long; not counted against the message cap, but the player waits the normal cooldown plus a random 0–3 s, so turned-away phones don't resend at once or all come back together); `llm` for any other failed call (the turn and cooldown are refunded).
+- `player:error { code, message }` (message is in character, never a stack trace). Code `not_running` while the game is in the lobby, paused, at the reveal or ended; `crowded` when the queue can't answer within its 60 s deadline (turned away at once if the line is already too long; not counted against the message cap, but the player waits the normal cooldown plus a random 0–3 s, so turned-away phones don't resend at once or all come back together); `refused` when the safety classifier stops the guardian's reply twice in a row (`stop_reason: "refusal"`: the reply is thrown away and asked once more; on a second refusal the message is the guardian's own "lost my words" line, and the turn and cooldown are refunded); `llm` for any other failed call (the turn and cooldown are refunded).
 - `player:kicked`: the admin kicked this player; the phone forgets its token and the server disconnects the socket.
 - `player:reset`: the admin opened a new game; the phone forgets its token and goes back to Join.
 
@@ -321,6 +321,7 @@ All pure, all unit-tested.
 | Problem | What happens |
 |---|---|
 | Burst of 429s | The queue pauses that model for `retry-after` and retries; players see waiting lines. Admin can raise the cooldown live. |
+| The safety classifier stops a reply (`stop_reason: "refusal"`, a false positive on spelled-out letters) | The reply is thrown away and asked once more; both calls are logged and billed. A second refusal gets the guardian's "lost my words" line (`refused`), and the turn and cooldown are refunded. Nothing from a refused reply reaches the phone. |
 | Demand above the rate limit | The queue slows everyone down; a call that can't be answered within 60 s gets "The dungeon is crowded…" straight away; it isn't counted against the cap, and the player waits the cooldown plus 0–3 s before trying again. The admin's "Crowded, last minute" tile shows it: raise the cooldown. |
 | API down | In-character error bubbles; admin pauses the game; the projector shows "The dungeon sleeps". |
 | Budget reached | Auto-pause at `BUDGET_USD`, admin alert. |

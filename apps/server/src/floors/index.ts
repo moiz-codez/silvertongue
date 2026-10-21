@@ -18,9 +18,22 @@ export const FLOOR_TURNS: Record<
   {
     role: RoleName;
     turn: (complete: Complete, history: Turn[], rune: string) => Promise<FloorReply>;
+    lostWords: string; // in character, when the API refused the reply twice
   }
 > = {
-  1: { role: 'grub', turn: grubTurn },
-  2: { role: 'vellum', turn: vellumTurn },
-  3: { role: 'morwen', turn: morwenTurn },
+  1: {
+    role: 'grub',
+    turn: grubTurn,
+    lostWords: 'Grub forgot what he was saying. Ask again, tall-folk?',
+  },
+  2: {
+    role: 'vellum',
+    turn: vellumTurn,
+    lostWords: 'My quill falters, traveller. Ask me once more.',
+  },
+  3: {
+    role: 'morwen',
+    turn: morwenTurn,
+    lostWords: 'Ooh, the cauldron spat and I lost my words, dearie! Ask me again.',
+  },
 };

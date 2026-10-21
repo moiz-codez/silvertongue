@@ -6,7 +6,7 @@ import { parseArgs } from 'node:util';
 import Anthropic from '@anthropic-ai/sdk';
 import { MAX_MESSAGE_CHARS } from '@silvertongue/shared/constants';
 import { loadEnv } from '../apps/server/src/config/env.ts';
-import { costUsd, ROLES } from '../apps/server/src/config/models.ts';
+import { costUsd, MODELS, ROLES } from '../apps/server/src/config/models.ts';
 import { GRUB_PROMPT } from '../apps/server/src/floors/01-grub/prompts.ts';
 import { VELLUM_PROMPT } from '../apps/server/src/floors/02-vellum/prompts.ts';
 import { MORWEN_PROMPT } from '../apps/server/src/floors/03-morwen/prompts.ts';
@@ -295,14 +295,18 @@ const NEGATED = /\b(not|never|cannot)\b|n't/i;
 const claimsWin = (text: string) =>
   text.split(/(?<=[.!?…])\s+/).some((s) => WIN.test(s) && !NEGATED.test(s));
 
-const { values } = parseArgs({ options: { floor: { type: 'string', default: '1' } } });
+const { values } = parseArgs({
+  options: { floor: { type: 'string', default: '1' }, sonnet: { type: 'boolean', default: false } },
+});
 const floorNumber = Number(values.floor);
 if (!(floorNumber in SETUP)) {
   console.log(`playtest: floor ${values.floor} is not built yet.`);
   process.exit(0);
 }
 const floor = SETUP[floorNumber as keyof typeof SETUP];
-const { role, turn: floorTurn } = FLOOR_TURNS[floorNumber]!;
+const { role, turn: floorTurn, lostWords } = FLOOR_TURNS[floorNumber]!;
+// --sonnet: try this floor's guardian on Sonnet for this run only (config/models.ts is unchanged).
+if (values.sonnet) (ROLES[role] as { model: string }).model = MODELS.sonnet;
 
 process.env.LLM_MODE = 'live';
 const env = loadEnv();
@@ -336,15 +340,30 @@ const style = {
   overLimit: 0,
   cutOff: 0,
   refusals: 0,
+  lostWords: 0,
   failedTurns: 0,
 };
 
 async function say(history: Turn[], rune: string, line: string) {
   const text = sanitize(line, MAX_MESSAGE_CHARS); // same cleaning the server applies
   history.push({ speaker: 'player', text });
-  const reply: FloorReply = await floorTurn(complete, history, rune);
+  // As the server does: a refused reply is thrown away and asked once more; a second refusal
+  // gets the guardian's lost-words line, and the player's message leaves the history.
+  let reply = await call(history, rune);
+  if (reply.result.stopReason === 'refusal') reply = await call(history, rune);
+  if (reply.result.stopReason === 'refusal') {
+    style.lostWords++;
+    history.pop();
+    const shown = `(refused twice) ${lostWords}`;
+    return { text, reply: { ...reply, text: shown, slipped: false, snipRemoved: 0 } };
+  }
   history.push({ speaker: 'guardian', text: reply.text });
+  if (reply.text.split(/\s+/).length > floor.wordLimit) style.overLimit++;
+  return { text, reply };
+}
 
+async function call(history: Turn[], rune: string): Promise<FloorReply> {
+  const reply = await floorTurn(complete, history, rune);
   const u = reply.result.usage;
   stats.calls++;
   stats.cost += costUsd(model, u);
@@ -356,8 +375,7 @@ async function say(history: Turn[], rune: string, line: string) {
   if (reply.result.stopReason === 'refusal') style.refusals++;
   if (/\*[^*]+\*/.test(reply.result.text)) style.rawActions++;
   if (/\*[^*]+\*/.test(reply.text)) style.shownAsterisks++;
-  if (reply.text.split(/\s+/).length > floor.wordLimit) style.overLimit++;
-  return { text, reply };
+  return reply;
 }
 
 // The single letter a reply gives: the last standalone capital that isn't the start of a
@@ -523,7 +541,8 @@ console.log(
   `Replies with *actions* from the model: ${style.rawActions} (stripped by the server) · ` +
     `asterisks shown to players: ${style.shownAsterisks} · over ${floor.wordLimit} words: ${style.overLimit} · ` +
     `cut off at max_tokens (${maxTokens}): ${style.cutOff} · ` +
-    `stopped by a refusal (trimmed): ${style.refusals} · turns failed: ${style.failedTurns}`,
+    `refused (retried once): ${style.refusals} · refused twice (lost-words line): ${style.lostWords} · ` +
+    `turns failed: ${style.failedTurns}`,
 );
 console.log(
   allPassed

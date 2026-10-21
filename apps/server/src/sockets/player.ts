@@ -29,7 +29,7 @@ import { scoreFloorClear } from '../game/scoring.ts';
 import { elapsedMs } from '../game/state.ts';
 import { titleFor } from '../game/titles.ts';
 import type { AdminReply } from '@silvertongue/shared/events';
-import { DeadlineError, errorStatus, type Complete } from '../llm/client.ts';
+import { DeadlineError, errorStatus, RefusalError, type Complete } from '../llm/client.ts';
 import type { QueueStats } from '../llm/queue.ts';
 import { cleanNickname, NICKNAME_TAKEN, nicknameProblem } from '../security/nickname.ts';
 import { revealsRune } from '../security/revealsRune.ts';
@@ -287,23 +287,25 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
         socket.emit('player:bubble', { id: playerMessageId, floor, speaker: 'player', text });
 
         try {
-          const turn = await floorTurn.turn(
-            complete,
-            [...history, { speaker: 'player', text }],
-            q.getRune(db, id, floor),
-          );
-          // A refusal still answers (trimmed), but the log should show the classifier stepped in.
-          logCall(
-            gameId,
-            id,
-            floor,
-            floorTurn.role,
-            turn.result,
-            turn.result.stopReason === 'refusal' ? 'refusal' : 'ok',
-          );
+          const rune = q.getRune(db, id, floor);
+          const ask = async () => {
+            const reply = await floorTurn.turn(
+              complete,
+              [...history, { speaker: 'player', text }],
+              rune,
+            );
+            const refused = reply.result.stopReason === 'refusal';
+            logCall(gameId, id, floor, floorTurn.role, reply.result, refused ? 'refusal' : 'ok');
+            return { reply, refused };
+          };
+          // The API's safety classifier sometimes stops a harmless reply mid-word (stop_reason
+          // "refusal"). Its text is thrown away and the call tried once more.
+          let { reply: turn, refused } = await ask();
+          if (refused) ({ reply: turn, refused } = await ask());
           checkBudget();
           // Kicked or reset while the guardian was thinking: this socket no longer plays as them.
           if (socket.data.playerId !== id) return;
+          if (refused) throw new RefusalError();
           q.countPlayerMessage(db, id, floor);
           // turn.text is the post-filter text (cleaned, and on Floor 3 snipped): the only version sent.
           const replyId = q.insertMessage(db, {
@@ -337,18 +339,20 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
           }
           if (turn.slipped) socket.emit('player:expression', { floor, state: 'slipped' });
         } catch (err) {
-          logCall(
-            gameId,
-            id,
-            floor,
-            floorTurn.role,
-            {
-              model: ROLES[floorTurn.role].model,
-              usage: { input_tokens: 0, output_tokens: 0 },
-              latencyMs: 0,
-            },
-            errorStatus(err),
-          );
+          // A refusal's calls were logged (and billed) above; any other failure is logged here.
+          if (!(err instanceof RefusalError))
+            logCall(
+              gameId,
+              id,
+              floor,
+              floorTurn.role,
+              {
+                model: ROLES[floorTurn.role].model,
+                usage: { input_tokens: 0, output_tokens: 0 },
+                latencyMs: 0,
+              },
+              errorStatus(err),
+            );
           q.removeFromGuardianHistory(db, playerMessageId);
           if (err instanceof DeadlineError) {
             // Crowded: no refund, or turned-away phones could resend at once. A normal cooldown
@@ -362,6 +366,9 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
               'crowded',
               'The dungeon is crowded. Catch your breath and try again.',
             );
+          } else if (err instanceof RefusalError) {
+            cooldownUntil.delete(id); // not their fault: the turn is given back
+            sendError(socket, 'refused', floorTurn.lostWords);
           } else {
             cooldownUntil.delete(id); // their turn wasn't used, so give it back
             sendError(socket, 'llm', 'The dungeon trembles. Try again.');

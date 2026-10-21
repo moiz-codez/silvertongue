@@ -98,6 +98,7 @@ Every milestone is done only when its acceptance criteria are met and `npm run c
 - Snip's line is its own `snip` message, never in Morwen's history. Morwen's history is the blacked-out text the traveller saw. If playtests show her confused by it, switching her history to `raw_text` is safe (API only, never a phone) but needs Moiz's OK.
 - Both prompts gained the README rule-5 lines: Vellum under 60 words (a poem: one line per letter), Morwen under 40 words, no *asterisk* actions.
 - The notes on the wall stay in M7.
+- A reply stopped by the safety classifier (`stop_reason: "refusal"`, seen on spelled-out runes) is thrown away and asked once more. A second refusal gets the guardian's own "lost my words" line, with the turn and cooldown refunded. The playtest script does the same and counts both.
 - `npm run playtest -- --floor 2|3` judges "letters one by one" across the whole conversation, and marks riddles, other scripts and "how does Snip work?" as REVIEW (the transcript decides; the keyword flag is only a hint).
 
 **Acceptance**

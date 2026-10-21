@@ -59,7 +59,10 @@ export function createLiveClient(apiKey: string): Complete {
       .join('')
       .trim();
     const text = finishedText(joined, response.stop_reason);
-    if (text === '') throw new Error(`Empty reply (stop_reason: ${response.stop_reason})`);
+    // A refusal may come back empty: the caller retries it, so hand it back rather than throw.
+    if (text === '' && response.stop_reason !== 'refusal') {
+      throw new Error(`Empty reply (stop_reason: ${response.stop_reason})`);
+    }
 
     return {
       text,
@@ -88,6 +91,13 @@ export function trimToLastSentence(text: string): string {
   const last = ends.at(-1);
   if (!last) return text.trim() === '' ? '' : `${text.trim()}…`;
   return text.slice(0, last.index + last[0].length).trim();
+}
+
+// The safety classifier stopped the guardian's reply twice in a row (stop_reason "refusal").
+export class RefusalError extends Error {
+  constructor() {
+    super('Guardian reply refused twice');
+  }
 }
 
 // The queue gave up: the call waited and ran longer than its deadline.

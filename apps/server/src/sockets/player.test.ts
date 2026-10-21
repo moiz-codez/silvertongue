@@ -1,5 +1,7 @@
 // End to end in mock mode: real server, real sockets, in-memory database. No API calls.
 import { describe, expect, it } from 'vitest';
+import { ROLES } from '../config/models.ts';
+import type { Db } from '../db/db.ts';
 import { getRune, kickPlayer } from '../db/queries.ts';
 import { createMockClient } from '../llm/mock.ts';
 import type { LlmRequest } from '../llm/client.ts';
@@ -123,6 +125,55 @@ describe('Floor 1, end to end in mock mode', () => {
     await next(socket, 'player:bubble', (b) => b.speaker === 'guardian');
     socket.emit('player:message', { text: 'two' });
     expect((await next(socket, 'player:error')).code).toBe('cooldown');
+  });
+
+  // A client whose first `refusals` replies are stopped by the safety classifier.
+  function refusing(refusals: number): Complete {
+    let calls = 0;
+    return async (req) => {
+      const refused = calls++ < refusals;
+      const text = refused ? 'Ooh, posh!' : 'A VISITOR! Want a mushroom?';
+      return {
+        text,
+        rawText: text,
+        stopReason: refused ? 'refusal' : 'end_turn',
+        model: ROLES[req.role].model,
+        usage: { input_tokens: 10, output_tokens: 5 },
+        latencyMs: 0,
+      };
+    };
+  }
+  const loggedStatuses = (db: Db) =>
+    (db.prepare('SELECT status FROM llm_calls ORDER BY id').all() as { status: string }[]).map(
+      (r) => r.status,
+    );
+
+  it('throws away a refused reply and asks once more', async () => {
+    const { db, url } = await startServer({}, refusing(1));
+    const { socket, seen } = client(url);
+    await join(socket, 'Ali');
+    socket.emit('player:message', { text: 'hi' });
+    const reply = await next(socket, 'player:bubble', (b) => b.speaker === 'guardian');
+    expect(reply.text).toBe('A VISITOR! Want a mushroom?');
+    expect(JSON.stringify(seen)).not.toContain('posh');
+    expect(loggedStatuses(db)).toEqual(['refusal', 'ok']); // both calls billed and logged
+  });
+
+  it('answers a second refusal with the guardian losing their words, and refunds the turn', async () => {
+    const { db, url } = await startServer({ COOLDOWN_MS: '5000' }, refusing(2));
+    const { socket } = client(url);
+    await join(socket, 'Ali');
+    let errored = false;
+    socket.on('player:error', () => (errored = true));
+    const error = next(socket, 'player:error');
+    const stateAfterError = next(socket, 'player:state', () => errored);
+    socket.emit('player:message', { text: 'hi' });
+    expect(await error).toEqual({
+      code: 'refused',
+      message: 'Grub forgot what he was saying. Ask again, tall-folk?',
+    });
+    expect(await stateAfterError).toMatchObject({ cooldownMs: 0, messagesLeft: 150 });
+    expect(loggedStatuses(db)).toEqual(['refusal', 'refusal']);
   });
 
   it('answers an API failure in character and refunds the turn', async () => {
