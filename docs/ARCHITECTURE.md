@@ -146,7 +146,7 @@ All payloads validated with zod on receipt.
 **Server → player**
 - `player:state { gameStatus, playersInGame, nickname, floor, floorReady, score, title, messagesLeft, cooldownMs, doorLockedMs }`. Durations are milliseconds from now, never timestamps, so a phone with a wrong clock still counts down correctly. `floorReady` is false while the floor isn't built yet. `playersInGame` is the lobby's "N adventurers at the gate". The phone picks its screen from `gameStatus`. M7 adds `notes`.
 - `player:history { floor, bubbles }`: on resume, replays this floor's bubbles so a refresh shows the same chat.
-- `player:bubble { id, floor, speaker, text }` (speaker: player | guardian | snip | system; later floors add gorm | ward_ears | ward_tongues | carving). On Floor 3 the guardian bubble is Snip's output, and when Snip cut something a `snip` bubble follows: `SNIP! N letters removed.` It is stored as its own message with `in_guardian_history = 0`, so Morwen never sees it. Morwen's history is what the traveller saw (blacked out); her unfiltered words are only in `raw_text`. The player's own message comes back as a bubble too.
+- `player:bubble { id, floor, speaker, text }` (speaker: player | guardian | snip | gorm | system; later floors add ward_ears | ward_tongues | carving). On Floor 4 a `gorm` bubble is Gorm's growl when he blocked the message; the phone shows "Mumble was asleep and never heard that." under it (UI text, not stored), and a `gorm` bubble ends the wait for an answer just like a guardian reply. On Floor 3 the guardian bubble is Snip's output, and when Snip cut something a `snip` bubble follows: `SNIP! N letters removed.` It is stored as its own message with `in_guardian_history = 0`, so Morwen never sees it. Morwen's history is what the traveller saw (blacked out); her unfiltered words are only in `raw_text`. The player's own message comes back as a bubble too.
 - `player:expression { floor, state: 'idle' | 'slipped' }` (computed on the server with `revealsRune`)
 - `player:door-result { correct, lockedMs }`
 - `player:floor-cleared { floor, lines: [{ label, points, highlight? }], total, score, title, nextFloorReady }`
@@ -229,8 +229,19 @@ This keeps the static block byte-identical across all players, so one cache entr
 **History rules**
 - Smashed or sealed player messages are not sent to the guardian (`in_guardian_history = 0`).
 - A Ward of Tongues–sealed guardian reply is stored and sent back in history as `[sealed]`.
-- Floors 5–6: send at most the last 12 messages.
-- Gorm receives only the latest player message. The Ward of Ears receives the last 12 messages plus the latest one marked.
+- Floors 2–6: send at most the last 12 messages (Floor 1: 20).
+- Gorm receives only the latest player message, with no rune and no per-player note. The Ward of Ears receives the last 12 messages plus the latest one marked.
+
+**Input guard outcomes (Floor 4, Gorm).** Gorm always fails closed: Mumble is never called for a message Gorm didn't pass, and that message leaves his history (`in_guardian_history = 0`). The verdict is stored on the player's message; the M8 reveal counts only `SMASH`.
+
+| Gorm outcome | The player sees | Message cap | Cooldown | `messages.verdict` |
+|---|---|---|---|---|
+| `PASS` | Mumble's reply | counts | kept | `PASS` |
+| A real `SMASH` | Gorm's growl (cleaned: caps, ≤ 8 words, stock growl if empty or rude) | counts | kept | `SMASH` |
+| His answer can't be read (refusal, bad JSON, extra keys, unknown verdict, `max_tokens` stop): asked once more, then | the stock growl "GORM NOT HEAR GOOD. GORM SMASH ANYWAY." | not counted | kept | `GUARD_ERROR` |
+| The call fails (crowded queue / deadline, API error, timeout) | the usual `crowded` / `llm` ("The dungeon trembles") error, not a growl | not counted | `crowded`: cooldown + 0–3 s; `llm`: refunded | `GUARD_ERROR` |
+
+Every Gorm call is logged in `llm_calls` with role `gorm`. A message costs one Gorm call (two if his answer can't be read) plus, when he passes it, one Mumble call (two if refused).
 
 ### Rate-limited queue (`llm/queue.ts`)
 
@@ -258,7 +269,7 @@ Default in development and in load tests. No API key needed. Deterministic, with
 | 1 Grub | — | Grub | — | `revealsRune(reply)` or clear |
 | 2 Vellum | — | Ser Vellum | — | `revealsRune(reply)` or clear |
 | 3 Morwen | — | Morwen | `cleanReply` → `snip` | `revealsRune(filteredText)` (rune got past Snip) or clear |
-| 4 Ogre | Gorm: latest message only, no rune, JSON verdict | Mumble | — | `revealsRune(reply)` or clear |
+| 4 Ogre | Gorm: latest message only, no rune, JSON verdict (`parseVerdict`, fails closed; see "Input guard outcomes") | Mumble | `cleanReply` | `revealsRune(reply)` or clear |
 | 5 Ashveil | Ward of Ears: last 12 messages, no rune | Queen Ashveil | `revealsRune` → else Ward of Tongues | on clear |
 | 6 Vorgath | Ward of Ears + carvings + `is_gift` | Vorgath (+ hoard note) | `revealsRune` → else Ward of Tongues | on clear |
 

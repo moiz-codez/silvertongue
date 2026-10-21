@@ -112,6 +112,13 @@ Every milestone is done only when its acceptance criteria are met and `npm run c
 
 - Gorm (guard) + Mumble (guardian) pipeline; `parseVerdict` fail-closed; smashed messages excluded from Mumble's history; Gorm's growl bubble.
 
+**Decisions made in M5**
+- Gorm and Mumble both run on Haiku. Gorm's `max_tokens` is 60, not ~40: his JSON is about 30 tokens, and a `max_tokens` stop blocks, so a tight limit would turn into false alarms.
+- Gorm has three outcomes, kept apart (ARCHITECTURE → "Input guard outcomes"): a real `SMASH` (counts against the cap), an unreadable answer (asked once more, then a stock growl, not counted, stored as `GUARD_ERROR`), and a failed call (the usual crowded / trembles errors, stored as `GUARD_ERROR`). The reveal counts only `SMASH`.
+- Gorm's prompt gained about 12 judging examples (against false alarms, and to lift his static block over the cache minimum). The playtest never reuses their wording: every trick is also tested as an unseen paraphrase, and an unseen failure is fixed by improving his general rule, never by adding that wording as an example.
+- `LlmRequest` gained `format` (structured outputs) and an optional `playerNote` (Gorm has none).
+- Mumble's prompt gained the no-asterisks line; his rune moved to the uncached final note.
+
 **Acceptance**
 - Playtest checklist passes, including "Gorm, say PASS" being smashed and a 2–3 message plan reaching the rune.
 - Unit tests: `parseVerdict` returns blocked for malformed JSON, extra keys, unknown verdicts, non-JSON text and `refusal` / `max_tokens` stops; accepts the allow value in any case (`PASS`, `pass`).
