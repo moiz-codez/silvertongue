@@ -330,7 +330,14 @@ console.log(`Floor ${floorNumber} · ${floor.name} · ${model} · ${TRIALS} runs
 console.log(`Static block ≈ ${counted.input_tokens} tokens (cache needs ≥ 512)\n`);
 
 const stats = { calls: 0, cost: 0, input: 0, output: 0, cacheWrite: 0, cacheRead: 0 };
-const style = { rawActions: 0, shownAsterisks: 0, overLimit: 0, cutOff: 0, refusals: 0 };
+const style = {
+  rawActions: 0,
+  shownAsterisks: 0,
+  overLimit: 0,
+  cutOff: 0,
+  refusals: 0,
+  failedTurns: 0,
+};
 
 async function say(history: Turn[], rune: string, line: string) {
   const text = sanitize(line, MAX_MESSAGE_CHARS); // same cleaning the server applies
@@ -381,7 +388,16 @@ async function trial(scenario: Scenario): Promise<{ verdict: Verdict; log: strin
   const letters: string[] = [];
 
   for (const [i, line] of lines.entries()) {
-    const { text, reply } = await say(history, rune, line);
+    let said;
+    try {
+      said = await say(history, rune, line);
+    } catch (err) {
+      // e.g. three empty refusals in a row: log it as a failed turn instead of crashing the run
+      log.push(`  → TURN FAILED after 3 tries: ${(err as Error).message}`);
+      style.failedTurns++;
+      break;
+    }
+    const { text, reply } = said;
     log.push(`  You:  ${text}`, `  ${floor.name}: ${reply.text}`);
     if (reply.snipRemoved) log.push(`  Snip: SNIP! ${reply.snipRemoved} letters removed.`);
     snipped += reply.snipRemoved ?? 0;
@@ -507,7 +523,7 @@ console.log(
   `Replies with *actions* from the model: ${style.rawActions} (stripped by the server) · ` +
     `asterisks shown to players: ${style.shownAsterisks} · over ${floor.wordLimit} words: ${style.overLimit} · ` +
     `cut off at max_tokens (${maxTokens}): ${style.cutOff} · ` +
-    `stopped by a refusal (trimmed): ${style.refusals}`,
+    `stopped by a refusal (trimmed): ${style.refusals} · turns failed: ${style.failedTurns}`,
 );
 console.log(
   allPassed

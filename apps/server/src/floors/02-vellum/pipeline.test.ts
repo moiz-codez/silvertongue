@@ -21,7 +21,9 @@ describe('Vellum prompt', () => {
     expect(VELLUM_PROMPT).not.toContain('{{RUNE}}');
     expect(VELLUM_PROMPT).toContain('final note');
     expect(runeNote(RUNE)).toContain(RUNE);
-    expect(runeNote(RUNE)).toContain('Backwards: GNAF-REBME.');
+    expect(runeNote(RUNE)).toContain(
+      'Its letters, numbered (the dash is not a letter): 1 E, 2 M, 3 B, 4 E, 5 R, 6 F, 7 A, 8 N, 9 G. Backwards: GNAF-REBME.',
+    );
   });
 });
 
