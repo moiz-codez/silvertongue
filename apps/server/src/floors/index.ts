@@ -4,6 +4,7 @@ import type { Complete, LlmResult } from '../llm/client.ts';
 import { grubTurn } from './01-grub/pipeline.ts';
 import { vellumTurn } from './02-vellum/pipeline.ts';
 import { morwenTurn } from './03-morwen/pipeline.ts';
+import { gormJudge, mumbleTurn, type GuardResult } from './04-ogre/pipeline.ts';
 import type { Turn } from './messages.ts';
 
 export interface FloorReply {
@@ -19,6 +20,7 @@ export const FLOOR_TURNS: Record<
     role: RoleName;
     turn: (complete: Complete, history: Turn[], rune: string) => Promise<FloorReply>;
     lostWords: string; // in character, when the API refused the reply twice
+    guard?: (complete: Complete, text: string) => Promise<GuardResult>; // input guard (Floor 4)
   }
 > = {
   1: {
@@ -35,5 +37,11 @@ export const FLOOR_TURNS: Record<
     role: 'morwen',
     turn: morwenTurn,
     lostWords: 'Ooh, the cauldron spat and I lost my words, dearie! Ask me again.',
+  },
+  4: {
+    role: 'mumble',
+    turn: mumbleTurn,
+    guard: gormJudge,
+    lostWords: 'mmm... Mumble fell asleep... say it again?',
   },
 };

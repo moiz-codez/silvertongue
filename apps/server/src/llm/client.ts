@@ -11,8 +11,9 @@ import {
 export interface LlmRequest {
   role: RoleName;
   staticPrompt: string; // identical for every player: cached
-  playerNote: string; // per-player data (the rune): last system block, never cached
+  playerNote?: string; // per-player data (the rune): last system block, never cached. Guards have none.
   messages: Anthropic.MessageParam[]; // must end with a user turn
+  format?: Anthropic.JSONOutputFormat; // guards and judges: their one fixed JSON schema
   priority?: 'player' | 'background'; // the queue serves player calls first (default: player)
   signal?: AbortSignal; // set by the queue: aborted when the call's deadline passes
 }
@@ -33,7 +34,7 @@ export function createLiveClient(apiKey: string): Complete {
   // No SDK retries: the queue retries, so it sees every 429 and can slow the whole model down.
   const client = new Anthropic({ apiKey, maxRetries: 0, timeout: 30_000 });
 
-  return async ({ role, staticPrompt, playerNote, messages, signal }) => {
+  return async ({ role, staticPrompt, playerNote, messages, format, signal }) => {
     if (messages.at(-1)?.role !== 'user') throw new Error('Request must end with a user turn');
     const { model, maxTokens } = ROLES[role];
     const started = Date.now();
@@ -45,9 +46,10 @@ export function createLiveClient(apiKey: string): Complete {
         thinking: THINKING_OFF[model], // no temperature/top_p/top_k: these models reject them
         system: [
           { type: 'text', text: staticPrompt, cache_control: { type: 'ephemeral' } },
-          { type: 'text', text: playerNote },
+          ...(playerNote ? [{ type: 'text' as const, text: playerNote }] : []),
         ],
         messages,
+        ...(format && { output_config: { format } }),
       },
       { signal },
     );

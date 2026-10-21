@@ -43,7 +43,7 @@ const RETRY_BACKOFF_MS = 1000; // for errors without a retry-after; doubles each
 // a burst's reservations at or above the real usage.
 const CHARS_PER_INPUT_TOKEN = 2.5;
 export function estimateInput(req: LlmRequest): number {
-  const chars = req.playerNote.length + JSON.stringify(req.messages).length;
+  const chars = (req.playerNote ?? '').length + JSON.stringify(req.messages).length;
   return Math.ceil(chars / CHARS_PER_INPUT_TOKEN);
 }
 

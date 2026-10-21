@@ -7,6 +7,7 @@ export interface FloorInfo {
   waitingLines: string[];
   clearQuote: string;
   clearLine: string;
+  voice?: string; // the name above guardian bubbles, when it isn't `guardian` (Floor 4: Mumble)
 }
 
 export const FLOORS: Record<number, FloorInfo> = {
@@ -48,6 +49,20 @@ export const FLOORS: Record<number, FloorInfo> = {
     ],
     clearQuote: '“Snip! Did you get it? SNIP?”',
     clearLine: 'The door creaks open. Snip has no idea what just happened.',
+  },
+  4: {
+    guardian: 'Gorm & Mumble',
+    voice: 'Mumble',
+    subtitle: 'the Two-Headed Ogre · guards the bridge',
+    placeholder: 'Say something to the ogre…',
+    waitingLines: [
+      'Gorm squints at your words…',
+      'Mumble yawns a very long yawn…',
+      'Gorm cracks his knuckles…',
+      'Mumble hums an old bridge song…',
+    ],
+    clearQuote: '“mmm... did Mumble say something?”',
+    clearLine: 'The bridge door opens. Gorm stares at Mumble in horror.',
   },
 };
 

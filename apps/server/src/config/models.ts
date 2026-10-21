@@ -36,6 +36,10 @@ export const ROLES = {
   // about 1 call in 5 and never wrote a poem; Haiku's poems are best-effort (docs/prompts/02-vellum.md).
   vellum: { model: MODELS.haiku, maxTokens: 200 },
   morwen: { model: MODELS.haiku, maxTokens: 150 },
+  // Gorm's JSON with an 8-word growl is ~30 tokens. A max_tokens stop blocks (fail closed), so
+  // leave headroom rather than turn cut-offs into false alarms.
+  gorm: { model: MODELS.haiku, maxTokens: 60 },
+  mumble: { model: MODELS.haiku, maxTokens: 180 },
 } as const;
 
 export type RoleName = keyof typeof ROLES;

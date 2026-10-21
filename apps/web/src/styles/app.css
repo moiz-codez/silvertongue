@@ -262,6 +262,37 @@
   color: var(--name-morwen);
 }
 
+.bubble-guardian.floor-4 {
+  background: var(--bubble-mumble);
+}
+
+.bubble-row.guardian:has(.floor-4) .bubble-name {
+  color: var(--name-mumble);
+}
+
+/* Gorm smashed the message: a red, blocky, all-caps shout, and Mumble slept through it. */
+.bubble-row.gorm {
+  align-self: flex-start;
+}
+
+.bubble-row.gorm .bubble-name {
+  color: var(--name-gorm);
+}
+
+.bubble-gorm {
+  background: var(--bubble-gorm);
+  border-radius: 4px;
+  font-family: var(--font-heading);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.gorm-asleep {
+  margin: var(--space-1) 0 0 var(--space-1);
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
 /* Snip is code, not a character, and looks it: plain, monospaced, dashed. */
 .bubble-row.snip {
   align-self: flex-start;

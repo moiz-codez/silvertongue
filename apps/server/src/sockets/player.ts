@@ -282,12 +282,54 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
           floor,
           speaker: 'player',
           text,
+          // Behind a guard it starts outside the guardian's history and joins only on PASS, so a
+          // crash or restart mid-judgement can never leave an unjudged message for Mumble to hear.
+          inGuardianHistory: floorTurn.guard === undefined,
           now,
         });
         socket.emit('player:bubble', { id: playerMessageId, floor, speaker: 'player', text });
 
+        let guarding = floorTurn.guard !== undefined; // a failure now is the guard's, not the guardian's
         try {
           const rune = q.getRune(db, id, floor);
+          if (floorTurn.guard) {
+            const guard = floorTurn.guard;
+            const judge = async () => {
+              const verdict = await guard(complete, text); // the message only: no rune, no history
+              const refused = verdict.result.stopReason === 'refusal';
+              logCall(gameId, id, floor, 'gorm', verdict.result, refused ? 'refusal' : 'ok');
+              return verdict;
+            };
+            // A refusal or unreadable JSON is the model's fault: ask once more before giving up.
+            let gorm = await judge();
+            if (gorm.outcome === 'unparseable') gorm = await judge();
+            guarding = false;
+            checkBudget();
+            if (socket.data.playerId !== id) return;
+            if (gorm.outcome !== 'pass') {
+              // Fail closed: Mumble never hears it. Only a real SMASH uses up one of their messages.
+              const smashed = gorm.outcome === 'smash';
+              q.setMessageVerdict(db, playerMessageId, smashed ? 'SMASH' : 'GUARD_ERROR');
+              if (smashed) q.countPlayerMessage(db, id, floor);
+              const gormId = q.insertMessage(db, {
+                gameId,
+                playerId: id,
+                floor,
+                speaker: 'gorm',
+                text: gorm.growl,
+                inGuardianHistory: false,
+                now: Date.now(),
+              });
+              socket.emit('player:bubble', {
+                id: gormId,
+                floor,
+                speaker: 'gorm',
+                text: gorm.growl,
+              });
+              return;
+            }
+            q.passGuard(db, playerMessageId); // now Mumble may hear it
+          }
           const ask = async () => {
             const reply = await floorTurn.turn(
               complete,
@@ -340,19 +382,22 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
           if (turn.slipped) socket.emit('player:expression', { floor, state: 'slipped' });
         } catch (err) {
           // A refusal's calls were logged (and billed) above; any other failure is logged here.
+          const role = guarding ? 'gorm' : floorTurn.role;
           if (!(err instanceof RefusalError))
             logCall(
               gameId,
               id,
               floor,
-              floorTurn.role,
+              role,
               {
-                model: ROLES[floorTurn.role].model,
+                model: ROLES[role].model,
                 usage: { input_tokens: 0, output_tokens: 0 },
                 latencyMs: 0,
               },
               errorStatus(err),
             );
+          // The guard couldn't judge it (crowded, API error): stored apart from real smashes.
+          if (guarding) q.setMessageVerdict(db, playerMessageId, 'GUARD_ERROR');
           q.removeFromGuardianHistory(db, playerMessageId);
           if (err instanceof DeadlineError) {
             // Crowded: no refund, or turned-away phones could resend at once. A normal cooldown

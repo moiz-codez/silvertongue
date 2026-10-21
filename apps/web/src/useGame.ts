@@ -64,7 +64,8 @@ export function useGame() {
     socket.on('player:history', (h) => setBubbles(h.bubbles));
     socket.on('player:bubble', (b) => {
       setBubbles((list) => (list.some((x) => x.id === b.id) ? list : [...list, b]));
-      if (b.speaker === 'guardian') setWaitingLine(null);
+      // The answer: the guardian's reply, or Gorm smashing the message before Mumble heard it.
+      if (b.speaker === 'guardian' || b.speaker === 'gorm') setWaitingLine(null);
     });
     socket.on('player:expression', (e) => setExpression(e.state));
     socket.on('player:door-result', (r) => {
