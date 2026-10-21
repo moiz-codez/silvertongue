@@ -321,14 +321,17 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
             errorStatus(err),
           );
           q.removeFromGuardianHistory(db, playerMessageId);
-          cooldownUntil.delete(id); // their turn wasn't used, so give it back
           if (err instanceof DeadlineError) {
+            // Crowded: no refund, or turned-away phones could resend at once. A normal cooldown
+            // plus 0–3 s at random, so they don't all come back together. The cap isn't touched.
+            cooldownUntil.set(id, Date.now() + ctx.game.cooldown_ms + Math.random() * 3000);
             sendError(
               socket,
               'crowded',
               'The dungeon is crowded. Catch your breath and try again.',
             );
           } else {
+            cooldownUntil.delete(id); // their turn wasn't used, so give it back
             sendError(socket, 'llm', 'The dungeon trembles. Try again.');
           }
         } finally {

@@ -142,7 +142,7 @@ describe('Floor 1, end to end in mock mode', () => {
     expect(state.messagesLeft).toBe(150);
   });
 
-  it('tells the player the dungeon is crowded when the queue gives up, and refunds the turn', async () => {
+  it('tells the player the dungeon is crowded, with a cooldown plus up to 3 s, and keeps the message', async () => {
     const tooSlow: Complete = async () => {
       throw new DeadlineError();
     };
@@ -159,7 +159,10 @@ describe('Floor 1, end to end in mock mode', () => {
       code: 'crowded',
       message: 'The dungeon is crowded. Catch your breath and try again.',
     });
-    expect(await stateAfterError).toMatchObject({ cooldownMs: 0, messagesLeft: 150 });
+    const state = await stateAfterError;
+    expect(state.messagesLeft).toBe(150); // not counted against the cap
+    expect(state.cooldownMs).toBeGreaterThan(4500); // the normal 5 s (minus the round trip)…
+    expect(state.cooldownMs).toBeLessThanOrEqual(8000); // …plus at most 3 s at random
   });
 
   it('keeps the doors sealed in the lobby and while paused', async () => {

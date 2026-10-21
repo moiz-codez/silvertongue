@@ -71,7 +71,7 @@ Every milestone is done only when its acceptance criteria are met and `npm run c
 
 **Decisions made in M3**
 - Retries moved from the SDK into the queue, so every 429 is seen, counted and pauses the whole model for `retry-after`.
-- 60 s deadline per call from joining the queue; then an in-character "crowded" error with the turn refunded.
+- 60 s deadline per call from joining the queue; then an in-character "crowded" error. It isn't counted against the message cap, but (after the M3 audit) the player waits the normal cooldown plus a random 0–3 s: with instant turn-aways, a refunded cooldown let phones resend twice a second. Other failed calls refund the cooldown.
 - After the load-tester report: a call is turned away as "crowded" at once when the estimated wait is already past the deadline, and never started with under 10 s left; the 60 s deadline stays as the backstop. The admin has a "Crowded, last minute" tile. The input-token estimate is chars/2.5 (calibrated on the live check, where chars/4 was 1.5× too low).
 - Live settings (cooldown, cap, mock/live) are stored on the game. `.env` only seeds the first game; Reset copies them into the next game; a restart keeps them. The admin header shows a large MOCK / LIVE badge.
 - The budget auto-pause fires once per game; the admin may resume on purpose.
