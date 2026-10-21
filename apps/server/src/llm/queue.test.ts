@@ -229,6 +229,12 @@ it('turns a waiting call away when too little time is left to make it', async ()
   expect(queue.stats()).toMatchObject({ queued: 0, crowded1m: 1 });
 });
 
+it('still serves a call bigger than a whole minute of a bucket', async () => {
+  // Grub's max_tokens is above this output limit; pump lets it through on a full bucket.
+  const queue = createQueue(() => async (r) => reply(said(r)), { rpm: BIG, itpm: BIG, otpm: 10 });
+  await expect(queue.complete(req('big'))).resolves.toMatchObject({ text: 'big' });
+});
+
 it('reserves at least the input the live check measured', () => {
   // M3 live check: this much uncached text (37 tokens at chars/4) really used 54 input tokens.
   const live = {

@@ -152,15 +152,17 @@ export function createQueue(
     const upTo = [...line.filter((j) => j.model === job.model), job];
     const msFor = (need: number, bucket: Bucket) =>
       (Math.max(0, need - bucket.level) * MINUTE) / bucket.perMinute;
+    // Like Bucket.waitFor: one call never needs more than a full bucket.
+    const capped = (amount: number, bucket: Bucket) => Math.min(amount, bucket.perMinute);
     return Math.max(
       b.blockedUntil - now,
       msFor(upTo.length, b.requests),
       msFor(
-        upTo.reduce((sum, j) => sum + j.estInput, 0),
+        upTo.reduce((sum, j) => sum + capped(j.estInput, b.input), 0),
         b.input,
       ),
       msFor(
-        upTo.reduce((sum, j) => sum + j.maxOutput, 0),
+        upTo.reduce((sum, j) => sum + capped(j.maxOutput, b.output), 0),
         b.output,
       ),
     );
