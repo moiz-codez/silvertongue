@@ -150,7 +150,7 @@ All payloads validated with zod on receipt.
 - `player:expression { floor, state: 'idle' | 'slipped' }` (computed on the server with `revealsRune`)
 - `player:door-result { correct, lockedMs }`
 - `player:floor-cleared { floor, lines: [{ label, points, highlight? }], total, score, title, nextFloorReady }`
-- `player:error { code, message }` (message is in character, never a stack trace). Code `not_running` while the game is in the lobby, paused, at the reveal or ended; `crowded` when the queue's 60 s deadline passed (the turn is refunded); `llm` for any other failed call (refunded too).
+- `player:error { code, message }` (message is in character, never a stack trace). Code `not_running` while the game is in the lobby, paused, at the reveal or ended; `crowded` when the queue can't answer within its 60 s deadline (turned away at once if the line is already too long) (the turn is refunded); `llm` for any other failed call (refunded too).
 - `player:kicked`: the admin kicked this player; the phone forgets its token and the server disconnects the socket.
 - `player:reset`: the admin opened a new game; the phone forgets its token and goes back to Join.
 
@@ -164,7 +164,7 @@ There is no `player:pending` event: the phone shows an in-character waiting line
 - `admin:command { type: 'start'|'pause'|'resume'|'reveal'|'end'|'reset' }` → ack `{ ok: true }` or `{ ok: false, error }`
 - `admin:kick { playerId }`, `admin:rename { playerId, nickname }` → same ack. Rename runs the same nickname rules as join (`security/nickname.ts`).
 - `admin:config { cooldownMs, maxMessages, llmMode }` → same ack. Cooldown 0–60 s, cap 1–500, `mock` | `live`; Live is refused when the server has no `ANTHROPIC_API_KEY`. Saved on the current game.
-- server → admin: `admin:state { status, elapsedMs, players: [{ id, nickname, floor, score, messagesSent, kicked }], settings: { cooldownMs, maxMessages, llmMode }, liveAvailable, health: { queued, inFlight, rateLimited1m, avgReplyMs, callsLastMin, estInputLastMin, maxOutputLastMin, memoryMb }, spendUsd, budgetUsd, budgetAlert }`, throttled like the projector, and refreshed every 5 s so the last-minute tiles age out. Never tokens, token hashes, runes or raw replies.
+- server → admin: `admin:state { status, elapsedMs, players: [{ id, nickname, floor, score, messagesSent, kicked }], settings: { cooldownMs, maxMessages, llmMode }, liveAvailable, health: { queued, inFlight, rateLimited1m, crowded1m, avgReplyMs, callsLastMin, estInputLastMin, maxOutputLastMin, memoryMb }, spendUsd, budgetUsd, budgetAlert }`, throttled like the projector, and refreshed every 5 s so the last-minute tiles age out. Never tokens, token hashes, runes or raw replies.
 - M7 adds `admin:moderate { eventId, approve }` and the moderation queue.
 
 **Per-address limits** (`sockets/clientIp.ts`). Behind the Cloudflare tunnel every socket comes from cloudflared on the laptop, so the visitor's address is the `cf-connecting-ip` header, trusted only when the socket itself comes from loopback; otherwise the socket's own address. This is only safe because cloudflared sets that header itself. Behind any other local proxy (Caddy on Oracle) a player could send a fake `cf-connecting-ip`: there, strip the header in the proxy or read `X-Forwarded-For` instead.
@@ -236,11 +236,12 @@ This keeps the static block byte-identical across all players, so one cache entr
 
 Every call from every phone goes through one queue, in front of the mock or live client that the game's `llm_mode` selects.
 - Per model, three buckets refilled continuously, each holding one minute's worth: requests (`RATE_RPM`), input tokens (`RATE_ITPM`), output tokens (`RATE_OTPM`), set to **80%** of the account limits (1,000 / 500K / 80K per minute) via env.
-- Before sending, a call reserves 1 request, `estimatedInput = (player note + messages chars) / 4` (the uncached part) and `max_tokens`. After the reply it reconciles with real usage: input = `input_tokens + cache_creation_input_tokens` (cache reads don't count toward the limit), output = `output_tokens`. Unused tokens go back; extra use becomes debt that delays the next call. A failed call gives its tokens back.
+- Before sending, a call reserves 1 request, `estimatedInput = (player note + messages chars) / 2.5` (the uncached part; calibrated on the M3 live check, where chars/4 came out 1.5× too low, so a burst's reservations stay at or above real use) and `max_tokens`. After the reply it reconciles with real usage: input = `input_tokens + cache_creation_input_tokens` (cache reads don't count toward the limit), output = `output_tokens`. Unused tokens go back; extra use becomes debt that delays the next call. A failed call gives its tokens back.
 - First in, first out: nobody overtakes the head of the line. Priorities: player calls first; background calls (technique tagger, Carver) only when no player call is waiting.
 - Max 30 calls in flight.
 - **Retries live in the queue, not the SDK** (`maxRetries: 0`), so the queue sees every 429: a 429 pauses that whole model for `retry-after` (counted for the "Rate-limited, last minute" tile); 5xx/529 and dropped connections back off 1 s, then 2 s. At most 2 retries.
-- **Deadline: 60 s per call from joining the queue.** It aborts the request (`AbortSignal`) and answers the player in character ("The dungeon is crowded…") with the cooldown refunded. Each attempt also has the SDK's 30 s timeout. A player has at most one message waiting at a time, so the queue never holds more than one call per player.
+- **Turned away early:** when a call joins, the queue estimates its wait from the calls ahead of it and the bucket levels. If that wait plus 10 s (the least time a call needs) is past the deadline, it is rejected at once as `crowded`, instead of after 60 s. A call that reaches the front with less than 10 s left is turned away too rather than started, since the deadline would cancel it (and live mode would still pay). Every turn-away counts toward the "Crowded, last minute" admin tile.
+- **Deadline: 60 s per call from joining the queue**, the backstop for what the estimate misses (a hanging call, the in-flight cap). It aborts the request (`AbortSignal`) and answers the player in character ("The dungeon is crowded…") with the cooldown refunded. Each attempt also has the SDK's 30 s timeout. A player has at most one message waiting at a time, so the queue never holds more than one call per player.
 - Every call writes a row to `llm_calls` with tokens and cost (prices in `config/models.ts`; check claude.com/pricing before demo day). After each call, if spend crossed `BUDGET_USD`, the game pauses itself once and the admin sees an alert; the admin may resume on purpose.
 
 ### Mock mode (`LLM_MODE=mock`)
@@ -317,7 +318,7 @@ All pure, all unit-tested.
 | Problem | What happens |
 |---|---|
 | Burst of 429s | The queue pauses that model for `retry-after` and retries; players see waiting lines. Admin can raise the cooldown live. |
-| Demand above the rate limit | The queue slows everyone down; a call still waiting after 60 s gets "The dungeon is crowded…" and a refunded turn. |
+| Demand above the rate limit | The queue slows everyone down; a call that can't be answered within 60 s gets "The dungeon is crowded…" straight away and a refunded turn. The admin's "Crowded, last minute" tile shows it: raise the cooldown. |
 | API down | In-character error bubbles; admin pauses the game; the projector shows "The dungeon sleeps". |
 | Budget reached | Auto-pause at `BUDGET_USD`, admin alert. |
 | Server crash | `npm run tunnel` restarts only the server after 2 s, on the same address (gives up after 5 restarts in a minute). SQLite keeps state and settings; phones reconnect and `player:resume` with their token. In-flight replies are lost; player retries. |

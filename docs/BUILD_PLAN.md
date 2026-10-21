@@ -72,6 +72,7 @@ Every milestone is done only when its acceptance criteria are met and `npm run c
 **Decisions made in M3**
 - Retries moved from the SDK into the queue, so every 429 is seen, counted and pauses the whole model for `retry-after`.
 - 60 s deadline per call from joining the queue; then an in-character "crowded" error with the turn refunded.
+- After the load-tester report: a call is turned away as "crowded" at once when the estimated wait is already past the deadline, and never started with under 10 s left; the 60 s deadline stays as the backstop. The admin has a "Crowded, last minute" tile. The input-token estimate is chars/2.5 (calibrated on the live check, where chars/4 was 1.5× too low).
 - Live settings (cooldown, cap, mock/live) are stored on the game. `.env` only seeds the first game; Reset copies them into the next game; a restart keeps them. The admin header shows a large MOCK / LIVE badge.
 - The budget auto-pause fires once per game; the admin may resume on purpose.
 - Kicked phones remember the kick for 3 hours and show a "sent away" screen instead of the join form. Clearing the browser still gets round it; the per-address join limit slows that, and the admin can kick again. Banning addresses was ruled out: the class shares one IP.
@@ -112,7 +113,7 @@ Every milestone is done only when its acceptance criteria are met and `npm run c
 **Acceptance**
 - Playtest checklist passes. At least 7 of 10 generated riddles are solvable by a friend.
 - Every earlier floor's winning approach is sealed or refused.
-- Second load test (mock mode) still clean with up to 3 calls per message.
+- Second load test (mock mode) still clean with up to 3 calls per message: re-run the `load-tester` agent's three scenarios (normal 40 × 5 min, the "go" burst, overload at `RATE_RPM=30`) with players spread over floors 4–6 (the M3 report estimated ~480 RPM there, under the 800 limit). Also confirm a cache read on the real Grub prompt in `npm run playtest -- --floor 1` (without the cache, input use rises to ~41% of the limit).
 
 ## M7 — Hints, moderation, polish
 
