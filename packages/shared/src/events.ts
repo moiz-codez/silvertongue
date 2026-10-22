@@ -41,7 +41,9 @@ export interface PlayerState {
   title: string;
   messagesLeft: number;
   cooldownMs: number;
+  doorCooldownMs: number; // after a wrong guess, the door waits as long as the send button
   doorLockedMs: number;
+  notes: string[]; // the notes on the wall unlocked on this floor (0, 1 or 2)
 }
 
 export interface FloorCleared {
@@ -83,7 +85,7 @@ export interface ServerToClientEvents {
 
 export interface FeedItem {
   gameMs: number; // time in the dungeon when it happened
-  type: 'first_blood' | 'clear';
+  type: 'first_blood' | 'clear' | 'note'; // note: "A note has appeared on Floor N." (never the note)
   text: string;
 }
 

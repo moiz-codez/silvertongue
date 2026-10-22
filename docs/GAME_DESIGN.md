@@ -39,8 +39,10 @@ Each floor beats the previous floor's trick on purpose, so no single trick clear
 - While a reply is pending, show an in-character waiting line (e.g. "Grub is chewing a mushroom…"), never a spinner with an error.
 
 ### Hints ("notes on the wall")
-- A failed try = a player message on that floor or a wrong door guess.
-- After 10 failed tries on a floor: note 1 appears. After 20: note 2. Text in each prompt file.
+- A failed try = a player message on that floor or a wrong door guess. Only messages that count against the message cap count: a refusal retry, a guard that couldn't judge, or a "crowded" turn-away is not a try. A guess while the door is locked is not a try either.
+- Wrong guesses share the message cooldown: after a wrong guess the door button counts down like the send button, and a guess sent sooner is refused and not counted. So spamming the door can't unlock the notes in seconds.
+- After 10 failed tries on a floor: note 1 appears. After 20: note 2. Text in each prompt file (kept in `game/hints.ts`). Notes are worked out from the saved count, so they come back after a refresh.
+- The phone shows them in a small "scratched on the wall" panel; a new note glows once. The projector feed says "A note has appeared on Floor N." the first time anyone unlocks one on that floor, never the note itself.
 
 ### Scoring
 - Clearing floor n: `100 × n` points.

@@ -34,11 +34,15 @@ export function registerProjector(io: PlayerServer, ctx: GameContext): () => voi
         .filter((p) => !p.kicked)
         .map((p) => ({ nickname: p.nickname, floor: p.floor })),
       // Server-written words around a filtered nickname. No player-typed text, ever.
-      feed: q.listProjectorEvents(db, game.id, FEED_LENGTH).map((e) => ({
-        gameMs: e.game_ms,
-        type: e.type === 'first_blood' ? 'first_blood' : 'clear',
-        text: GUARDIANS[e.floor]?.clearedBy(e.nickname) ?? '',
-      })),
+      feed: q.listProjectorEvents(db, game.id, FEED_LENGTH).map((e) =>
+        e.type === 'note'
+          ? { gameMs: e.game_ms, type: 'note', text: `A note has appeared on Floor ${e.floor}.` }
+          : {
+              gameMs: e.game_ms,
+              type: e.type === 'first_blood' ? 'first_blood' : 'clear',
+              text: GUARDIANS[e.floor]?.clearedBy(e.nickname) ?? '',
+            },
+      ),
       wards: q.countWardSeals(db, game.id), // counts only, never text
     };
   }

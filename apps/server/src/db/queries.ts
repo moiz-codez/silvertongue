@@ -236,13 +236,25 @@ export function insertProjectorEvent(
   ).run(e.gameId, e.playerId, e.floor, e.type, e.gameMs, e.now);
 }
 
-// Newest first. Kicked players' lines disappear from the projector.
+// "A note has appeared on Floor N": once per floor per game, whoever unlocked it first.
+export function insertNoteEventOnce(
+  db: Db,
+  e: { gameId: string; playerId: string; floor: number; gameMs: number; now: number },
+): void {
+  db.prepare(
+    `INSERT INTO projector_events (game_id, player_id, floor, type, game_ms, created_at)
+     SELECT ?, ?, ?, 'note', ?, ?
+     WHERE NOT EXISTS (SELECT 1 FROM projector_events WHERE game_id = ? AND floor = ? AND type = 'note')`,
+  ).run(e.gameId, e.playerId, e.floor, e.gameMs, e.now, e.gameId, e.floor);
+}
+
+// Newest first. Kicked players' lines disappear from the projector (a note line names nobody).
 export function listProjectorEvents(db: Db, gameId: string, limit: number): ProjectorEventRow[] {
   return db
     .prepare(
       `SELECT e.type, e.floor, e.game_ms, p.nickname FROM projector_events e
        JOIN players p ON p.id = e.player_id
-       WHERE e.game_id = ? AND p.kicked = 0 ORDER BY e.id DESC LIMIT ?`,
+       WHERE e.game_id = ? AND (p.kicked = 0 OR e.type = 'note') ORDER BY e.id DESC LIMIT ?`,
     )
     .all(gameId, limit) as ProjectorEventRow[];
 }
