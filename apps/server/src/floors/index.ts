@@ -1,11 +1,22 @@
 // Which pipeline answers on each built floor. The socket handler picks from here by floor number.
+import type { Speaker } from '@silvertongue/shared/events';
 import type { RoleName } from '../config/models.ts';
 import type { Complete, LlmResult } from '../llm/client.ts';
 import { grubTurn } from './01-grub/pipeline.ts';
 import { vellumTurn } from './02-vellum/pipeline.ts';
 import { morwenTurn } from './03-morwen/pipeline.ts';
-import { gormJudge, mumbleTurn, type GuardResult } from './04-ogre/pipeline.ts';
+import { gormJudge, mumbleTurn } from './04-ogre/pipeline.ts';
+import type { JudgeResult } from './judge.ts';
 import type { Turn } from './messages.ts';
+
+// An input guard (Floor 4 Gorm, Floor 5 Ward of Ears): judges the player's message before the
+// guardian hears it. `earlier` is everything said on this floor so far, sealed messages included.
+export interface InputGuard {
+  role: RoleName;
+  speaker: Speaker; // whose bubble a block shows as
+  blockedVerdict: 'SMASH' | 'SEAL'; // stored on the player's message for a real block
+  judge: (complete: Complete, text: string, earlier: Turn[]) => Promise<JudgeResult>;
+}
 
 export interface FloorReply {
   text: string; // the post-filter text: the only version that may leave the server
@@ -20,7 +31,7 @@ export const FLOOR_TURNS: Record<
     role: RoleName;
     turn: (complete: Complete, history: Turn[], rune: string) => Promise<FloorReply>;
     lostWords: string; // in character, when the API refused the reply twice
-    guard?: (complete: Complete, text: string) => Promise<GuardResult>; // input guard (Floor 4)
+    guard?: InputGuard;
   }
 > = {
   1: {
@@ -41,7 +52,12 @@ export const FLOOR_TURNS: Record<
   4: {
     role: 'mumble',
     turn: mumbleTurn,
-    guard: gormJudge,
+    guard: {
+      role: 'gorm',
+      speaker: 'gorm',
+      blockedVerdict: 'SMASH',
+      judge: (complete, text) => gormJudge(complete, text),
+    },
     lostWords: 'mmm... Mumble fell asleep... say it again?',
   },
 };

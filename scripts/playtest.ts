@@ -10,7 +10,7 @@ import { costUsd, MODELS, ROLES } from '../apps/server/src/config/models.ts';
 import { GRUB_PROMPT } from '../apps/server/src/floors/01-grub/prompts.ts';
 import { VELLUM_PROMPT } from '../apps/server/src/floors/02-vellum/prompts.ts';
 import { MORWEN_PROMPT } from '../apps/server/src/floors/03-morwen/prompts.ts';
-import type { GuardResult } from '../apps/server/src/floors/04-ogre/pipeline.ts';
+import type { JudgeResult } from '../apps/server/src/floors/judge.ts';
 import { GORM_PROMPT, MUMBLE_PROMPT } from '../apps/server/src/floors/04-ogre/prompts.ts';
 import { FLOOR_TURNS, type FloorReply } from '../apps/server/src/floors/index.ts';
 import type { Turn } from '../apps/server/src/floors/messages.ts';
@@ -515,18 +515,18 @@ async function say(
   history: Turn[],
   rune: string,
   line: string,
-): Promise<{ text: string; reply: FloorReply; gorm?: GuardResult['outcome'] }> {
+): Promise<{ text: string; reply: FloorReply; gorm?: JudgeResult['outcome'] }> {
   const text = sanitize(line, MAX_MESSAGE_CHARS); // same cleaning the server applies
   playerMessages++;
   // Floor 4, as the server does: Gorm judges the message alone first (asked once more if his
   // answer can't be read). Anything but PASS never reaches Mumble or his history.
-  let gorm: GuardResult['outcome'] | undefined;
+  let gorm: JudgeResult['outcome'] | undefined;
   if (guard) {
     let judged = await judge(text);
     if (judged.outcome === 'unparseable') judged = await judge(text);
     gorm = judged.outcome;
     if (gorm !== 'pass') {
-      const shown = `[Gorm${gorm === 'unparseable' ? ', unreadable twice' : ''}] ${judged.growl}`;
+      const shown = `[Gorm${gorm === 'unparseable' ? ', unreadable twice' : ''}] ${judged.line}`;
       return { text, gorm, reply: { text: shown, slipped: false, result: judged.result } };
     }
   }
@@ -561,8 +561,8 @@ function tally(callRole: string, result: FloorReply['result']) {
   r.cost += cost;
 }
 
-async function judge(text: string): Promise<GuardResult> {
-  const judged = await guard!(complete, text);
+async function judge(text: string): Promise<JudgeResult> {
+  const judged = await guard!.judge(complete, text, []);
   tally('gorm', judged.result);
   if (judged.result.stopReason === 'refusal') style.refusals++;
   return judged;
@@ -607,7 +607,7 @@ async function trial(scenario: Scenario): Promise<{ verdict: Verdict; log: strin
   let claimedWin = false;
   const flagged: string[] = [];
   const letters: string[] = [];
-  const gormSaid: (GuardResult['outcome'] | undefined)[] = [];
+  const gormSaid: (JudgeResult['outcome'] | undefined)[] = [];
 
   for (const [i, line] of lines.entries()) {
     let said;
@@ -658,7 +658,7 @@ async function trial(scenario: Scenario): Promise<{ verdict: Verdict; log: strin
     };
   } else if (scenario.mustSmash) {
     // Only a real SMASH counts: an unreadable answer blocks too, but isn't Gorm's judgement.
-    const missed = scenario.mustSmash.filter((n) => gormSaid[n - 1] !== 'smash');
+    const missed = scenario.mustSmash.filter((n) => gormSaid[n - 1] !== 'blocked');
     const problems = [
       missed.length &&
         `Gorm did not smash message ${missed.join(', ')} (${missed.map((n) => gormSaid[n - 1] ?? 'not sent').join(', ')})`,

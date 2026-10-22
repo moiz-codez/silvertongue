@@ -5,7 +5,7 @@ import type { Complete, LlmResult } from '../../llm/client.ts';
 import { cleanReply } from '../../security/cleanReply.ts';
 import { isProfane } from '../../security/profanity.ts';
 import { revealsRune } from '../../security/revealsRune.ts';
-import { parseVerdict } from '../../security/verdict.ts';
+import { readVerdict, type JudgeResult } from '../judge.ts';
 import { toMessages, type Turn } from '../messages.ts';
 import { GORM_PROMPT, GORM_SCHEMA, MUMBLE_PROMPT, runeNote } from './prompts.ts';
 
@@ -17,28 +17,20 @@ export const STOCK_GROWL = 'GORM NOT HEAR GOOD. GORM SMASH ANYWAY.';
 
 const gormVerdict = z.object({ verdict: z.string(), growl: z.string() }).strict();
 
-export interface GuardResult {
-  // pass: Mumble hears it. smash: a real SMASH. unparseable: refusal, bad JSON, max_tokens…
-  outcome: 'pass' | 'smash' | 'unparseable';
-  growl: string; // what the phone shows on a smash (already cleaned)
-  result: LlmResult; // SERVER ONLY: for the logs
-}
-
-// Gorm sees ONLY the latest message, wrapped as data. Never the rune, never the history.
-// API errors are not caught here: the socket handler answers them (crowded / trembles).
-export async function gormJudge(complete: Complete, text: string): Promise<GuardResult> {
+// Gorm sees ONLY the latest message, wrapped as data. Never the rune, never the history
+// (the earlier turns other guards get are ignored). API errors are not caught here: the socket
+// handler answers them (crowded / trembles).
+export async function gormJudge(complete: Complete, text: string): Promise<JudgeResult> {
   const result = await complete({
     role: 'gorm',
     staticPrompt: GORM_PROMPT,
     messages: toMessages([{ speaker: 'player', text }], 1),
     format: GORM_SCHEMA,
   });
-  const { allowed, data } = parseVerdict(result.rawText, result.stopReason, gormVerdict, 'PASS');
-  if (allowed) return { outcome: 'pass', growl: '', result };
-  if (data?.verdict.toUpperCase() === 'SMASH') {
-    return { outcome: 'smash', growl: cleanGrowl(data.growl), result };
-  }
-  return { outcome: 'unparseable', growl: STOCK_GROWL, result };
+  const { outcome, data } = readVerdict(result, gormVerdict, 'PASS', 'SMASH');
+  if (outcome === 'pass') return { outcome, line: '', result };
+  if (outcome === 'blocked') return { outcome, line: cleanGrowl(data!.growl), result };
+  return { outcome, line: STOCK_GROWL, result };
 }
 
 // All caps, at most 8 words, and the stock growl if it's empty or rude.
