@@ -10,6 +10,7 @@ import type {
   AdminSettings,
   AdminState,
   GameStatus,
+  ModerationItem,
 } from '@silvertongue/shared/events';
 import { clock } from '../clock.ts';
 import { useNow } from '../useGame.ts';
@@ -292,7 +293,66 @@ function Dashboard({
           onApply={(next) => socket.emitWithAck('admin:config', next)}
         />
       </div>
+      <ModerationPanel
+        items={state.moderation}
+        onModerate={async (id, action) =>
+          show(await socket.emitWithAck('admin:moderate', { id, action }))
+        }
+      />
     </main>
+  );
+}
+
+// Winning messages, newest first. Approve puts one on the projector's wall; Hide removes it for good.
+function ModerationPanel({
+  items,
+  onModerate,
+}: {
+  items: ModerationItem[];
+  onModerate: (id: number, action: 'approve' | 'hide') => void;
+}) {
+  const waiting = items.filter((item) => item.status === 'pending').length;
+  return (
+    <section className="admin-panel moderation">
+      <h2>
+        Best attempts <small className="kicked-count">· {waiting} waiting</small>
+      </h2>
+      {items.length === 0 ? (
+        <p className="admin-empty">Winning messages appear here when someone clears a floor.</p>
+      ) : (
+        <ul className="moderation-list">
+          {items.map((item) => (
+            <li key={item.id} className={`moderation-item ${item.status}`}>
+              <p className="moderation-text">“{item.text}”</p>
+              <p className="moderation-meta">
+                {item.nickname} · Floor {item.floor} ·{' '}
+                {new Date(item.createdAt).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+                {item.status === 'approved' && ' · on the wall'}
+              </p>
+              <div className="row-actions">
+                {item.status === 'pending' && (
+                  <button
+                    className="admin-button small primary"
+                    onClick={() => onModerate(item.id, 'approve')}
+                  >
+                    Approve
+                  </button>
+                )}
+                <button
+                  className="admin-button small plain"
+                  onClick={() => onModerate(item.id, 'hide')}
+                >
+                  Hide
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

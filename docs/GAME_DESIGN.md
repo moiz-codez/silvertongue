@@ -39,8 +39,10 @@ Each floor beats the previous floor's trick on purpose, so no single trick clear
 - While a reply is pending, show an in-character waiting line (e.g. "Grub is chewing a mushroom…"), never a spinner with an error.
 
 ### Hints ("notes on the wall")
-- A failed try = a player message on that floor or a wrong door guess.
-- After 10 failed tries on a floor: note 1 appears. After 20: note 2. Text in each prompt file.
+- A failed try = a player message on that floor or a wrong door guess. Only messages that count against the message cap count: a refusal retry, a guard that couldn't judge, or a "crowded" turn-away is not a try. A guess while the door is locked is not a try either.
+- Wrong guesses share the message cooldown: after a wrong guess the door button counts down like the send button, and a guess sent sooner is refused and not counted. So spamming the door can't unlock the notes in seconds.
+- After 10 failed tries on a floor: note 1 appears. After 20: note 2. Text in each prompt file (kept in `game/hints.ts`). Notes are worked out from the saved count, so they come back after a refresh.
+- The phone shows them in a small "scratched on the wall" panel; a new note glows once. The projector feed says "A note has appeared on Floor N." the first time anyone unlocks one on that floor, never the note itself.
 
 ### Scoring
 - Clearing floor n: `100 × n` points.
@@ -66,7 +68,9 @@ Each floor beats the previous floor's trick on purpose, so no single trick clear
 1. **Join:** nickname (2–16 chars, profanity-filtered, unique per game) → Enter. No account, no login. A session token is stored in `localStorage` so a refresh rejoins the same player.
 2. **Lobby:** "Waiting for the dungeon to open…" until the admin starts the game.
 3. **Play:** guardian portrait (current expression) and name; chat log; message box with cooldown; door box; floor number, score and title; the wall note when unlocked.
-4. **Floor cleared:** short celebration with the guardian's slip-up face, then the next floor.
+4. **Floor cleared:** short celebration with the guardian's slip-up face, points and new title, then the next floor: automatically after about 3 s ("Descending in 3…"), or at once on a tap. If the next floor isn't built yet, the screen stays.
+
+Phone polish rules: nothing scrolls sideways at 360 px, every button and input is at least 44 × 44 px, and the send and door buttons show their cooldown countdown. On the projector, every text colour keeps at least 7:1 contrast against its background (3:1 for the ward glows), reached by shading the existing colours lighter, not by changing hues.
 
 Phones are the main target: design for 360–430 px wide, large touch targets, works on slow mobile data (small bundle, no heavy assets).
 
@@ -80,7 +84,7 @@ Phones are the main target: design for 360–430 px wide, large touch targets, w
 - Start / pause / resume / start reveal / end / reset game.
 - Live config: cooldown, message cap, LLM mode (mock/live).
 - Player list: kick, rename.
-- Moderation queue: approve or reject attempts for the projector's "best attempts" wall.
+- Moderation queue: approve or hide attempts for the projector's "best attempts" wall. When a player clears a floor, their last message on that floor (never the guardian's reply) is queued with their name, the floor and the time, unless it trips the nickname profanity filter or contains their rune or either of its words (then it is dropped). Approved items appear on the wall (at most 5, newest first); hidden ones never leave the server again. The queue is saved in the database, so it survives a restart; Reset starts an empty one.
 - Health: queue length, recent 429s, average reply time, tokens and estimated spend this game.
 
 ## The reveal (the actual presentation)

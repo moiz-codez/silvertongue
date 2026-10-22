@@ -4,7 +4,7 @@ import Database from 'better-sqlite3';
 
 export type Db = Database.Database;
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 // Steps that bring an older file up to date. Key = the version the step upgrades FROM.
 const MIGRATIONS: Record<number, string> = {
@@ -23,6 +23,17 @@ const MIGRATIONS: Record<number, string> = {
     ALTER TABLE games ADD COLUMN max_messages INTEGER;
     ALTER TABLE games ADD COLUMN llm_mode TEXT;
     ALTER TABLE games ADD COLUMN budget_alert_at INTEGER;`,
+  // The moderation queue for the best-attempts wall.
+  3: `
+    CREATE TABLE attempts (                  -- winning messages waiting for the admin (M7)
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      game_id TEXT NOT NULL,
+      player_id TEXT NOT NULL REFERENCES players(id),
+      floor INTEGER NOT NULL,
+      text TEXT NOT NULL,                     -- the player's own (sanitized) message
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','hidden')),
+      created_at INTEGER NOT NULL
+    );`,
 };
 
 // Opens (or creates) the database file. Pass ':memory:' in tests.

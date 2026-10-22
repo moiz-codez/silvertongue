@@ -652,3 +652,58 @@
   color: var(--color-accent);
   text-align: center;
 }
+
+/* Notes on the wall: a small scratched panel under the guardian. A new note glows once. */
+.wall-notes {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-field);
+  border-top: 1px dashed var(--color-border-strong);
+  border-bottom: 1px dashed var(--color-border-strong);
+}
+
+.wall-notes-label {
+  margin: 0 0 var(--space-1);
+  font-family: var(--font-heading);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.wall-note {
+  margin: 0;
+  font-size: 14px;
+  font-style: italic;
+  color: var(--color-muted);
+  border-radius: 6px;
+}
+
+.wall-note + .wall-note {
+  margin-top: var(--space-1);
+}
+
+.wall-note.fresh {
+  animation: note-glow 2.5s ease-out;
+}
+
+@keyframes note-glow {
+  from {
+    color: var(--color-text);
+    background: rgb(232 163 61 / 0.25);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wall-note.fresh {
+    animation: none;
+    color: var(--color-text);
+  }
+}
+
+.auto-continue {
+  margin: var(--space-2) 0 0;
+  text-align: center;
+  font-size: 14px;
+  color: var(--color-muted);
+}

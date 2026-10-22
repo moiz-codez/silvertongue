@@ -236,15 +236,85 @@ export function insertProjectorEvent(
   ).run(e.gameId, e.playerId, e.floor, e.type, e.gameMs, e.now);
 }
 
-// Newest first. Kicked players' lines disappear from the projector.
+// "A note has appeared on Floor N": once per floor per game, whoever unlocked it first.
+export function insertNoteEventOnce(
+  db: Db,
+  e: { gameId: string; playerId: string; floor: number; gameMs: number; now: number },
+): void {
+  db.prepare(
+    `INSERT INTO projector_events (game_id, player_id, floor, type, game_ms, created_at)
+     SELECT ?, ?, ?, 'note', ?, ?
+     WHERE NOT EXISTS (SELECT 1 FROM projector_events WHERE game_id = ? AND floor = ? AND type = 'note')`,
+  ).run(e.gameId, e.playerId, e.floor, e.gameMs, e.now, e.gameId, e.floor);
+}
+
+// Newest first. Kicked players' lines disappear from the projector (a note line names nobody).
 export function listProjectorEvents(db: Db, gameId: string, limit: number): ProjectorEventRow[] {
   return db
     .prepare(
       `SELECT e.type, e.floor, e.game_ms, p.nickname FROM projector_events e
        JOIN players p ON p.id = e.player_id
-       WHERE e.game_id = ? AND p.kicked = 0 ORDER BY e.id DESC LIMIT ?`,
+       WHERE e.game_id = ? AND (p.kicked = 0 OR e.type = 'note') ORDER BY e.id DESC LIMIT ?`,
     )
     .all(gameId, limit) as ProjectorEventRow[];
+}
+
+// ---------- the best-attempts wall ----------
+
+export interface AttemptRow {
+  id: number;
+  floor: number;
+  text: string;
+  status: 'pending' | 'approved';
+  created_at: number;
+  nickname: string; // the player's name NOW
+}
+
+export function insertAttempt(
+  db: Db,
+  a: { gameId: string; playerId: string; floor: number; text: string; now: number },
+): void {
+  db.prepare(
+    'INSERT INTO attempts (game_id, player_id, floor, text, created_at) VALUES (?, ?, ?, ?, ?)',
+  ).run(a.gameId, a.playerId, a.floor, a.text, a.now);
+}
+
+// For the admin: everything not hidden (hidden rows are never selected again), newest first.
+export function listAttemptsForAdmin(db: Db, gameId: string, limit = 50): AttemptRow[] {
+  return db
+    .prepare(
+      `SELECT a.id, a.floor, a.text, a.status, a.created_at, p.nickname FROM attempts a
+       JOIN players p ON p.id = a.player_id
+       WHERE a.game_id = ? AND a.status != 'hidden' AND p.kicked = 0
+       ORDER BY a.id DESC LIMIT ?`,
+    )
+    .all(gameId, limit) as AttemptRow[];
+}
+
+// For the projector: approved only, newest first, kicked players left out.
+export function listApprovedAttempts(db: Db, gameId: string, limit: number): AttemptRow[] {
+  return db
+    .prepare(
+      `SELECT a.id, a.floor, a.text, a.status, a.created_at, p.nickname FROM attempts a
+       JOIN players p ON p.id = a.player_id
+       WHERE a.game_id = ? AND a.status = 'approved' AND p.kicked = 0
+       ORDER BY a.id DESC LIMIT ?`,
+    )
+    .all(gameId, limit) as AttemptRow[];
+}
+
+// Only this game's rows, and never a hidden one back: hidden is final. True if a row changed.
+export function setAttemptStatus(
+  db: Db,
+  gameId: string,
+  id: number,
+  status: 'approved' | 'hidden',
+): boolean {
+  return (
+    db
+      .prepare("UPDATE attempts SET status = ? WHERE id = ? AND game_id = ? AND status != 'hidden'")
+      .run(status, id, gameId).changes > 0
+  );
 }
 
 // ---------- floor progress ----------

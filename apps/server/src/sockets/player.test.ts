@@ -179,6 +179,32 @@ describe('Floor 1, end to end in mock mode', () => {
     expect(loggedStatuses(db)).toEqual(['refusal', 'refusal']);
   });
 
+  it('never sends an empty bubble: a reply cleaned down to nothing is the lost-words line', async () => {
+    // Like a Floor 5 reply that was only "Queen Ashveil:" before her name was dropped.
+    const blank: Complete = async (req) => ({
+      text: ' \n ',
+      rawText: ' \n ',
+      stopReason: 'end_turn',
+      model: ROLES[req.role].model,
+      usage: { input_tokens: 10, output_tokens: 5 },
+      latencyMs: 0,
+    });
+    const { url } = await startServer({}, blank);
+    const { socket, seen } = client(url);
+    await join(socket, 'Ali');
+    let errored = false;
+    socket.on('player:error', () => (errored = true));
+    const error = next(socket, 'player:error');
+    const stateAfterError = next(socket, 'player:state', () => errored);
+    socket.emit('player:message', { text: 'hi' });
+    expect((await error).code).toBe('refused');
+    expect((await stateAfterError).messagesLeft).toBe(150); // not counted against the cap
+    const guardianBubbles = seen.filter(
+      (s) => s.event === 'player:bubble' && (s.payload as { speaker: string }).speaker !== 'player',
+    );
+    expect(guardianBubbles).toEqual([]);
+  });
+
   it('answers an API failure in character and refunds the turn', async () => {
     const failing: Complete = async () => {
       throw new Error('API down');

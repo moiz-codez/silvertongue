@@ -26,6 +26,7 @@ import { SEALED } from '../floors/05-ashveil/pipeline.ts';
 import type { JudgeResult } from '../floors/judge.ts';
 import type { Turn } from '../floors/messages.ts';
 import { checkDoor } from '../game/door.ts';
+import { HINT_AT, unlockedNotes } from '../game/hints.ts';
 import { generateRunes } from '../game/runes.ts';
 import { scoreFloorClear } from '../game/scoring.ts';
 import { elapsedMs } from '../game/state.ts';
@@ -34,7 +35,8 @@ import type { AdminReply } from '@silvertongue/shared/events';
 import { DeadlineError, errorStatus, RefusalError, type Complete } from '../llm/client.ts';
 import type { QueueStats } from '../llm/queue.ts';
 import { cleanNickname, NICKNAME_TAKEN, nicknameProblem } from '../security/nickname.ts';
-import { revealsRune } from '../security/revealsRune.ts';
+import { isProfane } from '../security/profanity.ts';
+import { revealsRune, saysRuneWord } from '../security/revealsRune.ts';
 import { sanitize } from '../security/sanitize.ts';
 import { clientIp, slidingLimit } from './clientIp.ts';
 import { throttle } from './throttle.ts';
@@ -79,6 +81,9 @@ const hashToken = (token: string) => createHash('sha256').update(token).digest('
 export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): PhoneControls {
   const { db, env, complete } = ctx;
   const cooldownUntil = new Map<string, number>(); // playerId → time the next message is allowed
+  // After a wrong guess, the next guess waits as long as the next message would: wrong guesses
+  // count as failed tries, so spamming the door can't unlock the notes in seconds.
+  const doorCooldownUntil = new Map<string, number>();
   const busy = new Set<string>(); // players waiting for a reply: one message at a time
   const joinsByIp = slidingLimit(env.JOIN_LIMIT_PER_MIN, 60_000); // slows down name-squatting scripts
 
@@ -96,6 +101,8 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
       title: titleFor(player.floor - 1),
       messagesLeft: Math.max(0, ctx.game.max_messages - player.messages_sent),
       cooldownMs: Math.max(0, (cooldownUntil.get(playerId) ?? 0) - now),
+      doorCooldownMs: Math.max(0, (doorCooldownUntil.get(playerId) ?? 0) - now),
+      notes: progress ? unlockedNotes(player.floor, progress.failed_tries) : [],
       doorLockedMs: Math.max(0, (progress?.door_locked_until ?? 0) - now),
     };
   }
@@ -124,6 +131,20 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
       (r) => r.speaker === 'guardian' && revealsRune(r.text, rune).revealed,
     );
     socket.emit('player:expression', { floor: player.floor, state: slipped ? 'slipped' : 'idle' });
+  }
+
+  // After every failed try: the first note unlocked on a floor in this game puts one line on the
+  // projector ("A note has appeared on Floor 3."), never the note itself.
+  function afterFailedTry(playerId: string, floor: number): void {
+    if (q.getProgress(db, playerId, floor).failed_tries < HINT_AT[0]) return;
+    const now = Date.now();
+    q.insertNoteEventOnce(db, {
+      gameId: ctx.game.id,
+      playerId,
+      floor,
+      gameMs: elapsedMs(ctx.game, now),
+      now,
+    });
   }
 
   function phoneSockets(): PlayerSocket[] {
@@ -350,7 +371,10 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
                 playerMessageId,
                 blocked ? guard.blockedVerdict : 'GUARD_ERROR',
               );
-              if (blocked) q.countPlayerMessage(db, id, floor);
+              if (blocked) {
+                q.countPlayerMessage(db, id, floor);
+                afterFailedTry(id, floor);
+              }
               sideBubble(guard.speaker, verdict.line);
               return;
             }
@@ -362,12 +386,15 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
               [...history, { speaker: 'player', text }],
               rune,
             );
-            const refused = reply.result.stopReason === 'refusal';
-            logCall(gameId, id, floor, floorTurn.role, reply.result, refused ? 'refusal' : 'ok');
-            return { reply, refused };
+            const blocked = reply.result.stopReason === 'refusal';
+            logCall(gameId, id, floor, floorTurn.role, reply.result, blocked ? 'refusal' : 'ok');
+            // A reply that cleaning left empty (e.g. only "Queen Ashveil:") is never sent as an
+            // empty bubble: it is handled like a refusal.
+            return { reply, refused: blocked || reply.text.trim() === '' };
           };
           // The API's safety classifier sometimes stops a harmless reply mid-word (stop_reason
-          // "refusal"). Its text is thrown away and the call tried once more.
+          // "refusal"), and a reply can be empty after cleaning. Either way its text is thrown
+          // away and the call tried once more; twice gives the guardian's "lost my words" line.
           let { reply: turn, refused } = await ask();
           if (refused) ({ reply: turn, refused } = await ask());
           checkBudget();
@@ -396,7 +423,10 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
             }
           }
 
-          if (seal?.verdict !== 'GUARD_ERROR') q.countPlayerMessage(db, id, floor);
+          if (seal?.verdict !== 'GUARD_ERROR') {
+            q.countPlayerMessage(db, id, floor);
+            afterFailedTry(id, floor);
+          }
           // turn.text is the post-filter text (cleaned, and on Floor 3 snipped): the only version
           // sent. A sealed reply is kept as "[sealed]"; her real words stay in raw_text (server only).
           const shown = seal ? SEALED : turn.text;
@@ -485,10 +515,14 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
         if (!isBuilt(floor)) return sendError(socket, 'not_ready', STAIRS);
 
         const now = Date.now();
+        if (now < (doorCooldownUntil.get(id) ?? 0)) {
+          return sendError(socket, 'door_cooldown', 'The door is still humming. Wait a moment.');
+        }
         const progress = q.getProgress(db, id, floor);
+        const rune = q.getRune(db, id, floor);
         const result = checkDoor(
           parsed.data.guess,
-          q.getRune(db, id, floor),
+          rune,
           { streak: progress.wrong_door_streak, lockedUntil: progress.door_locked_until },
           now,
         );
@@ -505,9 +539,12 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
             lockedUntil: result.next.lockedUntil,
             now,
           });
+          doorCooldownUntil.set(id, now + ctx.game.cooldown_ms);
+          afterFailedTry(id, floor);
           const lockedMs = result.next.lockedUntil === null ? 0 : result.next.lockedUntil - now;
           socket.emit('player:door-result', { correct: false, lockedMs });
           socket.emit('player:state', stateFor(id));
+          ctx.changed(); // a note line may have appeared on the projector
           return;
         }
 
@@ -521,6 +558,20 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
           messagesUsed: progress.messages_used,
           firstBlood,
         });
+        // Their last message on this floor goes to the admin's queue for the best-attempts wall,
+        // unless it is rude or gives away any part of this rune.
+        const winning = q
+          .listFloorMessages(db, id, floor)
+          .filter((m) => m.speaker === 'player')
+          .at(-1)?.text;
+        if (
+          winning &&
+          !isProfane(winning) &&
+          !revealsRune(winning, rune).revealed &&
+          !saysRuneWord(winning, rune)
+        ) {
+          q.insertAttempt(db, { gameId: ctx.game.id, playerId: id, floor, text: winning, now });
+        }
         q.clearFloor(db, { playerId: id, floor, points: score.total, firstBlood, now });
         // The projector turns this into "NightOwl charmed Grub." when it sends the feed.
         q.insertProjectorEvent(db, {
