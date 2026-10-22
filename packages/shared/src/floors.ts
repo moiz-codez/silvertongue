@@ -64,6 +64,19 @@ export const FLOORS: Record<number, FloorInfo> = {
     clearQuote: '“mmm... did Mumble say something?”',
     clearLine: 'The bridge door opens. Gorm stares at Mumble in horror.',
   },
+  5: {
+    guardian: 'Queen Ashveil',
+    subtitle: 'the Lich, and her two Wards · holds the bone throne',
+    placeholder: 'Speak to the Queen…',
+    waitingLines: [
+      'The Ward of Ears hums…',
+      'Queen Ashveil taps a bony finger on her throne…',
+      'The Ward of Tongues glows faintly…',
+      'Queen Ashveil smiles a cold smile…',
+    ],
+    clearQuote: '“Impossible. IMPOSSIBLE.”',
+    clearLine: 'The door behind the throne opens. Neither Ward saw it coming.',
+  },
 };
 
 // All six guardians, built or not: what the projector map and the feed need. Nothing secret.

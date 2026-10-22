@@ -22,6 +22,7 @@ import { costUsd, ROLES, type RoleName } from '../config/models.ts';
 import type { Db } from '../db/db.ts';
 import * as q from '../db/queries.ts';
 import { FLOOR_TURNS } from '../floors/index.ts';
+import { SEALED } from '../floors/05-ashveil/pipeline.ts';
 import type { JudgeResult } from '../floors/judge.ts';
 import type { Turn } from '../floors/messages.ts';
 import { checkDoor } from '../game/door.ts';
@@ -37,6 +38,8 @@ import { revealsRune } from '../security/revealsRune.ts';
 import { sanitize } from '../security/sanitize.ts';
 import { clientIp, slidingLimit } from './clientIp.ts';
 import { throttle } from './throttle.ts';
+
+const SEALED_VERDICTS = new Set(['LEAK', 'GUARD_ERROR']); // on a guardian reply
 
 export interface SocketData {
   playerId?: string; // set by join or resume; cleared by kick and reset
@@ -103,7 +106,10 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
     socket.emit('player:state', stateFor(playerId));
     if (!isBuilt(player.floor)) return;
 
-    const rows = q.listFloorMessages(db, playerId, player.floor);
+    // A sealed reply was never shown: its Ward's bubble tells the story instead.
+    const rows = q
+      .listFloorMessages(db, playerId, player.floor)
+      .filter((row) => !(row.speaker === 'guardian' && SEALED_VERDICTS.has(row.verdict ?? '')));
     const bubbles: Bubble[] = rows.map((row) => ({
       id: row.id,
       floor: player.floor,
@@ -364,17 +370,46 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
           // Kicked or reset while the guardian was thinking: this socket no longer plays as them.
           if (socket.data.playerId !== id) return;
           if (refused) throw new RefusalError();
-          q.countPlayerMessage(db, id, floor);
-          // turn.text is the post-filter text (cleaned, and on Floor 3 snipped): the only version sent.
+
+          // Floor 5: the reply is checked before anyone sees it. Fail closed: anything but CLEAN
+          // seals it. A real seal (LEAK) uses up a message; a judge that couldn't answer doesn't.
+          let seal: { verdict: 'LEAK' | 'GUARD_ERROR'; line: string } | undefined;
+          const replyJudge = floorTurn.replyJudge;
+          if (replyJudge) {
+            if (turn.slipped) {
+              seal = { verdict: 'LEAK', line: replyJudge.sealLine }; // code caught it: no call
+            } else {
+              stage = replyJudge.role;
+              const verdict = await judgeTwice(replyJudge.role, () =>
+                replyJudge.judge(complete, turn.text, rune),
+              );
+              checkBudget();
+              if (socket.data.playerId !== id) return;
+              if (verdict.outcome !== 'pass') {
+                const leak = verdict.outcome === 'blocked';
+                seal = { verdict: leak ? 'LEAK' : 'GUARD_ERROR', line: verdict.line };
+              }
+            }
+          }
+
+          if (seal?.verdict !== 'GUARD_ERROR') q.countPlayerMessage(db, id, floor);
+          // turn.text is the post-filter text (cleaned, and on Floor 3 snipped): the only version
+          // sent. A sealed reply is kept as "[sealed]"; her real words stay in raw_text (server only).
+          const shown = seal ? SEALED : turn.text;
           const replyId = q.insertMessage(db, {
             gameId,
             playerId: id,
             floor,
             speaker: 'guardian',
-            text: turn.text,
-            rawText: turn.result.rawText !== turn.text ? turn.result.rawText : undefined, // server only
+            text: shown,
+            rawText: turn.result.rawText !== shown ? turn.result.rawText : undefined, // server only
             now: Date.now(),
           });
+          if (replyJudge) q.setMessageVerdict(db, replyId, seal?.verdict ?? 'CLEAN');
+          if (seal) {
+            sideBubble(replyJudge!.speaker, seal.line);
+            return;
+          }
           socket.emit('player:bubble', {
             id: replyId,
             floor,

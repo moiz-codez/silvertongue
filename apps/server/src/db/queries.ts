@@ -44,6 +44,7 @@ export interface MessageRow {
   speaker: string;
   text: string;
   in_guardian_history: number;
+  verdict: string | null;
 }
 
 // ---------- games ----------
@@ -323,7 +324,7 @@ export function clearFloor(
 export function listFloorMessages(db: Db, playerId: string, floor: number): MessageRow[] {
   return db
     .prepare(
-      'SELECT id, speaker, text, in_guardian_history FROM messages WHERE player_id = ? AND floor = ? ORDER BY id',
+      'SELECT id, speaker, text, in_guardian_history, verdict FROM messages WHERE player_id = ? AND floor = ? ORDER BY id',
     )
     .all(playerId, floor) as MessageRow[];
 }
@@ -333,8 +334,9 @@ export function removeFromGuardianHistory(db: Db, messageId: number): void {
   db.prepare('UPDATE messages SET in_guardian_history = 0 WHERE id = ?').run(messageId);
 }
 
-// The input guard's verdict on a player message: PASS, SMASH, or GUARD_ERROR (the guard failed).
-// The reveal counts only SMASH.
+// A guard's verdict. On a player message: PASS, SMASH / SEAL (a real block) or GUARD_ERROR (the
+// guard failed). On a Floor 5 reply: CLEAN, LEAK (sealed) or GUARD_ERROR. The reveal counts only
+// real blocks.
 export function setMessageVerdict(db: Db, messageId: number, verdict: string): void {
   db.prepare('UPDATE messages SET verdict = ? WHERE id = ?').run(verdict, messageId);
 }

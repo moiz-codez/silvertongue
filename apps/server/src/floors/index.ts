@@ -6,6 +6,7 @@ import { grubTurn } from './01-grub/pipeline.ts';
 import { vellumTurn } from './02-vellum/pipeline.ts';
 import { morwenTurn } from './03-morwen/pipeline.ts';
 import { gormJudge, mumbleTurn } from './04-ogre/pipeline.ts';
+import { ashveilTurn, earsJudge, TONGUES_SEAL, tonguesJudge } from './05-ashveil/pipeline.ts';
 import type { JudgeResult } from './judge.ts';
 import type { Turn } from './messages.ts';
 
@@ -25,6 +26,15 @@ export interface FloorReply {
   result: LlmResult; // SERVER ONLY: raw reply and usage, for the logs
 }
 
+// An output judge (Floor 5 Ward of Tongues): reads the guardian's cleaned reply before the phone does.
+// A reply the code check (`slipped`) already caught is sealed with `sealLine` without asking it.
+export interface ReplyJudge {
+  role: RoleName;
+  speaker: Speaker;
+  sealLine: string;
+  judge: (complete: Complete, reply: string, rune: string) => Promise<JudgeResult>;
+}
+
 export const FLOOR_TURNS: Record<
   number,
   {
@@ -32,6 +42,7 @@ export const FLOOR_TURNS: Record<
     turn: (complete: Complete, history: Turn[], rune: string) => Promise<FloorReply>;
     lostWords: string; // in character, when the API refused the reply twice
     guard?: InputGuard;
+    replyJudge?: ReplyJudge;
   }
 > = {
   1: {
@@ -59,5 +70,17 @@ export const FLOOR_TURNS: Record<
       judge: (complete, text) => gormJudge(complete, text),
     },
     lostWords: 'mmm... Mumble fell asleep... say it again?',
+  },
+  5: {
+    role: 'ashveil',
+    turn: ashveilTurn,
+    guard: { role: 'ward_ears', speaker: 'ward_ears', blockedVerdict: 'SEAL', judge: earsJudge },
+    replyJudge: {
+      role: 'ward_tongues',
+      speaker: 'ward_tongues',
+      sealLine: TONGUES_SEAL,
+      judge: tonguesJudge,
+    },
+    lostWords: 'The Queen waves a bony hand. Again, mortal; I was not listening.',
   },
 };
