@@ -117,15 +117,15 @@ function DungeonMap({ snapshot, receivedAt }: { snapshot: ProjectorSnapshot; rec
                   src={GUARDIAN_SPRITES[floor]!.idle}
                   alt=""
                 />
-                {floor === 5 && (
-                  <>
-                    {/* A new key remounts the glyph, which replays its pulse: one pulse per seal. */}
-                    <span key={`ears-${snapshot.wards.ears}`} className="pj-ward pj-ward-ears" />
-                    <span
-                      key={`tongues-${snapshot.wards.tongues}`}
-                      className="pj-ward pj-ward-tongues"
-                    />
-                  </>
+                {/* A new key remounts a glow, which replays it: one flare per seal (none at 0). */}
+                {floor === 5 && snapshot.wards.ears > 0 && (
+                  <span key={`ears-${snapshot.wards.ears}`} className="pj-ward pj-ward-ears" />
+                )}
+                {floor === 5 && snapshot.wards.tongues > 0 && (
+                  <span
+                    key={`tongues-${snapshot.wards.tongues}`}
+                    className="pj-ward pj-ward-tongues"
+                  />
                 )}
               </span>
               <div className="pj-floor-name">

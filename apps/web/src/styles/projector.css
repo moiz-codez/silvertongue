@@ -221,45 +221,49 @@
   height: 4em;
 }
 
-/* Queen Ashveil's Wards: cyan left, magenta right. Each pulses when it seals something. */
+/* Queen Ashveil's Wards are the cyan (left) and magenta (right) gems on her pillars. When one
+   seals something, a glow flares over its gem and fades. */
 .pj-floor-art {
   position: relative;
-  display: inline-flex;
+  display: flex;
+  justify-self: start; /* hug the sprite, or the glows drift off its pillars */
 }
 
 .pj-ward {
   position: absolute;
-  top: 50%;
+  top: 46%;
   width: 0.45em;
-  height: 1.4em;
-  margin-top: -0.7em;
-  animation: pj-ward-pulse 1.2s ease-out;
+  height: 0.45em;
+  opacity: 0;
+  animation: pj-ward-pulse 2.5s ease-out;
 }
 
 .pj-ward-ears {
-  left: -0.7em;
-  background: var(--ward-ears);
+  left: 2%;
+  color: var(--ward-ears);
 }
 
 .pj-ward-tongues {
-  right: -0.7em;
-  background: var(--ward-tongues);
+  right: 2%;
+  color: var(--ward-tongues);
 }
 
 @keyframes pj-ward-pulse {
   0% {
-    transform: scale(1.6);
-    filter: brightness(1.8);
+    opacity: 1;
+    background: currentColor;
+    box-shadow: 0 0 1.4em 0.8em currentColor;
   }
   100% {
-    transform: scale(1);
-    filter: brightness(1);
+    opacity: 0;
+    background: currentColor;
+    box-shadow: 0 0 0 0 currentColor;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .pj-ward {
-    animation: none;
+    animation-duration: 0.01s;
   }
 }
 
