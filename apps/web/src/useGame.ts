@@ -136,11 +136,12 @@ export function useGame() {
     socket.emit('player:door', { guess });
   }
 
-  function descend() {
+  // Stable, so the cleared screen's auto-continue timer isn't restarted on every render.
+  const descend = useCallback(() => {
     setCleared(null);
     setExpression('idle');
     setBubbles([]);
-  }
+  }, []);
 
   return {
     token,

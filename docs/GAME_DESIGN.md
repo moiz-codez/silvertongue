@@ -68,7 +68,9 @@ Each floor beats the previous floor's trick on purpose, so no single trick clear
 1. **Join:** nickname (2–16 chars, profanity-filtered, unique per game) → Enter. No account, no login. A session token is stored in `localStorage` so a refresh rejoins the same player.
 2. **Lobby:** "Waiting for the dungeon to open…" until the admin starts the game.
 3. **Play:** guardian portrait (current expression) and name; chat log; message box with cooldown; door box; floor number, score and title; the wall note when unlocked.
-4. **Floor cleared:** short celebration with the guardian's slip-up face, then the next floor.
+4. **Floor cleared:** short celebration with the guardian's slip-up face, points and new title, then the next floor: automatically after about 3 s ("Descending in 3…"), or at once on a tap. If the next floor isn't built yet, the screen stays.
+
+Phone polish rules: nothing scrolls sideways at 360 px, every button and input is at least 44 × 44 px, and the send and door buttons show their cooldown countdown. On the projector, every text colour keeps at least 7:1 contrast against its background (3:1 for the ward glows), reached by shading the existing colours lighter, not by changing hues.
 
 Phones are the main target: design for 360–430 px wide, large touch targets, works on slow mobile data (small bundle, no heavy assets).
 
