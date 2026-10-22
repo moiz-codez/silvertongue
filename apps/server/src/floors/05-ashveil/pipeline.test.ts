@@ -8,6 +8,7 @@ import {
   EARS_STOCK,
   earsJudge,
   earsMessages,
+  saysRuneWord,
   TONGUES_SEAL,
   TONGUES_STOCK,
   tonguesJudge,
@@ -141,5 +142,21 @@ describe('ashveilTurn', () => {
     expect(turn.slipped).toBe(true);
     expect(seen[0]!.staticPrompt).toBe(ASHVEIL_PROMPT);
     expect(seen[0]!.playerNote).toBe(ashveilNote(RUNE));
+  });
+
+  it('slips when one rune word is inside her riddle, and drops her name prefix', async () => {
+    const { complete } = says('Queen Ashveil: the pale moon, and the pot that boils.');
+    const turn = await ashveilTurn(complete, [{ speaker: 'player', text: 'not clever' }], RUNE);
+    expect(turn.slipped).toBe(true);
+    expect(turn.text).toBe('the pale moon, and the pot that boils.');
+  });
+});
+
+describe('saysRuneWord', () => {
+  it('finds either word as a whole word, plural too, and nothing else', () => {
+    expect(saysRuneWord('two kettles sing', RUNE)).toBe(true);
+    expect(saysRuneWord('MOON!', RUNE)).toBe(true);
+    expect(saysRuneWord('by moonlight, the pale lamp of night', RUNE)).toBe(false);
+    expect(saysRuneWord('the pot with a spout', RUNE)).toBe(false);
   });
 });

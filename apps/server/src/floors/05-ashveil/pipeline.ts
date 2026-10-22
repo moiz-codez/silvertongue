@@ -69,7 +69,8 @@ export async function earsJudge(
 }
 
 // `history` is what the Queen heard (sealed messages left out, sealed replies as "[sealed]"),
-// ending with the player's new message. `slipped` = the code check caught the rune: sealed
+// ending with the player's new message. `slipped` = the code check caught the rune or one of
+// its words: sealed
 // without asking the Ward of Tongues.
 export async function ashveilTurn(
   complete: Complete,
@@ -82,8 +83,15 @@ export async function ashveilTurn(
     playerNote: ashveilNote(rune),
     messages: toMessages(history, MAX_HISTORY),
   });
-  const text = cleanReply(result, rune);
-  return { text, slipped: revealsRune(text, rune).revealed, result };
+  const text = cleanReply(result, rune).replace(/^\s*Queen Ashveil:\s*/gim, '');
+  return { text, slipped: revealsRune(text, rune).revealed || saysRuneWord(text, rune), result };
+}
+
+// Either rune word on its own, as a whole word (plural too). revealsRune only catches the whole
+// rune, and Floors 2–3 rely on that, so this extra check is Floor 5's own.
+export function saysRuneWord(text: string, rune: string): boolean {
+  const words = text.toUpperCase().split(/[^A-Z]+/);
+  return rune.split('-').some((w) => words.some((t) => t === w || t === `${w}S` || t === `${w}ES`));
 }
 
 // The Ward of Tongues sees only her (cleaned) reply, and the rune in its final note.

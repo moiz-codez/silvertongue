@@ -247,13 +247,13 @@ Every Gorm call is logged in `llm_calls` with role `gorm`. A message costs one G
 
 | Outcome | The player sees | Message cap | The Queen's history | `messages.verdict` |
 |---|---|---|---|---|
-| `revealsRune` fires (the Ward isn't asked) | `THE WARD OF TONGUES SEALS HER WORDS.` | counts | `[sealed]` | `LEAK` |
+| The code check fires (`revealsRune`, or `saysRuneWord`: either rune word alone; the Ward isn't asked) | `THE WARD OF TONGUES SEALS HER WORDS.` | counts | `[sealed]` | `LEAK` |
 | A real `LEAK` | the same line | counts | `[sealed]` | `LEAK` |
 | Its answer can't be read: asked once more, then | `THE WARD OF TONGUES FLICKERS. HER WORDS ARE SEALED.` | not counted (cooldown kept) | `[sealed]` | `GUARD_ERROR` |
 | The call fails | the usual `crowded` / `llm` error | not counted (`llm`: refunded) | nothing stored; the player's message leaves her history | — (logged as `ward_tongues`, status error) |
 | `CLEAN` | her reply | counts | her reply | `CLEAN` |
 
-A Floor 5 message costs one Ward of Ears call (two if unreadable), and when it passes, one Queen call (two if refused) and one Ward of Tongues call (none if `revealsRune` already caught the reply, two if unreadable).
+A Floor 5 message costs one Ward of Ears call (two if unreadable), and when it passes, one Queen call (two if refused) and one Ward of Tongues call (none if the code check already caught the reply, two if unreadable).
 
 ### Rate-limited queue (`llm/queue.ts`)
 
@@ -283,7 +283,7 @@ Default in development and in load tests. No API key needed. Deterministic, with
 | 2 Vellum | — | Ser Vellum | — | `revealsRune(reply)` or clear |
 | 3 Morwen | — | Morwen | `cleanReply` → `snip` | `revealsRune(filteredText)` (rune got past Snip) or clear |
 | 4 Ogre | Gorm: latest message only, no rune, JSON verdict (`parseVerdict`, fails closed; see "Input guard outcomes") | Mumble | `cleanReply` | `revealsRune(reply)` or clear |
-| 5 Ashveil | Ward of Ears: last 12 messages + the latest, no rune, JSON verdict (fails closed; see "Input guard outcomes") | Queen Ashveil (rune and her two riddle clues in the final note) | `cleanReply` → `revealsRune` → else Ward of Tongues (fails closed; see "Output judge outcomes") | on clear |
+| 5 Ashveil | Ward of Ears: last 12 messages + the latest, no rune, JSON verdict (fails closed; see "Input guard outcomes") | Queen Ashveil (rune and her two riddle clues in the final note) | `cleanReply` → `revealsRune` / `saysRuneWord` → else Ward of Tongues (fails closed; see "Output judge outcomes") | on clear |
 | 6 Vorgath | Ward of Ears + carvings + `is_gift` | Vorgath (+ hoard note) | `revealsRune` → else Ward of Tongues | on clear |
 
 Each floor's pipeline lives in `floors/0N-*/pipeline.ts` and is registered with its role in `floors/index.ts` (`FLOOR_TURNS`); the socket handler picks it by the player's floor. Every pipeline calls `cleanReply` first. History is capped at 20 turns on Floor 1 and 12 from Floor 2 on.
