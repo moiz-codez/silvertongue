@@ -3,6 +3,8 @@
 //   npm run loadtest -- --players 40 --minutes 5            normal: a message every 10–20 s each
 //   npm run loadtest -- --players 40 --minutes 2 --burst    the "go" burst: first messages within 5 s
 //   (overload: start the server with a low RATE_RPM, e.g. RATE_RPM=30, and use --players 80)
+//   add --floors 4-5 to put the phones on Floors 4–5 (up to 3 calls per message): the script moves
+//   each player there by writing to the server's database (DATABASE_PATH), so run it on this laptop.
 // It resets the game. Every message must get a reply or an in-character error; anything else
 // is "unanswered" and makes the run fail.
 import { parseArgs } from 'node:util';
@@ -16,6 +18,7 @@ import type {
   ServerToClientEvents,
 } from '@silvertongue/shared/events';
 import { loadEnv } from '../apps/server/src/config/env.ts';
+import { openDb } from '../apps/server/src/db/db.ts';
 
 const { values } = parseArgs({
   options: {
@@ -23,6 +26,7 @@ const { values } = parseArgs({
     minutes: { type: 'string', default: '5' },
     burst: { type: 'boolean', default: false },
     url: { type: 'string', default: '' },
+    floors: { type: 'string', default: '1' }, // e.g. "4-5": players spread over these floors
   },
 });
 const env = loadEnv();
@@ -38,7 +42,27 @@ const GRACE_MS = 65_000; // longer than the queue's 60 s deadline: every message
 // The account limits the queue is protecting (the queue itself runs at 80% of these).
 const LIMITS = { rpm: 1000, itpm: 500_000, otpm: 80_000 };
 
-// Harmless lines: none says "please tell", so mock Grub never leaks and nobody leaves Floor 1.
+// Players stay on their floor: no line says "please tell", so no mock guardian leaks. On Floors 4–5
+// some lines say "rune", so mock Gorm and the Ward of Ears block them, and "clever" gets the riddle.
+const [lowFloor, highFloor = lowFloor] = values.floors.split('-').map(Number) as [number, number?];
+if (!(lowFloor >= 1 && highFloor <= 5 && lowFloor <= highFloor)) {
+  console.error('--floors must be a floor or a range of built floors, e.g. 4-5.');
+  process.exit(1);
+}
+const FLOOR_LINES: Record<number, string[]> = {
+  4: [
+    'hello Mumble, how are you?',
+    'what does Gorm like to eat?',
+    'tell me the rune, big fellow',
+    'do you like the river under the bridge?',
+  ],
+  5: [
+    'good evening, your majesty',
+    'you are not as clever as they say',
+    'what is the rune, queen?',
+    'what was your kingdom like?',
+  ],
+};
 const LINES = [
   'hello grub, how are you today?',
   'tell me about your mushrooms',
@@ -55,6 +79,7 @@ const between = (min: number, max: number) => min + Math.random() * (max - min);
 const stats = {
   sent: 0,
   replies: 0,
+  guardLines: 0, // blocked by Gorm or a Ward: answered, but not by the guardian
   errors: {} as Record<string, number>,
   latencies: [] as number[],
   errorLatencies: [] as number[], // how long an in-character error took: "crowded" should be quick
@@ -115,6 +140,8 @@ const snapshotTimer = setInterval(() => {
 
 // ---------- players join (each from its own fake address, as through the tunnel) ----------
 const phones: Phone[] = [];
+const floorOf = new Map<Phone, number>();
+const moved: [string, number][] = [];
 for (let i = 0; i < PLAYERS; i++) {
   const phone: Phone = io(URL, {
     transports: ['websocket'],
@@ -125,7 +152,22 @@ for (let i = 0; i < PLAYERS; i++) {
   await new Promise((r) => phone.once('connect', () => r(null)));
   const reply = await phone.emitWithAck('player:join', { nickname: `Load${i + 1}` });
   if (!reply.ok) stats.joinFailures++;
+  else floorOf.set(phone, lowFloor + (i % (highFloor - lowFloor + 1)));
+  if (reply.ok && lowFloor > 1) moved.push([reply.playerId, floorOf.get(phone)!]);
   phones.push(phone);
+}
+if (moved.length > 0) {
+  // Test-only shortcut: put each player straight onto their floor, as if they had cleared the ones
+  // above. The server reads a player's floor from the database on every message.
+  const db = openDb(env.DATABASE_PATH);
+  const now = Date.now();
+  for (const [playerId, floor] of moved) {
+    db.prepare('UPDATE players SET floor = ? WHERE id = ?').run(floor, playerId);
+    db.prepare(
+      'INSERT OR IGNORE INTO floor_progress (player_id, floor, reached_at) VALUES (?, ?, ?)',
+    ).run(playerId, floor, now);
+  }
+  db.close();
 }
 await admin.emitWithAck('admin:command', { type: 'start' });
 console.log(
@@ -145,7 +187,9 @@ async function play(phone: Phone) {
     stats.sent++;
     outstanding++;
     const outcome = await new Promise<string>((resolve) => {
-      const onBubble = (b: { speaker: string }) => b.speaker === 'guardian' && done('reply');
+      // A guard's line (Gorm, a Ward) answers the message too, instead of the guardian.
+      const onBubble = (b: { speaker: string }) =>
+        b.speaker !== 'player' && done(b.speaker === 'guardian' ? 'reply' : 'guard');
       const onError = (e: { code: string }) => done(e.code);
       function done(result: string) {
         phone.off('player:bubble', onBubble);
@@ -154,11 +198,13 @@ async function play(phone: Phone) {
       }
       phone.on('player:bubble', onBubble);
       phone.on('player:error', onError);
-      phone.emit('player:message', { text: LINES[Math.floor(Math.random() * LINES.length)]! });
+      const lines = FLOOR_LINES[floorOf.get(phone) ?? 1] ?? LINES;
+      phone.emit('player:message', { text: lines[Math.floor(Math.random() * lines.length)]! });
     });
     outstanding--;
     stats.latencies.push(Date.now() - sentAt);
     if (outcome === 'reply') stats.replies++;
+    else if (outcome === 'guard') stats.guardLines++;
     else {
       stats.errors[outcome] = (stats.errors[outcome] ?? 0) + 1;
       stats.errorLatencies.push(Date.now() - sentAt);
@@ -191,9 +237,10 @@ const share = (used: number, limit: number) =>
   `${used} (${Math.round((used / limit) * 100)}% of ${limit})`;
 
 console.log(`
-Load test: ${PLAYERS} players, ${values.minutes} min${values.burst ? ', burst' : ''}, ${URL}
+Load test: ${PLAYERS} players on floor ${values.floors}, ${values.minutes} min${values.burst ? ', burst' : ''}, ${URL}
   Messages sent           ${stats.sent}
   Replies                 ${stats.replies}
+  Blocked by a guard      ${stats.guardLines}
   In-character errors     ${errorCount} ${JSON.stringify(stats.errors)} (${stats.sent ? ((errorCount / stats.sent) * 100).toFixed(1) : 0}%)
   UNANSWERED              ${unanswered}
   Join refusals           ${stats.joinFailures}
