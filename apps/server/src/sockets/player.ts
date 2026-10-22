@@ -22,6 +22,8 @@ import { costUsd, ROLES, type RoleName } from '../config/models.ts';
 import type { Db } from '../db/db.ts';
 import * as q from '../db/queries.ts';
 import { FLOOR_TURNS } from '../floors/index.ts';
+import { SEALED } from '../floors/05-ashveil/pipeline.ts';
+import type { JudgeResult } from '../floors/judge.ts';
 import type { Turn } from '../floors/messages.ts';
 import { checkDoor } from '../game/door.ts';
 import { generateRunes } from '../game/runes.ts';
@@ -36,6 +38,8 @@ import { revealsRune } from '../security/revealsRune.ts';
 import { sanitize } from '../security/sanitize.ts';
 import { clientIp, slidingLimit } from './clientIp.ts';
 import { throttle } from './throttle.ts';
+
+const SEALED_VERDICTS = new Set(['LEAK', 'GUARD_ERROR']); // on a guardian reply
 
 export interface SocketData {
   playerId?: string; // set by join or resume; cleared by kick and reset
@@ -102,7 +106,10 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
     socket.emit('player:state', stateFor(playerId));
     if (!isBuilt(player.floor)) return;
 
-    const rows = q.listFloorMessages(db, playerId, player.floor);
+    // A sealed reply was never shown: its Ward's bubble tells the story instead.
+    const rows = q
+      .listFloorMessages(db, playerId, player.floor)
+      .filter((row) => !(row.speaker === 'guardian' && SEALED_VERDICTS.has(row.verdict ?? '')));
     const bubbles: Bubble[] = rows.map((row) => ({
       id: row.id,
       floor: player.floor,
@@ -269,13 +276,16 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
         const floorTurn = FLOOR_TURNS[floor]!; // isBuilt(floor) was checked above
         busy.add(id);
         cooldownUntil.set(id, now + ctx.game.cooldown_ms);
-        const history: Turn[] = q
+        const said = q
           .listFloorMessages(db, id, floor)
-          .filter(
-            (m) =>
-              m.in_guardian_history === 1 && (m.speaker === 'player' || m.speaker === 'guardian'),
-          )
-          .map((m) => ({ speaker: m.speaker as Turn['speaker'], text: m.text }));
+          .filter((m) => m.speaker === 'player' || m.speaker === 'guardian');
+        const toTurn = (m: q.MessageRow): Turn => ({
+          speaker: m.speaker as Turn['speaker'],
+          text: m.text,
+        });
+        // What the guardian heard, and (for a guard that judges in context) everything said here.
+        const history = said.filter((m) => m.in_guardian_history === 1).map(toTurn);
+        const earlier = said.map(toTurn);
         const playerMessageId = q.insertMessage(db, {
           gameId,
           playerId: id,
@@ -289,50 +299,66 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
         });
         socket.emit('player:bubble', { id: playerMessageId, floor, speaker: 'player', text });
 
-        let guarding = floorTurn.guard !== undefined; // a failure now is the guard's, not the guardian's
+        // Every call after this message's first one is a follow-up: the queue serves it ahead of
+        // new messages, so a message that got through the guard isn't turned away halfway.
+        let calls = 0;
+        const call: Complete = (req) =>
+          complete(calls++ === 0 ? req : { ...req, priority: 'followup' });
+
+        // Asks a guard or judge, logging every try. A refusal or unreadable JSON is the model's
+        // fault, not the player's: asked once more before giving up.
+        const judgeTwice = async (role: RoleName, call: () => Promise<JudgeResult>) => {
+          const once = async () => {
+            const verdict = await call();
+            const refused = verdict.result.stopReason === 'refusal';
+            logCall(gameId, id, floor, role, verdict.result, refused ? 'refusal' : 'ok');
+            return verdict;
+          };
+          const first = await once();
+          return first.outcome === 'unparseable' ? once() : first;
+        };
+        // A bubble that isn't the guardian's reply (a guard's block), never part of any history.
+        const sideBubble = (speaker: Speaker, line: string) => {
+          const lineId = q.insertMessage(db, {
+            gameId,
+            playerId: id,
+            floor,
+            speaker,
+            text: line,
+            inGuardianHistory: false,
+            now: Date.now(),
+          });
+          socket.emit('player:bubble', { id: lineId, floor, speaker, text: line });
+        };
+
+        // Whose call is running: a failure is logged under that role, and an input guard's
+        // failure is stored apart from its real blocks.
+        let stage: RoleName = floorTurn.guard?.role ?? floorTurn.role;
         try {
           const rune = q.getRune(db, id, floor);
-          if (floorTurn.guard) {
-            const guard = floorTurn.guard;
-            const judge = async () => {
-              const verdict = await guard(complete, text); // the message only: no rune, no history
-              const refused = verdict.result.stopReason === 'refusal';
-              logCall(gameId, id, floor, 'gorm', verdict.result, refused ? 'refusal' : 'ok');
-              return verdict;
-            };
-            // A refusal or unreadable JSON is the model's fault: ask once more before giving up.
-            let gorm = await judge();
-            if (gorm.outcome === 'unparseable') gorm = await judge();
-            guarding = false;
+          const guard = floorTurn.guard;
+          if (guard) {
+            const verdict = await judgeTwice(guard.role, () => guard.judge(call, text, earlier));
+            stage = floorTurn.role;
             checkBudget();
             if (socket.data.playerId !== id) return;
-            if (gorm.outcome !== 'pass') {
-              // Fail closed: Mumble never hears it. Only a real SMASH uses up one of their messages.
-              const smashed = gorm.outcome === 'smash';
-              q.setMessageVerdict(db, playerMessageId, smashed ? 'SMASH' : 'GUARD_ERROR');
-              if (smashed) q.countPlayerMessage(db, id, floor);
-              const gormId = q.insertMessage(db, {
-                gameId,
-                playerId: id,
-                floor,
-                speaker: 'gorm',
-                text: gorm.growl,
-                inGuardianHistory: false,
-                now: Date.now(),
-              });
-              socket.emit('player:bubble', {
-                id: gormId,
-                floor,
-                speaker: 'gorm',
-                text: gorm.growl,
-              });
+            if (verdict.outcome !== 'pass') {
+              // Fail closed: the guardian never hears it. Only a real block uses up a message.
+              const blocked = verdict.outcome === 'blocked';
+              q.setMessageVerdict(
+                db,
+                playerMessageId,
+                blocked ? guard.blockedVerdict : 'GUARD_ERROR',
+              );
+              if (blocked) q.countPlayerMessage(db, id, floor);
+              sideBubble(guard.speaker, verdict.line);
               return;
             }
-            q.passGuard(db, playerMessageId); // now Mumble may hear it
+            q.passGuard(db, playerMessageId); // now the guardian may hear it
           }
           const ask = async () => {
             const reply = await floorTurn.turn(
-              complete,
+              call,
               [...history, { speaker: 'player', text }],
               rune,
             );
@@ -348,17 +374,46 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
           // Kicked or reset while the guardian was thinking: this socket no longer plays as them.
           if (socket.data.playerId !== id) return;
           if (refused) throw new RefusalError();
-          q.countPlayerMessage(db, id, floor);
-          // turn.text is the post-filter text (cleaned, and on Floor 3 snipped): the only version sent.
+
+          // Floor 5: the reply is checked before anyone sees it. Fail closed: anything but CLEAN
+          // seals it. A real seal (LEAK) uses up a message; a judge that couldn't answer doesn't.
+          let seal: { verdict: 'LEAK' | 'GUARD_ERROR'; line: string } | undefined;
+          const replyJudge = floorTurn.replyJudge;
+          if (replyJudge) {
+            if (turn.slipped) {
+              seal = { verdict: 'LEAK', line: replyJudge.sealLine }; // code caught it: no call
+            } else {
+              stage = replyJudge.role;
+              const verdict = await judgeTwice(replyJudge.role, () =>
+                replyJudge.judge(call, turn.text, rune),
+              );
+              checkBudget();
+              if (socket.data.playerId !== id) return;
+              if (verdict.outcome !== 'pass') {
+                const leak = verdict.outcome === 'blocked';
+                seal = { verdict: leak ? 'LEAK' : 'GUARD_ERROR', line: verdict.line };
+              }
+            }
+          }
+
+          if (seal?.verdict !== 'GUARD_ERROR') q.countPlayerMessage(db, id, floor);
+          // turn.text is the post-filter text (cleaned, and on Floor 3 snipped): the only version
+          // sent. A sealed reply is kept as "[sealed]"; her real words stay in raw_text (server only).
+          const shown = seal ? SEALED : turn.text;
           const replyId = q.insertMessage(db, {
             gameId,
             playerId: id,
             floor,
             speaker: 'guardian',
-            text: turn.text,
-            rawText: turn.result.rawText !== turn.text ? turn.result.rawText : undefined, // server only
+            text: shown,
+            rawText: turn.result.rawText !== shown ? turn.result.rawText : undefined, // server only
             now: Date.now(),
           });
+          if (replyJudge) q.setMessageVerdict(db, replyId, seal?.verdict ?? 'CLEAN');
+          if (seal) {
+            sideBubble(replyJudge!.speaker, seal.line);
+            return;
+          }
           socket.emit('player:bubble', {
             id: replyId,
             floor,
@@ -367,37 +422,27 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
           });
           // Snip is code, not a character: his own plain line, never part of Morwen's history.
           if (turn.snipRemoved) {
-            const snipText = `SNIP! ${turn.snipRemoved} letters removed.`;
-            const snipId = q.insertMessage(db, {
-              gameId,
-              playerId: id,
-              floor,
-              speaker: 'snip',
-              text: snipText,
-              inGuardianHistory: false,
-              now: Date.now(),
-            });
-            socket.emit('player:bubble', { id: snipId, floor, speaker: 'snip', text: snipText });
+            sideBubble('snip', `SNIP! ${turn.snipRemoved} letters removed.`);
           }
           if (turn.slipped) socket.emit('player:expression', { floor, state: 'slipped' });
         } catch (err) {
           // A refusal's calls were logged (and billed) above; any other failure is logged here.
-          const role = guarding ? 'gorm' : floorTurn.role;
           if (!(err instanceof RefusalError))
             logCall(
               gameId,
               id,
               floor,
-              role,
+              stage,
               {
-                model: ROLES[role].model,
+                model: ROLES[stage].model,
                 usage: { input_tokens: 0, output_tokens: 0 },
                 latencyMs: 0,
               },
               errorStatus(err),
             );
           // The guard couldn't judge it (crowded, API error): stored apart from real smashes.
-          if (guarding) q.setMessageVerdict(db, playerMessageId, 'GUARD_ERROR');
+          if (stage === floorTurn.guard?.role)
+            q.setMessageVerdict(db, playerMessageId, 'GUARD_ERROR');
           q.removeFromGuardianHistory(db, playerMessageId);
           if (err instanceof DeadlineError) {
             // Crowded: no refund, or turned-away phones could resend at once. A normal cooldown

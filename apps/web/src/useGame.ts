@@ -65,7 +65,7 @@ export function useGame() {
     socket.on('player:bubble', (b) => {
       setBubbles((list) => (list.some((x) => x.id === b.id) ? list : [...list, b]));
       // The answer: the guardian's reply, or Gorm smashing the message before Mumble heard it.
-      if (b.speaker === 'guardian' || b.speaker === 'gorm') setWaitingLine(null);
+      if (b.speaker !== 'player') setWaitingLine(null); // a reply, or a guard's line instead of one
     });
     socket.on('player:expression', (e) => setExpression(e.state));
     socket.on('player:door-result', (r) => {

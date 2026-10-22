@@ -40,6 +40,10 @@ export const ROLES = {
   // leave headroom rather than turn cut-offs into false alarms.
   gorm: { model: MODELS.haiku, maxTokens: 60 },
   mumble: { model: MODELS.haiku, maxTokens: 180 },
+  // The Wards' JSON is ~6 tokens; like Gorm, headroom so a max_tokens stop (which seals) stays rare.
+  ward_ears: { model: MODELS.haiku, maxTokens: 30 },
+  ashveil: { model: MODELS.haiku, maxTokens: 150 },
+  ward_tongues: { model: MODELS.haiku, maxTokens: 30 },
 } as const;
 
 export type RoleName = keyof typeof ROLES;

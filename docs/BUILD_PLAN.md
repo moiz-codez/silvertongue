@@ -128,6 +128,16 @@ Every milestone is done only when its acceptance criteria are met and `npm run c
 - Ward of Ears (history-aware, no rune) → Queen Ashveil → `revealsRune` → Ward of Tongues.
 - Ward seal bubbles in their own colours; ward glyph state for the projector.
 
+**Decisions made in M6**
+- The Queen doesn't invent her riddle. Every rune word has one fixed clue in `game/runeClues.ts`: its meaning only, pointing to exactly one word a classmate would type. Her final note gives her the two clues for this player's rune. A unit test checks every word has a clue, no clue contains any rune word, and no pair of clues trips `revealsRune`.
+- Twelve rune words were swapped for ones students in Pakistan know and can name from a clue (out: EMBER, HOLLOW, STONE, CINDER, TIN, LANTERN, BADGER, ROBIN, FROST, RAVEN, ACORN, OTTER; in: BALLOON, MANGO, CAMEL, PEACOCK, KITE, PARROT, LOTUS, BRICK, ONION, UMBRELLA, LADDER, PILLOW). `EMBER-FANG` in older docs and tests is only an example rune.
+- All three roles run on Haiku. Both Wards get `max_tokens` 30 (their JSON is ~6 tokens; a `max_tokens` stop seals), the Queen 150.
+- The Ward of Ears sees everything said on the floor (sealed messages too), so a plan is visible even after a seal. Both Wards answer with a verdict only; the server picks the line the phone shows.
+- Both Wards follow Gorm's three outcomes. A sealed reply is stored as `[sealed]` with her words in `raw_text`, and is skipped when a phone refreshes.
+- Gorm and the Ward of Ears share one input-guard path (`floors/judge.ts`, `FLOOR_TURNS[n].guard`); the Ward of Tongues is a `replyJudge`.
+- Projector "ward glyphs": the snapshot carries seal counts (numbers only), and a glow flares over the matching gem on her pillars. "Both wards go dark when she's beaten" is left for M7 polish.
+- `npm run loadtest -- --floors 4-5` moves the fake players onto those floors by writing to the server's database (test only).
+
 **Acceptance**
 - Playtest checklist passes. At least 7 of 10 generated riddles are solvable by a friend.
 - Every earlier floor's winning approach is sealed or refused.

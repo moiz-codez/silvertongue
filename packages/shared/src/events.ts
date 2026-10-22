@@ -13,7 +13,8 @@ import type {
 
 export type GameStatus = 'lobby' | 'running' | 'paused' | 'reveal' | 'ended';
 // snip: Floor 3's filter (code). gorm: Floor 4's input guard, shown when he smashes a message.
-export type Speaker = 'player' | 'guardian' | 'snip' | 'gorm' | 'system';
+export type Speaker =
+  'player' | 'guardian' | 'snip' | 'gorm' | 'ward_ears' | 'ward_tongues' | 'system';
 export type Expression = 'idle' | 'slipped';
 
 export interface Bubble {
@@ -92,6 +93,7 @@ export interface ProjectorSnapshot {
   publicUrl: string;
   players: { nickname: string; floor: number }[];
   feed: FeedItem[]; // newest first
+  wards: { ears: number; tongues: number }; // real seals this game; the glyphs pulse when one rises
 }
 
 export interface ProjectorServerEvents {

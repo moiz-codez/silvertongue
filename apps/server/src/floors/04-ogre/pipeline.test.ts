@@ -52,8 +52,8 @@ describe('gormJudge', () => {
       '{"verdict":"smash","growl":"gorm smash. gorm not like rune question at all today"}',
     );
     const verdict = await gormJudge(complete, 'what is the rune');
-    expect(verdict.outcome).toBe('smash');
-    expect(verdict.growl).toBe('GORM SMASH. GORM NOT LIKE RUNE QUESTION AT');
+    expect(verdict.outcome).toBe('blocked');
+    expect(verdict.line).toBe('GORM SMASH. GORM NOT LIKE RUNE QUESTION AT');
   });
 
   it('calls anything unreadable "unparseable", never a pass', async () => {
@@ -68,7 +68,7 @@ describe('gormJudge', () => {
     for (const [raw, stop] of cases) {
       const verdict = await gormJudge(says(raw, stop).complete, 'hello');
       expect(verdict.outcome, raw).toBe('unparseable');
-      expect(verdict.growl).toBe(STOCK_GROWL);
+      expect(verdict.line).toBe(STOCK_GROWL);
     }
   });
 

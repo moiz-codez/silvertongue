@@ -4,7 +4,7 @@ import { DeadlineError, type Complete, type LlmRequest, type LlmResult } from '.
 import { createQueue, estimateInput } from './queue.ts';
 
 const BIG = 1_000_000;
-const req = (text: string, priority?: 'player' | 'background'): LlmRequest => ({
+const req = (text: string, priority?: LlmRequest['priority']): LlmRequest => ({
   role: 'grub',
   staticPrompt: 'static',
   playerNote: 'note',
@@ -62,6 +62,18 @@ it('serves waiting player calls before background calls', async () => {
   open[0]!.finish();
   await vi.advanceTimersByTimeAsync(0);
   expect(open.map((c) => c.text)).toEqual(['first', 'player']);
+});
+
+it('serves a follow-up (the next call of a message) before new player calls', async () => {
+  const { client, open } = manualClient();
+  const queue = createQueue(() => client, { rpm: BIG, itpm: BIG, otpm: BIG, maxInFlight: 1 });
+  void queue.complete(req('first'));
+  void queue.complete(req('new message'));
+  void queue.complete(req('mumble', 'followup'));
+  await vi.advanceTimersByTimeAsync(0);
+  open[0]!.finish();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(open.map((c) => c.text)).toEqual(['first', 'mumble']);
 });
 
 it('never has more calls in flight than the cap', async () => {
