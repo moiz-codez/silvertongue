@@ -2,7 +2,8 @@
 // tripping the account's rate limits. Per model, three buckets refill continuously:
 // requests, input tokens and output tokens per minute (set to 80% of the account limits in .env).
 // A call reserves what it might use, then gives back (or owes) the difference once the real
-// usage is known. Player calls go first; at most 30 calls are in flight; each call has a deadline.
+// usage is known. Follow-ups go first (the 2nd and 3rd calls of a message on a guarded floor, so a
+// message that got in finishes), then player calls; at most 30 calls are in flight; each call has a deadline.
 // A call that can't start in time is turned away at once ("crowded") instead of waiting 60 s for it.
 import { ROLES, type ModelId } from '../config/models.ts';
 import {
@@ -103,7 +104,7 @@ export function createQueue(
   const minCallMs = limits.minCallMs ?? 10_000;
 
   const buckets = new Map<ModelId, ModelBuckets>();
-  const waiting = { player: [] as Job[], background: [] as Job[] };
+  const waiting = { followup: [] as Job[], player: [] as Job[], background: [] as Job[] };
   let inFlight = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
   // Rolling last-minute history for the admin tiles and the load test.
@@ -126,13 +127,13 @@ export function createQueue(
     return b;
   }
 
-  // The next job allowed to run: the oldest player call, or a background call when no player waits.
+  // The next job allowed to run: the oldest follow-up, else the oldest player call, else background.
   function nextJob(): Job | undefined {
-    return waiting.player[0] ?? waiting.background[0];
+    return waiting.followup[0] ?? waiting.player[0] ?? waiting.background[0];
   }
 
   function remove(job: Job) {
-    for (const list of [waiting.player, waiting.background]) {
+    for (const list of [waiting.followup, waiting.player, waiting.background]) {
       const i = list.indexOf(job);
       if (i !== -1) list.splice(i, 1);
     }
@@ -145,10 +146,9 @@ export function createQueue(
     b.requests.refill(now);
     b.input.refill(now);
     b.output.refill(now);
-    const line =
-      job.req.priority === 'background'
-        ? [...waiting.player, ...waiting.background]
-        : waiting.player;
+    const lines = [waiting.followup, waiting.player, waiting.background];
+    const ahead = { followup: 1, player: 2, background: 3 }[job.req.priority ?? 'player'];
+    const line = lines.slice(0, ahead).flat();
     const upTo = [...line.filter((j) => j.model === job.model), job];
     const msFor = (need: number, bucket: Bucket) =>
       (Math.max(0, need - bucket.level) * MINUTE) / bucket.perMinute;
@@ -308,7 +308,7 @@ export function createQueue(
       while (list.length && list[0]!.at < since) list.shift();
     }
     return {
-      queued: waiting.player.length + waiting.background.length,
+      queued: waiting.followup.length + waiting.player.length + waiting.background.length,
       inFlight,
       rateLimited1m: rateLimited.length,
       crowded1m: crowded.length,

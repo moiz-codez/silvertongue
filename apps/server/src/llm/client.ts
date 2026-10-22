@@ -14,7 +14,9 @@ export interface LlmRequest {
   playerNote?: string; // per-player data (the rune): last system block, never cached. Guards have none.
   messages: Anthropic.MessageParam[]; // must end with a user turn
   format?: Anthropic.JSONOutputFormat; // guards and judges: their one fixed JSON schema
-  priority?: 'player' | 'background'; // the queue serves player calls first (default: player)
+  // The queue serves follow-ups first (a later call of a message already under way), then
+  // player calls, then background calls. Default: player.
+  priority?: 'followup' | 'player' | 'background';
   signal?: AbortSignal; // set by the queue: aborted when the call's deadline passes
 }
 

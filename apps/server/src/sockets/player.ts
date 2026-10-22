@@ -299,6 +299,12 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
         });
         socket.emit('player:bubble', { id: playerMessageId, floor, speaker: 'player', text });
 
+        // Every call after this message's first one is a follow-up: the queue serves it ahead of
+        // new messages, so a message that got through the guard isn't turned away halfway.
+        let calls = 0;
+        const call: Complete = (req) =>
+          complete(calls++ === 0 ? req : { ...req, priority: 'followup' });
+
         // Asks a guard or judge, logging every try. A refusal or unreadable JSON is the model's
         // fault, not the player's: asked once more before giving up.
         const judgeTwice = async (role: RoleName, call: () => Promise<JudgeResult>) => {
@@ -332,9 +338,7 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
           const rune = q.getRune(db, id, floor);
           const guard = floorTurn.guard;
           if (guard) {
-            const verdict = await judgeTwice(guard.role, () =>
-              guard.judge(complete, text, earlier),
-            );
+            const verdict = await judgeTwice(guard.role, () => guard.judge(call, text, earlier));
             stage = floorTurn.role;
             checkBudget();
             if (socket.data.playerId !== id) return;
@@ -354,7 +358,7 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
           }
           const ask = async () => {
             const reply = await floorTurn.turn(
-              complete,
+              call,
               [...history, { speaker: 'player', text }],
               rune,
             );
@@ -381,7 +385,7 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
             } else {
               stage = replyJudge.role;
               const verdict = await judgeTwice(replyJudge.role, () =>
-                replyJudge.judge(complete, turn.text, rune),
+                replyJudge.judge(call, turn.text, rune),
               );
               checkBudget();
               if (socket.data.playerId !== id) return;
