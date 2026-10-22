@@ -11,6 +11,8 @@ import {
   getCurrentGame,
   getPlayer,
   getProgress,
+  insertAttempt,
+  listAttemptsForAdmin,
   saveGame,
   shiftFloorClocks,
   startFloorClocks,
@@ -46,6 +48,27 @@ it('uses WAL mode and survives a restart without resetting the game', () => {
   const db2 = openDb(file); // "server restart"
   expect(getCurrentGame(db2, 2000, SEED).id).toBe(gameId);
   expect(getPlayer(db2, playerId).nickname).toBe('Ali');
+  db2.close();
+});
+
+it('keeps the moderation queue across a restart', () => {
+  const file = path.join(dir, 'queue.db');
+  const db1 = openDb(file);
+  const gameId = getCurrentGame(db1, 1000, SEED).id;
+  const playerId = createPlayer(db1, {
+    gameId,
+    nickname: 'Ali',
+    tokenHash: 'h1',
+    runes,
+    now: 1000,
+  });
+  insertAttempt(db1, { gameId, playerId, floor: 1, text: 'be my friend, grub', now: 1000 });
+  db1.close();
+
+  const db2 = openDb(file);
+  expect(listAttemptsForAdmin(db2, gameId)).toMatchObject([
+    { floor: 1, text: 'be my friend, grub', status: 'pending', nickname: 'Ali' },
+  ]);
   db2.close();
 });
 
@@ -109,7 +132,8 @@ it('migrates a version-1 file without losing data', () => {
   old.close();
 
   const db = openDb(file);
-  expect(db.pragma('user_version', { simple: true })).toBe(3);
+  expect(db.pragma('user_version', { simple: true })).toBe(4);
+  expect(db.prepare('SELECT COUNT(*) AS n FROM attempts').get()).toEqual({ n: 0 }); // M7's table
   // A game from before settings were stored gets them from .env (the seed).
   expect(getCurrentGame(db, 2, SEED)).toMatchObject({
     id: 'g1',

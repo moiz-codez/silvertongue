@@ -1,4 +1,4 @@
--- Silvertongue schema, version 3 (db.ts migrates older files). WAL mode and foreign keys are switched on in db.ts.
+-- Silvertongue schema, version 4 (db.ts migrates older files). WAL mode and foreign keys are switched on in db.ts.
 -- Tables for later milestones (carvings, hoard) are added when they're needed.
 
 CREATE TABLE games (
@@ -82,9 +82,20 @@ CREATE TABLE projector_events (
   game_id TEXT NOT NULL,
   player_id TEXT NOT NULL REFERENCES players(id),
   floor INTEGER NOT NULL,
-  type TEXT NOT NULL,                     -- first_blood | clear
+  type TEXT NOT NULL,                     -- first_blood | clear | note
   game_ms INTEGER NOT NULL,               -- time in the dungeon when it happened (for "08:31")
   created_at INTEGER NOT NULL
   -- no text column: the line is built when sent, from the player's CURRENT name,
   -- so a rename or kick also changes or removes their old lines on the projector
+);
+
+-- The "best attempts" wall: only approved rows reach the projector; hidden rows never leave the server.
+CREATE TABLE attempts (                  -- winning messages waiting for the admin (M7)
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  game_id TEXT NOT NULL,
+  player_id TEXT NOT NULL REFERENCES players(id),
+  floor INTEGER NOT NULL,
+  text TEXT NOT NULL,                     -- the player's own (sanitized) message
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','hidden')),
+  created_at INTEGER NOT NULL
 );

@@ -82,7 +82,7 @@ Phones are the main target: design for 360–430 px wide, large touch targets, w
 - Start / pause / resume / start reveal / end / reset game.
 - Live config: cooldown, message cap, LLM mode (mock/live).
 - Player list: kick, rename.
-- Moderation queue: approve or reject attempts for the projector's "best attempts" wall.
+- Moderation queue: approve or hide attempts for the projector's "best attempts" wall. When a player clears a floor, their last message on that floor (never the guardian's reply) is queued with their name, the floor and the time, unless it trips the nickname profanity filter or contains their rune or either of its words (then it is dropped). Approved items appear on the wall (at most 5, newest first); hidden ones never leave the server again. The queue is saved in the database, so it survives a restart; Reset starts an empty one.
 - Health: queue length, recent 429s, average reply time, tokens and estimated spend this game.
 
 ## The reveal (the actual presentation)

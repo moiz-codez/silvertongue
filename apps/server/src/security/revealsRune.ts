@@ -28,3 +28,10 @@ export function revealsRune(
 function firstLetters(parts: string[]): string {
   return parts.map((part) => normalize(part)[0]).join('');
 }
+
+// Either rune word on its own, as a whole word (plural too). revealsRune only catches the whole
+// rune, and Floors 2–3 rely on that, so this is a separate check (Floor 5, the moderation queue).
+export function saysRuneWord(text: string, rune: string): boolean {
+  const words = text.toUpperCase().split(/[^A-Z]+/);
+  return rune.split('-').some((w) => words.some((t) => t === w || t === `${w}S` || t === `${w}ES`));
+}

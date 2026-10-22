@@ -125,7 +125,17 @@ CREATE TABLE projector_events (
   game_ms INTEGER NOT NULL,               -- time in the dungeon when it happened (for "08:31")
   created_at INTEGER NOT NULL
   -- No text column: the line is built when sent, from the player's CURRENT name, so a rename
-  -- or kick also fixes their old lines. M7 adds text + needs_approval/approved for attempts.
+  -- or kick also fixes their old lines.
+);
+
+CREATE TABLE attempts (                  -- the best-attempts wall (schema v4, M7)
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  game_id TEXT NOT NULL,
+  player_id TEXT NOT NULL REFERENCES players(id),
+  floor INTEGER NOT NULL,
+  text TEXT NOT NULL,                     -- the player's own (sanitized) winning message
+  status TEXT NOT NULL DEFAULT 'pending', -- pending | approved | hidden (hidden is final)
+  created_at INTEGER NOT NULL
 );
 ```
 
@@ -157,14 +167,15 @@ All payloads validated with zod on receipt.
 There is no `player:pending` event: the phone shows an in-character waiting line from `packages/shared/src/floors.ts` as soon as the player sends, and hides it when the reply or an error arrives.
 
 **Server → projector** (namespace `/projector`, read-only, no token; throttled to ≤ 2 updates/s)
-- `projector:snapshot { status, elapsedMs, publicUrl, players: [{ nickname, floor }], feed: [{ gameMs, type: 'first_blood' | 'clear' | 'note', text }] }`, sent on connect and after every change. Kicked players are left out. The feed is the newest 8 `projector_events` of players who aren't kicked, each turned into a server-written line with the player's current name (e.g. "NightOwl charmed Grub."), so no player-written text reaches the projector and a rename or kick also changes the old lines. A `note` line is "A note has appeared on Floor N.": written once per floor per game, the first time anyone unlocks note 1 there; it never carries the note or a name. Nicknames passed the profanity filter at join or rename. It also carries `wards: { ears, tongues }`, the number of real seals this game (`SEAL` and `LEAK` verdicts): counts only, never text. The projector flares a glow over the matching gem on Queen Ashveil's pillars when one rises. M9 adds Vorgath's counters; M7 adds approved attempts to the feed.
+- `projector:snapshot { status, elapsedMs, publicUrl, players: [{ nickname, floor }], feed: [{ gameMs, type: 'first_blood' | 'clear' | 'note', text }] }`, sent on connect and after every change. Kicked players are left out. The feed is the newest 5 `projector_events` of players who aren't kicked, each turned into a server-written line with the player's current name (e.g. "NightOwl charmed Grub."), so no player-written text reaches the projector and a rename or kick also changes the old lines. A `note` line is "A note has appeared on Floor N.": written once per floor per game, the first time anyone unlocks note 1 there; it never carries the note or a name. Nicknames passed the profanity filter at join or rename. It also carries `wards: { ears, tongues }`, the number of real seals this game (`SEAL` and `LEAK` verdicts): counts only, never text. The projector flares a glow over the matching gem on Queen Ashveil's pillars when one rises. `bestAttempts: [{ nickname, floor, text }]` is the best-attempts wall: admin-approved winning messages only, at most 5, newest first, players who aren't kicked, with their current name. It is the only player-typed text the projector ever gets. M9 adds Vorgath's counters.
 - `projector:reveal { bestiary: FloorStats[] }` (M8)
 
 **Admin ↔ server** (namespace `/admin`. The token goes in the Socket.IO handshake, `auth: { token }`, and connection middleware compares it with `ADMIN_TOKEN` using `timingSafeEqual`. A wrong token is refused before any handler exists. Through the tunnel, 5 wrong tokens in a minute from one address lock that address out for the rest of the minute ("Too many tries. Wait a minute."); a browser on the laptop itself is never locked out.)
 - `admin:command { type: 'start'|'pause'|'resume'|'reveal'|'end'|'reset' }` → ack `{ ok: true }` or `{ ok: false, error }`
+- `admin:moderate { id, action: 'approve' | 'hide' }` → same ack. Only this game's items; hidden is final (a hidden item is never selected again, so it can't be approved later).
 - `admin:kick { playerId }`, `admin:rename { playerId, nickname }` → same ack. Rename runs the same nickname rules as join (`security/nickname.ts`).
 - `admin:config { cooldownMs, maxMessages, llmMode }` → same ack. Cooldown 0–60 s, cap 1–500, `mock` | `live`; Live is refused when the server has no `ANTHROPIC_API_KEY`. Saved on the current game.
-- server → admin: `admin:state { status, elapsedMs, players: [{ id, nickname, floor, score, messagesSent, kicked }], settings: { cooldownMs, maxMessages, llmMode }, liveAvailable, health: { queued, inFlight, rateLimited1m, crowded1m, avgReplyMs, callsLastMin, estInputLastMin, maxOutputLastMin, memoryMb }, spendUsd, budgetUsd, budgetAlert }`, throttled like the projector, and refreshed every 5 s so the last-minute tiles age out. Never tokens, token hashes, runes or raw replies.
+- server → admin: `admin:state { status, elapsedMs, players: [{ id, nickname, floor, score, messagesSent, kicked }], settings: { cooldownMs, maxMessages, llmMode }, liveAvailable, health: { queued, inFlight, rateLimited1m, crowded1m, avgReplyMs, callsLastMin, estInputLastMin, maxOutputLastMin, memoryMb }, spendUsd, budgetUsd, budgetAlert, moderation: [{ id, nickname, floor, text, createdAt, status: 'pending' | 'approved' }] }`, throttled like the projector, and refreshed every 5 s so the last-minute tiles age out. Never tokens, token hashes, runes or raw replies.
 - M7 adds `admin:moderate { eventId, approve }` and the moderation queue.
 
 **Per-address limits** (`sockets/clientIp.ts`). Behind the Cloudflare tunnel every socket comes from cloudflared on the laptop, so the visitor's address is the `cf-connecting-ip` header, trusted only when the socket itself comes from loopback; otherwise the socket's own address. This is only safe because cloudflared sets that header itself. Behind any other local proxy (Caddy on Oracle) a player could send a fake `cf-connecting-ip`: there, strip the header in the proxy or read `X-Forwarded-For` instead.

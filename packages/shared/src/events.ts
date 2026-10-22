@@ -7,6 +7,7 @@ import type {
   joinPayload,
   kickPayload,
   messagePayload,
+  moderatePayload,
   renamePayload,
   resumePayload,
 } from './schemas.ts';
@@ -96,6 +97,8 @@ export interface ProjectorSnapshot {
   players: { nickname: string; floor: number }[];
   feed: FeedItem[]; // newest first
   wards: { ears: number; tongues: number }; // real seals this game; the glyphs pulse when one rises
+  // Admin-approved winning messages, at most 5, newest first. Nothing else typed by a player.
+  bestAttempts: { nickname: string; floor: number; text: string }[];
 }
 
 export interface ProjectorServerEvents {
@@ -111,6 +114,16 @@ export interface AdminPlayer {
   score: number;
   messagesSent: number;
   kicked: boolean;
+}
+
+// A winning message waiting for (or past) the admin's decision. Hidden ones are never sent.
+export interface ModerationItem {
+  id: number;
+  nickname: string;
+  floor: number;
+  text: string;
+  createdAt: number;
+  status: 'pending' | 'approved';
 }
 
 export type AdminSettings = z.infer<typeof configPayload>;
@@ -138,6 +151,7 @@ export interface AdminState {
   spendUsd: number;
   budgetUsd: number;
   budgetAlert: boolean; // spend crossed the budget and the game paused itself
+  moderation: ModerationItem[]; // newest first
 }
 
 export type AdminReply = { ok: true } | { ok: false; error: string };
@@ -149,6 +163,10 @@ export interface AdminClientEvents {
   ) => void;
   'admin:config': (payload: AdminSettings, ack: (reply: AdminReply) => void) => void;
   'admin:kick': (payload: z.infer<typeof kickPayload>, ack: (reply: AdminReply) => void) => void;
+  'admin:moderate': (
+    payload: z.infer<typeof moderatePayload>,
+    ack: (reply: AdminReply) => void,
+  ) => void;
   'admin:rename': (
     payload: z.infer<typeof renamePayload>,
     ack: (reply: AdminReply) => void,

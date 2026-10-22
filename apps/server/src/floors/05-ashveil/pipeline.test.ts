@@ -8,11 +8,11 @@ import {
   EARS_STOCK,
   earsJudge,
   earsMessages,
-  saysRuneWord,
   TONGUES_SEAL,
   TONGUES_STOCK,
   tonguesJudge,
 } from './pipeline.ts';
+import { saysRuneWord } from '../../security/revealsRune.ts';
 import {
   ASHVEIL_PROMPT,
   ashveilNote,

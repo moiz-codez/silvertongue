@@ -35,7 +35,8 @@ import type { AdminReply } from '@silvertongue/shared/events';
 import { DeadlineError, errorStatus, RefusalError, type Complete } from '../llm/client.ts';
 import type { QueueStats } from '../llm/queue.ts';
 import { cleanNickname, NICKNAME_TAKEN, nicknameProblem } from '../security/nickname.ts';
-import { revealsRune } from '../security/revealsRune.ts';
+import { isProfane } from '../security/profanity.ts';
+import { revealsRune, saysRuneWord } from '../security/revealsRune.ts';
 import { sanitize } from '../security/sanitize.ts';
 import { clientIp, slidingLimit } from './clientIp.ts';
 import { throttle } from './throttle.ts';
@@ -515,9 +516,10 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
           return sendError(socket, 'door_cooldown', 'The door is still humming. Wait a moment.');
         }
         const progress = q.getProgress(db, id, floor);
+        const rune = q.getRune(db, id, floor);
         const result = checkDoor(
           parsed.data.guess,
-          q.getRune(db, id, floor),
+          rune,
           { streak: progress.wrong_door_streak, lockedUntil: progress.door_locked_until },
           now,
         );
@@ -553,6 +555,20 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
           messagesUsed: progress.messages_used,
           firstBlood,
         });
+        // Their last message on this floor goes to the admin's queue for the best-attempts wall,
+        // unless it is rude or gives away any part of this rune.
+        const winning = q
+          .listFloorMessages(db, id, floor)
+          .filter((m) => m.speaker === 'player')
+          .at(-1)?.text;
+        if (
+          winning &&
+          !isProfane(winning) &&
+          !revealsRune(winning, rune).revealed &&
+          !saysRuneWord(winning, rune)
+        ) {
+          q.insertAttempt(db, { gameId: ctx.game.id, playerId: id, floor, text: winning, now });
+        }
         q.clearFloor(db, { playerId: id, floor, points: score.total, firstBlood, now });
         // The projector turns this into "NightOwl charmed Grub." when it sends the feed.
         q.insertProjectorEvent(db, {

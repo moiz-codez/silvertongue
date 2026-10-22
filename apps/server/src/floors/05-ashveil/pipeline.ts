@@ -5,7 +5,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import type { Complete, LlmResult } from '../../llm/client.ts';
 import { cleanReply } from '../../security/cleanReply.ts';
-import { revealsRune } from '../../security/revealsRune.ts';
+import { revealsRune, saysRuneWord } from '../../security/revealsRune.ts';
 import { readVerdict, type JudgeResult } from '../judge.ts';
 import { toMessages, type Turn } from '../messages.ts';
 import {
@@ -85,13 +85,6 @@ export async function ashveilTurn(
   });
   const text = cleanReply(result, rune).replace(/^\s*Queen Ashveil:\s*/gim, '');
   return { text, slipped: revealsRune(text, rune).revealed || saysRuneWord(text, rune), result };
-}
-
-// Either rune word on its own, as a whole word (plural too). revealsRune only catches the whole
-// rune, and Floors 2–3 rely on that, so this extra check is Floor 5's own.
-export function saysRuneWord(text: string, rune: string): boolean {
-  const words = text.toUpperCase().split(/[^A-Z]+/);
-  return rune.split('-').some((w) => words.some((t) => t === w || t === `${w}S` || t === `${w}ES`));
 }
 
 // The Ward of Tongues sees only her (cleaned) reply, and the rune in its final note.

@@ -13,6 +13,7 @@ import {
   adminCommandPayload,
   configPayload,
   kickPayload,
+  moderatePayload,
   renamePayload,
 } from '@silvertongue/shared/schemas';
 import { effectiveMode } from '../config/env.ts';
@@ -82,6 +83,14 @@ export function registerAdmin(io: PlayerServer, ctx: GameContext, phones: PhoneC
       spendUsd: q.gameSpendUsd(db, game.id),
       budgetUsd: env.BUDGET_USD,
       budgetAlert: game.budget_alert_at !== null,
+      moderation: q.listAttemptsForAdmin(db, game.id).map((a) => ({
+        id: a.id,
+        nickname: a.nickname,
+        floor: a.floor,
+        text: a.text,
+        createdAt: a.created_at,
+        status: a.status,
+      })),
     };
   }
 
@@ -168,6 +177,22 @@ export function registerAdmin(io: PlayerServer, ctx: GameContext, phones: PhoneC
         if (!player) return { ok: false, error: 'No such player in this game.' };
         q.kickPlayer(db, player.id);
         phones.kick(player.id);
+        return { ok: true };
+      }),
+    );
+
+    // Approve puts a winning message on the projector's wall; hide removes it for good.
+    socket.on(
+      'admin:moderate',
+      safely((payload) => {
+        const parsed = moderatePayload.safeParse(payload);
+        if (!parsed.success) return { ok: false, error: 'Unknown item.' };
+        const { id, action } = parsed.data;
+        const status = action === 'approve' ? 'approved' : 'hidden';
+        if (!q.setAttemptStatus(db, ctx.game.id, id, status)) {
+          return { ok: false, error: 'That item is gone.' };
+        }
+        ctx.changed(); // the projector's wall
         return { ok: true };
       }),
     );

@@ -17,6 +17,10 @@ export const configPayload = z.object({
   maxMessages: z.number().int().min(1).max(500),
   llmMode: z.enum(['mock', 'live']),
 });
+export const moderatePayload = z.object({
+  id: z.number().int().positive(),
+  action: z.enum(['approve', 'hide']),
+});
 export const kickPayload = z.object({ playerId: z.string().max(64) });
 export const renamePayload = z.object({
   playerId: z.string().max(64),
