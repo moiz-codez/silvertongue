@@ -386,12 +386,15 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
               [...history, { speaker: 'player', text }],
               rune,
             );
-            const refused = reply.result.stopReason === 'refusal';
-            logCall(gameId, id, floor, floorTurn.role, reply.result, refused ? 'refusal' : 'ok');
-            return { reply, refused };
+            const blocked = reply.result.stopReason === 'refusal';
+            logCall(gameId, id, floor, floorTurn.role, reply.result, blocked ? 'refusal' : 'ok');
+            // A reply that cleaning left empty (e.g. only "Queen Ashveil:") is never sent as an
+            // empty bubble: it is handled like a refusal.
+            return { reply, refused: blocked || reply.text.trim() === '' };
           };
           // The API's safety classifier sometimes stops a harmless reply mid-word (stop_reason
-          // "refusal"). Its text is thrown away and the call tried once more.
+          // "refusal"), and a reply can be empty after cleaning. Either way its text is thrown
+          // away and the call tried once more; twice gives the guardian's "lost my words" line.
           let { reply: turn, refused } = await ask();
           if (refused) ({ reply: turn, refused } = await ask());
           checkBudget();
