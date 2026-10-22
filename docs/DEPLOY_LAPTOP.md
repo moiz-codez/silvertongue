@@ -59,7 +59,7 @@ It then checks `/health` **through the tunnel** every 15 seconds and prints a re
 ## If something goes wrong
 
 - **Red "THE SERVER CRASHED" banner:** nothing to do. It restarts in 2 s on the same address and phones carry on. If it says **"KEEPS CRASHING"**, read the error above it, then run `npm run tunnel` again (new address).
-- **Red "GAME IS NOT ANSWERING" banner:** if the server didn't just crash, the laptop's internet dropped. Switch to the phone hotspot. The tunnel usually reconnects by itself with the **same** address, and a green "Tunnel is back" banner appears. Pause the game meanwhile: the localhost admin page still works.
+- **Red "GAME IS NOT ANSWERING" banner:** if the server didn't just crash, the laptop's internet dropped. Switch to the phone hotspot. The tunnel usually reconnects by itself with the **same** address, and a green "The game is answering again" banner appears. Pause the game meanwhile: the localhost admin page still works.
 - **Red "THE TUNNEL DIED" banner:** run `npm run tunnel` again. The game state is kept, because a restart never resets progress. But it's a **new address**: the projector QR updates by itself, and players re-scan and join again.
 - **"Budget reached" alert on the admin page:** the game paused itself at `BUDGET_USD`. Resume only if you mean to keep spending.
 - **Phones stuck on "connecting":** check the projector page first. If the projector works, the problem is the phone's network; ask them to try mobile data.
