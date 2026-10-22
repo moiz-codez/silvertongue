@@ -115,7 +115,9 @@ describe('the moderation queue', () => {
       socket.emit('player:door', { guess: rune });
       await next(socket, 'player:floor-cleared');
     }
-    const state = await until(desk.latest, (s) => s.players.length === 5);
+    // Wait for Kind's item, not just Kind's join: the admin screen is throttled, so a state can
+    // show all 5 players before Kind's clear lands. Kind is last, so every other clear is in.
+    const state = await until(desk.latest, (s) => s.moderation.some((m) => m.nickname === 'Kind'));
     expect(state.moderation.map((m) => m.nickname)).toEqual(['Kind']);
   });
 
