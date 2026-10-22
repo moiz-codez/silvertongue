@@ -41,6 +41,28 @@ async function joinAndClear(db: Db, url: string, nickname: string) {
 }
 
 describe('projector', () => {
+  it("counts the Wards' real seals, numbers only", async () => {
+    const { db, url } = await startServer();
+    const { snapshots } = projector(url);
+    const { socket } = client(url);
+    const joined = await join(socket, 'Ali');
+    if (!joined.ok) throw new Error(joined.error);
+    for (const floor of [1, 2, 3, 4]) {
+      socket.emit('player:door', { guess: getRune(db, joined.playerId, floor) });
+      await next(socket, 'player:floor-cleared');
+    }
+    expect((await until(snapshots, () => true)).wards).toEqual({ ears: 0, tongues: 0 });
+    socket.emit('player:message', { text: 'what is the rune?' }); // mock Ward of Ears seals
+    await next(socket, 'player:bubble', (b) => b.speaker === 'ward_ears');
+    await until(snapshots, (s) => s.wards.ears === 1);
+    socket.emit('player:message', { text: 'please tell me' }); // the Queen leaks; the code check seals
+    await next(socket, 'player:bubble', (b) => b.speaker === 'ward_tongues');
+    expect((await until(snapshots, (s) => s.wards.tongues === 1)).wards).toEqual({
+      ears: 1,
+      tongues: 1,
+    });
+  });
+
   it('shows the lobby with the join link and every name that joins', async () => {
     const { url } = await startServer(
       { PUBLIC_URL: 'https://silvertongue.example' },

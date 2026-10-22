@@ -221,6 +221,48 @@
   height: 4em;
 }
 
+/* Queen Ashveil's Wards: cyan left, magenta right. Each pulses when it seals something. */
+.pj-floor-art {
+  position: relative;
+  display: inline-flex;
+}
+
+.pj-ward {
+  position: absolute;
+  top: 50%;
+  width: 0.45em;
+  height: 1.4em;
+  margin-top: -0.7em;
+  animation: pj-ward-pulse 1.2s ease-out;
+}
+
+.pj-ward-ears {
+  left: -0.7em;
+  background: var(--ward-ears);
+}
+
+.pj-ward-tongues {
+  right: -0.7em;
+  background: var(--ward-tongues);
+}
+
+@keyframes pj-ward-pulse {
+  0% {
+    transform: scale(1.6);
+    filter: brightness(1.8);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pj-ward {
+    animation: none;
+  }
+}
+
 .pj-floor-name h2 {
   margin: 0;
   font-size: 1.5em;

@@ -270,6 +270,40 @@
   color: var(--name-mumble);
 }
 
+.bubble-guardian.floor-5 {
+  background: var(--bubble-ashveil);
+}
+
+.bubble-row.guardian:has(.floor-5) .bubble-name {
+  color: var(--name-ashveil);
+}
+
+/* A Ward sealed it: stone, not a voice. Dashed, all caps, cyan for Ears and magenta for Tongues. */
+.bubble-row.ward_ears,
+.bubble-row.ward_tongues {
+  align-self: flex-start;
+}
+
+.bubble-ward_ears,
+.bubble-ward_tongues {
+  padding: 6px 12px;
+  border: 1px dashed currentColor;
+  border-radius: 0;
+  background: transparent;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.bubble-ward_ears {
+  color: var(--ward-ears);
+}
+
+.bubble-ward_tongues {
+  color: var(--ward-tongues);
+}
+
 /* Gorm smashed the message: a red, blocky, all-caps shout, and Mumble slept through it. */
 .bubble-row.gorm {
   align-self: flex-start;

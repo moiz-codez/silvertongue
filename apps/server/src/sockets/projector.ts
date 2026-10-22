@@ -39,6 +39,7 @@ export function registerProjector(io: PlayerServer, ctx: GameContext): () => voi
         type: e.type === 'first_blood' ? 'first_blood' : 'clear',
         text: GUARDIANS[e.floor]?.clearedBy(e.nickname) ?? '',
       })),
+      wards: q.countWardSeals(db, game.id), // counts only, never text
     };
   }
 

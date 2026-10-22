@@ -111,7 +111,23 @@ function DungeonMap({ snapshot, receivedAt }: { snapshot: ProjectorSnapshot; rec
           return (
             <div key={floor} className={floor === FLOOR_COUNT ? 'pj-floor pj-vault' : 'pj-floor'}>
               <span className="pj-floor-number">{floor}</span>
-              <img className="sprite pj-floor-sprite" src={GUARDIAN_SPRITES[floor]!.idle} alt="" />
+              <span className="pj-floor-art">
+                <img
+                  className="sprite pj-floor-sprite"
+                  src={GUARDIAN_SPRITES[floor]!.idle}
+                  alt=""
+                />
+                {floor === 5 && (
+                  <>
+                    {/* A new key remounts the glyph, which replays its pulse: one pulse per seal. */}
+                    <span key={`ears-${snapshot.wards.ears}`} className="pj-ward pj-ward-ears" />
+                    <span
+                      key={`tongues-${snapshot.wards.tongues}`}
+                      className="pj-ward pj-ward-tongues"
+                    />
+                  </>
+                )}
+              </span>
               <div className="pj-floor-name">
                 <h2>{guardian.name}</h2>
                 <p>{guardian.title}</p>

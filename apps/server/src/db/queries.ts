@@ -341,6 +341,16 @@ export function setMessageVerdict(db: Db, messageId: number, verdict: string): v
   db.prepare('UPDATE messages SET verdict = ? WHERE id = ?').run(verdict, messageId);
 }
 
+// Real seals this game: the Ward of Ears' SEAL verdicts and the Ward of Tongues' LEAK ones.
+export function countWardSeals(db: Db, gameId: string): { ears: number; tongues: number } {
+  const row = db
+    .prepare(
+      "SELECT COUNT(*) FILTER (WHERE verdict = 'SEAL') AS ears, COUNT(*) FILTER (WHERE verdict = 'LEAK') AS tongues FROM messages WHERE game_id = ?",
+    )
+    .get(gameId) as { ears: number; tongues: number };
+  return { ears: row.ears, tongues: row.tongues };
+}
+
 // The guard passed this message: record it, and only now let the guardian hear it.
 export function passGuard(db: Db, messageId: number): void {
   db.prepare("UPDATE messages SET verdict = 'PASS', in_guardian_history = 1 WHERE id = ?").run(

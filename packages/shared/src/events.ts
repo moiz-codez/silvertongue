@@ -93,6 +93,7 @@ export interface ProjectorSnapshot {
   publicUrl: string;
   players: { nickname: string; floor: number }[];
   feed: FeedItem[]; // newest first
+  wards: { ears: number; tongues: number }; // real seals this game; the glyphs pulse when one rises
 }
 
 export interface ProjectorServerEvents {
