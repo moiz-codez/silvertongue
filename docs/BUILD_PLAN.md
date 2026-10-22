@@ -149,6 +149,17 @@ Every milestone is done only when its acceptance criteria are met and `npm run c
 - Moderation queue; projector "best attempts" wall shows approved items only.
 - Phone UI polish: 360 px layout, cooldown on the send button, floor-cleared celebration, readable on a sunny classroom projector.
 
+**Decisions made in M7**
+- A failed try is a counted player message (guard blocks included) or a wrong door guess. The notes come from the existing `floor_progress.failed_tries`, so they survive a refresh. Refusal retries, guard or model errors and "crowded" turn-aways never count. The note texts live in `game/hints.ts`, and a test keeps them free of rune words.
+- A wrong door guess starts the same per-player cooldown as a message (its own timer, shown on the door button), so spamming the door can't unlock both notes in seconds. A right guess has no wait, so a player can open the next door straight away.
+- The projector feed says "A note has appeared on Floor N." once per floor per game, never the note. The feed keeps 5 lines to make room for the best-attempts wall.
+- The winning message is the player's last message on the floor. It is queued (table `attempts`, schema v4) only if it passes the nickname profanity check, `revealsRune` and `saysRuneWord` against the rune just cleared. Hide is final. Reset starts a new game, so the queue empties. `saysRuneWord` moved to `security/revealsRune.ts`.
+- A reply that is empty after cleaning counts as a refusal: one retry, then the floor's lost-words line, and the message isn't counted.
+- The cleared screen moves on after about 3 s or on a tap. The projector's muted grey is one shade lighter than on the phone (same hue) to keep 7:1 on every panel.
+- `npm run riddles:sheet` prints the Floor 5 clues for a paper test with friends. The clue table didn't change.
+- The M6 one-off test failure never came back: 0 failures in 47 `npm test` runs in a row, 10 `npm run check` runs and 48 runs 3 at a time under load. The load run did find a new race in M7's own `moderation.test.ts` (1 in 18): it waited until the throttled admin screen showed 5 players, which can arrive before the last player's clear is queued. It now waits for the queued item itself (then 0 failures in 30 runs under the same load).
+- Not done, carried to M8: "both wards go dark when she's beaten" on the projector.
+
 **Acceptance**
 - Real playtest with 5–10 friends on their own phones for 10 minutes, via the deployed URL. Fix everything that confused them.
 
