@@ -1,16 +1,26 @@
 // The big screen. Read-only: it only listens to /projector snapshots, which carry filtered
-// nicknames and server-written feed lines. Sized in "em" off the viewport, so any projector fits.
+// nicknames, server-written feed lines and admin-approved attempts. Sized in "em" off the viewport, so any projector fits.
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { io } from 'socket.io-client';
 import { FLOOR_COUNT } from '@silvertongue/shared/constants';
-import type { ProjectorServerEvents, ProjectorSnapshot } from '@silvertongue/shared/events';
+import type {
+  FeedItem,
+  ProjectorServerEvents,
+  ProjectorSnapshot,
+} from '@silvertongue/shared/events';
 import { DEEPEST_BUILT_FLOOR, GUARDIANS } from '@silvertongue/shared/floors';
 import type { Socket } from 'socket.io-client';
 import { clock } from '../clock.ts';
 import { GUARDIAN_SPRITES } from '../sprites.ts';
 import { useNow } from '../useGame.ts';
 import '../styles/projector.css';
+
+const FEED_LABEL: Record<FeedItem['type'], string> = {
+  first_blood: 'First blood',
+  clear: 'Cleared',
+  note: 'A note',
+};
 
 const MAX_CHIPS = 20; // per floor; the rest become "+N more" so a crowded row never spills off-screen
 
@@ -152,6 +162,19 @@ function DungeonMap({ snapshot, receivedAt }: { snapshot: ProjectorSnapshot; rec
           <span>{snapshot.status === 'paused' ? 'Paused' : 'Time in the dungeon'}</span>
           <strong>{clock(elapsed)}</strong>
         </div>
+        {snapshot.bestAttempts.length > 0 && (
+          <div className="pj-best">
+            <p className="eyebrow eyebrow-left">Best attempts</p>
+            {snapshot.bestAttempts.map((a, i) => (
+              <div key={i} className="pj-best-item">
+                <p className="pj-best-text">“{a.text}”</p>
+                <span className="pj-feed-meta">
+                  {a.nickname} · Floor {a.floor}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="pj-feed">
           <p className="eyebrow eyebrow-left">What just happened</p>
           {snapshot.feed.length === 0 && <p className="pj-empty">The guardians are waiting…</p>}
@@ -159,8 +182,8 @@ function DungeonMap({ snapshot, receivedAt }: { snapshot: ProjectorSnapshot; rec
             <div key={`${item.gameMs}-${i}`} className="pj-feed-item">
               <span className="pj-feed-meta">
                 {clock(item.gameMs)} ·{' '}
-                <b className={item.type === 'first_blood' ? 'first-blood' : undefined}>
-                  {item.type === 'first_blood' ? 'First blood' : 'Cleared'}
+                <b className={item.type === 'clear' ? undefined : item.type.replace('_', '-')}>
+                  {FEED_LABEL[item.type]}
                 </b>
               </span>
               <p>{item.text}</p>

@@ -35,6 +35,8 @@ function Phone() {
       doorNote={game.doorNote}
       cooldownUntil={game.cooldownUntil}
       doorLockedUntil={game.doorLockedUntil}
+      doorCooldownUntil={game.doorCooldownUntil}
+      freshNote={game.freshNote}
       onSend={game.send}
       onDoor={game.openDoor}
     />

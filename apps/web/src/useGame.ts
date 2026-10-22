@@ -24,6 +24,10 @@ export function useGame() {
   // Local deadlines built from the server's "ms from now" values.
   const [cooldownUntil, setCooldownUntil] = useState(0);
   const [doorLockedUntil, setDoorLockedUntil] = useState(0);
+  const [doorCooldownUntil, setDoorCooldownUntil] = useState(0);
+  // A note that appeared while playing glows once; notes already there after a refresh don't.
+  const [freshNote, setFreshNote] = useState<number | null>(null);
+  const notesSeen = useRef<{ floor: number; count: number } | null>(null);
 
   const forget = useCallback(() => {
     saveToken(null);
@@ -60,6 +64,13 @@ export function useGame() {
       setState(s);
       setCooldownUntil(Date.now() + s.cooldownMs);
       setDoorLockedUntil(Date.now() + s.doorLockedMs);
+      setDoorCooldownUntil(Date.now() + s.doorCooldownMs);
+      const seen = notesSeen.current;
+      if (seen && seen.floor === s.floor && s.notes.length > seen.count) {
+        setFreshNote(s.notes.length - 1);
+        setTimeout(() => setFreshNote(null), 2500);
+      }
+      notesSeen.current = { floor: s.floor, count: s.notes.length };
     });
     socket.on('player:history', (h) => setBubbles(h.bubbles));
     socket.on('player:bubble', (b) => {
@@ -143,6 +154,8 @@ export function useGame() {
     kicked,
     cooldownUntil,
     doorLockedUntil,
+    doorCooldownUntil,
+    freshNote,
     join,
     send,
     openDoor,

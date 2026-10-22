@@ -13,6 +13,8 @@ interface Props {
   doorNote: DoorNote | null;
   cooldownUntil: number;
   doorLockedUntil: number;
+  doorCooldownUntil: number; // after a wrong guess, like the send button
+  freshNote: number | null; // index of a note that just appeared
   onSend: (text: string) => void;
   onDoor: (guess: string) => void;
 }
@@ -27,6 +29,7 @@ export function Play(props: Props) {
   const now = useNow(true);
   const cooldownLeft = Math.ceil(Math.max(0, props.cooldownUntil - now) / 1000);
   const lockLeft = Math.ceil(Math.max(0, props.doorLockedUntil - now) / 1000);
+  const doorWaitLeft = Math.ceil(Math.max(0, props.doorCooldownUntil - now) / 1000);
 
   const [text, setText] = useState('');
   const [guess, setGuess] = useState('');
@@ -53,7 +56,7 @@ export function Play(props: Props) {
 
   function knock(event: FormEvent) {
     event.preventDefault();
-    if (paused || guess.trim() === '' || lockLeft > 0) return;
+    if (paused || guess.trim() === '' || lockLeft > 0 || doorWaitLeft > 0) return;
     props.onDoor(guess);
     setGuess('');
   }
@@ -82,6 +85,17 @@ export function Play(props: Props) {
           <p className="guardian-subtitle">{floor.subtitle}</p>
         </div>
       </section>
+
+      {state.notes.length > 0 && (
+        <aside className="wall-notes" aria-label="Notes scratched on the wall">
+          <p className="wall-notes-label">Scratched on the wall</p>
+          {state.notes.map((note, i) => (
+            <p key={i} className={i === props.freshNote ? 'wall-note fresh' : 'wall-note'}>
+              “{note}”
+            </p>
+          ))}
+        </aside>
+      )}
 
       <section className="chat" aria-live="polite">
         {bubbles.map((b) =>
@@ -131,8 +145,11 @@ export function Play(props: Props) {
             aria-label="Rune"
             maxLength={100}
           />
-          <button className="door-button" disabled={paused || lockLeft > 0 || guess.trim() === ''}>
-            {lockLeft > 0 ? `${lockLeft}s` : 'Open'}
+          <button
+            className="door-button"
+            disabled={paused || lockLeft > 0 || doorWaitLeft > 0 || guess.trim() === ''}
+          >
+            {lockLeft > 0 ? `${lockLeft}s` : doorWaitLeft > 0 ? `${doorWaitLeft}s` : 'Open'}
           </button>
         </form>
 

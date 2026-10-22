@@ -348,9 +348,40 @@
   color: var(--color-accent);
 }
 
+.pj-feed-meta .note {
+  color: var(--color-text);
+}
+
 .pj-feed-item p {
   margin: 0.1em 0 0;
   font-size: 1.15em;
+}
+
+/* Admin-approved winning messages: the only player-typed text on the big screen. */
+.pj-best {
+  padding: 1.2em 1.5em;
+  background: var(--color-surface);
+  border: 1px solid var(--color-accent);
+}
+
+.pj-best .eyebrow {
+  margin-bottom: 0.8em;
+}
+
+.pj-best-item + .pj-best-item {
+  margin-top: 0.8em;
+}
+
+.pj-best-text {
+  margin: 0;
+  font-size: 1.1em;
+  font-style: italic;
+  /* Up to 300 characters: two lines on the wall, the rest cut. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
 }
 
 /* ---------- Reveal / ended holding screen ---------- */
