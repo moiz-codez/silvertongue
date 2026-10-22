@@ -63,8 +63,27 @@ It then checks `/health` **through the tunnel** every 15 seconds and prints a re
 - **Red "THE TUNNEL DIED" banner:** run `npm run tunnel` again. The game state is kept, because a restart never resets progress. But it's a **new address**: the projector QR updates by itself, and players re-scan and join again.
 - **"Budget reached" alert on the admin page:** the game paused itself at `BUDGET_USD`. Resume only if you mean to keep spending.
 - **Phones stuck on "connecting":** check the projector page first. If the projector works, the problem is the phone's network; ask them to try mobile data.
+- **Players on the same Wi-Fi as the laptop** can also use the `http://<lan-ip>:3000` address printed in the READY banner, if the tunnel is down but the server is still running. Never open `/admin` that way.
+
+## Tunnel won't start
+
+A red **"COULD NOT START THE TUNNEL"** banner means cloudflared never got an address. This is different from "THE TUNNEL DIED", which means it was running and then stopped. Above the banner are cloudflared's own error lines. The banner gives the likely reason and what to do. For a temporary problem, the script tries again by itself after 10 s and then 30 s, then gives up.
+
+| What the banner says | What to do |
+|---|---|
+| Cloudflare's quick-tunnel service didn't answer in time (`context deadline exceeded`) | Usually passes on a retry. Cloudflare's free service is sometimes slow to give out addresses; cloudflared waits only about 15 s. If all three tries fail, wait a few minutes or switch to the phone hotspot. |
+| Rate-limiting (`429`) | Too many new tunnels from this connection. Wait 15–30 minutes, or use the phone hotspot. No retry, because retrying makes it worse. |
+| Found a config file | A `config.yml` or credentials in `~/.cloudflared` (`C:\Users\<you>\.cloudflared`) makes cloudflared run a named tunnel instead. Rename that folder (e.g. `.cloudflared-off`). |
+| Can't reach Cloudflare (DNS or `dial tcp` error) | The laptop's internet or DNS. Check the connection, or switch to the phone hotspot. |
+| cloudflared could not be run | It isn't installed or isn't on PATH. Check with `cloudflared --version`. |
+| Port 3000 is already in use | Another `npm run tunnel`, `npm start` or `npm run dev` is still running. Close it first. |
+| No web build found | Run `npm run build`. |
+
+To check cloudflared on its own: `cloudflared tunnel --url http://localhost:3000`. It should print a `https://….trycloudflare.com` address within about 15 s. Ctrl+C stops it.
+
+**On demo day, start the tunnel early** (well before class). That leaves time to wait out a slow or rate-limited service.
 
 ## Afterwards
 
-- Ctrl+C in the tunnel terminal stops both cloudflared and the server.
+- Ctrl+C in the tunnel terminal stops both cloudflared and the server (and anything they started).
 - Restore sleep: `powercfg /change standby-timeout-ac 30` (or your old value).
