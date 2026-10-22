@@ -22,7 +22,8 @@
     "native-check": "node scripts/native-check.ts",
     "playtest": "node scripts/playtest.ts",
     "loadtest": "node scripts/loadtest.ts",
-    "tunnel": "node scripts/tunnel.ts"
+    "tunnel": "node scripts/tunnel.ts",
+    "riddles:sheet": "node scripts/riddlesSheet.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
