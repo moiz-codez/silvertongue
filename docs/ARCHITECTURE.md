@@ -146,7 +146,7 @@ All payloads validated with zod on receipt.
 **Server → player**
 - `player:state { gameStatus, playersInGame, nickname, floor, floorReady, score, title, messagesLeft, cooldownMs, doorLockedMs }`. Durations are milliseconds from now, never timestamps, so a phone with a wrong clock still counts down correctly. `floorReady` is false while the floor isn't built yet. `playersInGame` is the lobby's "N adventurers at the gate". The phone picks its screen from `gameStatus`. M7 adds `notes`.
 - `player:history { floor, bubbles }`: on resume, replays this floor's bubbles so a refresh shows the same chat.
-- `player:bubble { id, floor, speaker, text }` (speaker: player | guardian | snip | gorm | system; later floors add ward_ears | ward_tongues | carving). On Floor 4 a `gorm` bubble is Gorm's growl when he blocked the message; the phone shows "Mumble was asleep and never heard that." under it (UI text, not stored), and a `gorm` bubble ends the wait for an answer just like a guardian reply. On Floor 3 the guardian bubble is Snip's output, and when Snip cut something a `snip` bubble follows: `SNIP! N letters removed.` It is stored as its own message with `in_guardian_history = 0`, so Morwen never sees it. Morwen's history is what the traveller saw (blacked out); her unfiltered words are only in `raw_text`. The player's own message comes back as a bubble too.
+- `player:bubble { id, floor, speaker, text }` (speaker: player | guardian | snip | gorm | ward_ears | ward_tongues | system; Floor 6 adds carving). On Floor 5 a `ward_ears` bubble (cyan) replaces the Queen's reply when the Ward of Ears sealed the message, and a `ward_tongues` bubble (magenta) replaces it when her reply was sealed; both are fixed lines chosen by the server, and any non-player bubble ends the wait for an answer. On Floor 4 a `gorm` bubble is Gorm's growl when he blocked the message; the phone shows "Mumble was asleep and never heard that." under it (UI text, not stored), and a `gorm` bubble ends the wait for an answer just like a guardian reply. On Floor 3 the guardian bubble is Snip's output, and when Snip cut something a `snip` bubble follows: `SNIP! N letters removed.` It is stored as its own message with `in_guardian_history = 0`, so Morwen never sees it. Morwen's history is what the traveller saw (blacked out); her unfiltered words are only in `raw_text`. The player's own message comes back as a bubble too.
 - `player:expression { floor, state: 'idle' | 'slipped' }` (computed on the server with `revealsRune`)
 - `player:door-result { correct, lockedMs }`
 - `player:floor-cleared { floor, lines: [{ label, points, highlight? }], total, score, title, nextFloorReady }`
@@ -157,7 +157,7 @@ All payloads validated with zod on receipt.
 There is no `player:pending` event: the phone shows an in-character waiting line from `packages/shared/src/floors.ts` as soon as the player sends, and hides it when the reply or an error arrives.
 
 **Server → projector** (namespace `/projector`, read-only, no token; throttled to ≤ 2 updates/s)
-- `projector:snapshot { status, elapsedMs, publicUrl, players: [{ nickname, floor }], feed: [{ gameMs, type: 'first_blood' | 'clear', text }] }`, sent on connect and after every change. Kicked players are left out. The feed is the newest 8 `projector_events` of players who aren't kicked, each turned into a server-written line with the player's current name (e.g. "NightOwl charmed Grub."), so no player-written text reaches the projector and a rename or kick also changes the old lines. Nicknames passed the profanity filter at join or rename. M9 adds Vorgath's counters; M7 adds approved attempts to the feed.
+- `projector:snapshot { status, elapsedMs, publicUrl, players: [{ nickname, floor }], feed: [{ gameMs, type: 'first_blood' | 'clear', text }] }`, sent on connect and after every change. Kicked players are left out. The feed is the newest 8 `projector_events` of players who aren't kicked, each turned into a server-written line with the player's current name (e.g. "NightOwl charmed Grub."), so no player-written text reaches the projector and a rename or kick also changes the old lines. Nicknames passed the profanity filter at join or rename. It also carries `wards: { ears, tongues }`, the number of real seals this game (`SEAL` and `LEAK` verdicts): counts only, never text. The projector flares a glow over the matching gem on Queen Ashveil's pillars when one rises. M9 adds Vorgath's counters; M7 adds approved attempts to the feed.
 - `projector:reveal { bestiary: FloorStats[] }` (M8)
 
 **Admin ↔ server** (namespace `/admin`. The token goes in the Socket.IO handshake, `auth: { token }`, and connection middleware compares it with `ADMIN_TOKEN` using `timingSafeEqual`. A wrong token is refused before any handler exists. Through the tunnel, 5 wrong tokens in a minute from one address lock that address out for the rest of the minute ("Too many tries. Wait a minute."); a browser on the laptop itself is never locked out.)
@@ -228,11 +228,11 @@ This keeps the static block byte-identical across all players, so one cache entr
 
 **History rules**
 - Smashed or sealed player messages are not sent to the guardian (`in_guardian_history = 0`).
-- A Ward of Tongues–sealed guardian reply is stored and sent back in history as `[sealed]`.
+- A Ward of Tongues–sealed guardian reply is stored and sent back in history as `[sealed]`; her real words stay in `raw_text` (server only). `player:history` skips guardian rows with a `LEAK` or `GUARD_ERROR` verdict, so a refreshed phone shows the Ward's line, never a `[sealed]` bubble.
 - Floors 2–6: send at most the last 12 messages (Floor 1: 20).
-- Gorm receives only the latest player message, with no rune and no per-player note. The Ward of Ears receives the last 12 messages plus the latest one marked.
+- Gorm receives only the latest player message, with no rune and no per-player note. The Ward of Ears receives, in one user turn, the last 12 things said on the floor (every player message, sealed ones included, as `<traveller_message>`; the Queen's replies as delivered, or `[sealed]`, as `<queen_reply>`) inside `<conversation>`, then the latest message inside `<latest>`. No rune and no per-player note.
 
-**Input guard outcomes (Floor 4, Gorm).** Gorm always fails closed: Mumble is never called for a message Gorm didn't pass. On guarded floors a player message is stored outside the guardian's history (`in_guardian_history = 0`) and joins it only when Gorm passes it, so a crash mid-judgement can't leave an unjudged message for Mumble. The verdict is stored on the player's message; the M8 reveal counts only `SMASH`.
+**Input guard outcomes (Floor 4 Gorm, Floor 5 Ward of Ears).** One shared path in `sockets/player.ts`, per floor settings in `floors/index.ts` (`guard`). The guard always fails closed: the guardian is never called for a message it didn't pass. On guarded floors a player message is stored outside the guardian's history (`in_guardian_history = 0`) and joins it only when the guard passes it, so a crash mid-judgement can't leave an unjudged message for the guardian. The verdict is stored on the player's message; the M8 reveal counts only real blocks (`SMASH`, `SEAL`). The table shows Gorm; the Ward of Ears is the same with `SEAL` and its fixed lines (`docs/prompts/05-ashveil.md`).
 
 | Gorm outcome | The player sees | Message cap | Cooldown | `messages.verdict` |
 |---|---|---|---|---|
@@ -242,6 +242,18 @@ This keeps the static block byte-identical across all players, so one cache entr
 | The call fails (crowded queue / deadline, API error, timeout) | the usual `crowded` / `llm` ("The dungeon trembles") error, not a growl | not counted | `crowded`: cooldown + 0–3 s; `llm`: refunded | `GUARD_ERROR` |
 
 Every Gorm call is logged in `llm_calls` with role `gorm`. A message costs one Gorm call (two if his answer can't be read) plus, when he passes it, one Mumble call (two if refused).
+
+**Output judge outcomes (Floor 5, Ward of Tongues).** Per floor settings in `floors/index.ts` (`replyJudge`). The verdict is stored on the Queen's reply; the reveal counts `LEAK`.
+
+| Outcome | The player sees | Message cap | The Queen's history | `messages.verdict` |
+|---|---|---|---|---|
+| `revealsRune` fires (the Ward isn't asked) | `THE WARD OF TONGUES SEALS HER WORDS.` | counts | `[sealed]` | `LEAK` |
+| A real `LEAK` | the same line | counts | `[sealed]` | `LEAK` |
+| Its answer can't be read: asked once more, then | `THE WARD OF TONGUES FLICKERS. HER WORDS ARE SEALED.` | not counted (cooldown kept) | `[sealed]` | `GUARD_ERROR` |
+| The call fails | the usual `crowded` / `llm` error | not counted (`llm`: refunded) | nothing stored; the player's message leaves her history | — (logged as `ward_tongues`, status error) |
+| `CLEAN` | her reply | counts | her reply | `CLEAN` |
+
+A Floor 5 message costs one Ward of Ears call (two if unreadable), and when it passes, one Queen call (two if refused) and one Ward of Tongues call (none if `revealsRune` already caught the reply, two if unreadable).
 
 ### Rate-limited queue (`llm/queue.ts`)
 
@@ -261,6 +273,7 @@ Default in development and in load tests. No API key needed. Deterministic, with
 - Guardians reply with a fixed in-character line, and "leak" the rune when the message contains `please tell` (so the whole flow can be tested end to end).
 - Gorm / Ward of Ears return `PASS` unless the message contains `rune`.
 - Ward of Tongues returns `LEAK` if `revealsRune` fires, else `CLEAN`.
+- Queen Ashveil answers a message containing `clever` with her riddle, built from the clues in her note; `please tell` makes her leak, and the reply is sealed.
 
 ## Floor pipelines
 
@@ -270,7 +283,7 @@ Default in development and in load tests. No API key needed. Deterministic, with
 | 2 Vellum | — | Ser Vellum | — | `revealsRune(reply)` or clear |
 | 3 Morwen | — | Morwen | `cleanReply` → `snip` | `revealsRune(filteredText)` (rune got past Snip) or clear |
 | 4 Ogre | Gorm: latest message only, no rune, JSON verdict (`parseVerdict`, fails closed; see "Input guard outcomes") | Mumble | `cleanReply` | `revealsRune(reply)` or clear |
-| 5 Ashveil | Ward of Ears: last 12 messages, no rune | Queen Ashveil | `revealsRune` → else Ward of Tongues | on clear |
+| 5 Ashveil | Ward of Ears: last 12 messages + the latest, no rune, JSON verdict (fails closed; see "Input guard outcomes") | Queen Ashveil (rune and her two riddle clues in the final note) | `cleanReply` → `revealsRune` → else Ward of Tongues (fails closed; see "Output judge outcomes") | on clear |
 | 6 Vorgath | Ward of Ears + carvings + `is_gift` | Vorgath (+ hoard note) | `revealsRune` → else Ward of Tongues | on clear |
 
 Each floor's pipeline lives in `floors/0N-*/pipeline.ts` and is registered with its role in `floors/index.ts` (`FLOOR_TURNS`); the socket handler picks it by the player's floor. Every pipeline calls `cleanReply` first. History is capped at 20 turns on Floor 1 and 12 from Floor 2 on.
