@@ -170,6 +170,7 @@ Every milestone is done only when its acceptance criteria are met and `npm run c
 - He never judges a guess, in any language, and stays generous after being shaken. Being told "you pieced it together" shakes him whether the guess is right or wrong.
 - The wrong-guess line on every floor adds "Spaces and dashes don't matter."
 - `door_attempts.distance` (schema v5): each wrong guess's edit distance to the rune, a number only, never sent to a client.
+- Accepted: unseen wording for Vellum's letters and backwards is 1/3 to 3/3 per run (tuning further broke the Roman Urdu acrostic), and "backwards of the backwards word" is left open as one more unnamed loophole (see `02-vellum.md`).
 - Not changed yet: Floor 1's Grub also judged guesses in playtest 1 ("that's not quite it… You're close, though!", and "LADDER-BREAD, yes, that's the one" after he had leaked it).
 
 ## M8 — The reveal
