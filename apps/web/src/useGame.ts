@@ -81,7 +81,9 @@ export function useGame() {
     socket.on('player:expression', (e) => setExpression(e.state));
     socket.on('player:door-result', (r) => {
       if (r.correct) return setDoorNote(null);
-      if (r.lockedMs > 0) {
+      if (r.noLetters) {
+        setDoorNote({ text: 'The door needs letters.', tone: 'wrong' });
+      } else if (r.lockedMs > 0) {
         setDoorLockedUntil(Date.now() + r.lockedMs);
         setDoorNote({ text: 'The door grows cold. Wait.', tone: 'locked' });
       } else {

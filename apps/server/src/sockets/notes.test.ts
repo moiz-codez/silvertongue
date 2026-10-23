@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import type { ProjectorServerEvents, ProjectorSnapshot } from '@silvertongue/shared/events';
 import { ROLES } from '../config/models.ts';
 import type { Db } from '../db/db.ts';
+import { getRune } from '../db/queries.ts';
 import { HINTS } from '../game/hints.ts';
 import { DeadlineError, type Complete } from '../llm/client.ts';
 import { client, join, next, open, startServer } from './testServer.ts';
@@ -96,6 +97,26 @@ describe('notes on the wall', () => {
     expect((states.at(-1)!.payload as { doorCooldownMs: number }).doorCooldownMs).toBeGreaterThan(
       4000,
     );
+  });
+
+  it('ignores guesses with no letters: no try, no strike, no cooldown', async () => {
+    const { db, url } = await startServer({ COOLDOWN_MS: '5000' });
+    const ali = await phone(url);
+    setFailedTries(db, ali.id, 9); // one more failed try would unlock a note
+    for (let i = 0; i < 3; i++) {
+      const result = next(ali.socket, 'player:door-result');
+      ali.socket.emit('player:door', { guess: '███' });
+      expect(await result).toEqual({ correct: false, lockedMs: 0, noLetters: true });
+    }
+    expect(failedTries(db, ali.id)).toBe(9);
+    expect(db.prepare('SELECT COUNT(*) AS n FROM door_attempts').get()).toEqual({ n: 0 });
+    expect(
+      db.prepare('SELECT wrong_door_streak, door_locked_until FROM floor_progress').get(),
+    ).toEqual({ wrong_door_streak: 0, door_locked_until: null });
+
+    // No door cooldown started: the real rune opens it straight away.
+    ali.socket.emit('player:door', { guess: getRune(db, ali.id, 1) });
+    expect(await next(ali.socket, 'player:door-result')).toEqual({ correct: true, lockedMs: 0 });
   });
 
   it('puts one "note has appeared" line per floor on the projector, never the note', async () => {

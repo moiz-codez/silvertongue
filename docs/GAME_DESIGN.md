@@ -33,6 +33,7 @@ Each floor beats the previous floor's trick on purpose, so no single trick clear
 - Normalise guess and rune (uppercase, strip everything that isn't A–Z) and compare. `ember fang`, `Ember-Fang` and `EMBERFANG` all open `EMBER-FANG`. The two words may come in either order (`FANG EMBER` opens it too), because riddles and slips sometimes give them the other way round; one word alone, or an extra word, never opens it.
 - A wrong guess says "The door doesn’t budge. Spaces and dashes don’t matter." on every floor (playtest 1: a player one letter off kept retrying the same guess with different spacing and dashes).
 - 3 wrong guesses in a row → door locked 20 s ("The door grows cold. Wait.").
+- A guess with no letters (only symbols, digits or spaces, e.g. a pasted ███ from Floor 3) is not a guess: "The door needs letters." No strike, no failed try, no cooldown.
 - Correct → floor cleared, expression switches to the guardian's slip-up face, player moves to the next floor.
 
 ### Messages

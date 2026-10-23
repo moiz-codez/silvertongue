@@ -528,6 +528,10 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
           now,
         );
 
+        if (result.kind === 'no_letters') {
+          socket.emit('player:door-result', { correct: false, lockedMs: 0, noLetters: true });
+          return;
+        }
         if (result.kind === 'locked') {
           socket.emit('player:door-result', { correct: false, lockedMs: result.lockedUntil - now });
           return;

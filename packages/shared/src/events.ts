@@ -74,7 +74,8 @@ export interface ServerToClientEvents {
   'player:history': (history: { floor: number; bubbles: Bubble[] }) => void;
   'player:bubble': (bubble: Bubble) => void;
   'player:expression': (expression: { floor: number; state: Expression }) => void;
-  'player:door-result': (result: { correct: boolean; lockedMs: number }) => void;
+  // noLetters: the guess had no letters (e.g. a pasted ███); it didn't count as a try.
+  'player:door-result': (result: { correct: boolean; lockedMs: number; noLetters?: true }) => void;
   'player:floor-cleared': (cleared: FloorCleared) => void;
   'player:error': (error: { code: string; message: string }) => void; // message is in character
   'player:reset': () => void; // the admin opened a new game: forget the token, back to Join
