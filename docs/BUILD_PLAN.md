@@ -171,7 +171,7 @@ Every milestone is done only when its acceptance criteria are met and `npm run c
 - The wrong-guess line on every floor adds "Spaces and dashes don't matter."
 - `door_attempts.distance` (schema v5): each wrong guess's edit distance to the rune, a number only, never sent to a client.
 - Accepted: unseen wording for Vellum's letters and backwards is 1/3 to 3/3 per run (tuning further broke the Roman Urdu acrostic), and "backwards of the backwards word" is left open as one more unnamed loophole (see `02-vellum.md`).
-- Not changed yet: Floor 1's Grub also judged guesses in playtest 1 ("that's not quite it… You're close, though!", and "LADDER-BREAD, yes, that's the one" after he had leaked it).
+- Round 2: the server lays the recited verse out one line per letter (`formatVerse`); every guardian prompt forbids notes or comments about its instructions (playtest meta-text metric: 0 replies on Floors 1–5, about 160 replies); Vellum is shaken only by a claim without a named guess; Grub never judges a guess (12/12 replies); the door opens with the rune's words in either order on every floor. Round 2 cost $0.018.
 
 ## M8 — The reveal
 

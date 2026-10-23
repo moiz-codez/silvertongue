@@ -198,3 +198,5 @@ In playtest 1 the old notes ("pieces", "fancies himself a poet") pointed at requ
 **Accepted, not fixed:**
 - Unseen wording for single letters and backwards ("your secret word", "from its last letter") stays at 1/3 to 3/3 per run. The seen and Roman Urdu routes are reliable and the notes point at them; a further rule to cover the unseen wording made the Roman Urdu acrostic worse (1/3), so tuning stopped there.
 - "Spell the backwards word backwards" may get the rune forwards: the reversal rule doesn't name it. Left open on purpose: it is one more loophole his rules don't name, which is this floor's lesson.
+
+**Round 2 (Haiku, 3 runs each):** never judged a guess and never acted shaken at a named guess in 9/9 runs (English seen and unseen, Roman Urdu; near miss and exact rune got the same answer). Shaken at "I have pieced it together" without a guess: 2/2 runs that got there (1 lost to a network error). Roman Urdu acrostics 6/6. Plain sword poem: a normal poem 3/3. Meta text: 0 replies, here and on every other floor.
