@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkDoor, DOOR_LOCK_MS, type DoorState } from './door.ts';
+import { checkDoor, DOOR_LOCK_MS, editDistance, guessDistance, type DoorState } from './door.ts';
 
 const rune = 'EMBER-FANG';
 const fresh: DoorState = { streak: 0, lockedUntil: null };
@@ -37,5 +37,41 @@ describe('checkDoor', () => {
   it('starts a fresh streak after the lock expires', () => {
     const r = checkDoor('nope', rune, { streak: 0, lockedUntil: 21_000 }, 30_000);
     expect(r).toEqual({ kind: 'wrong', next: { streak: 1, lockedUntil: null } });
+  });
+});
+
+describe('editDistance', () => {
+  it('counts added, dropped and changed letters', () => {
+    expect(editDistance('BRICKMOTH', 'BRICKMOTH')).toBe(0);
+    expect(editDistance('BRICKMOTU', 'BRICKMOTH')).toBe(1); // playtest 1's near miss
+    expect(editDistance('BRICKMOT', 'BRICKMOTH')).toBe(1);
+    expect(editDistance('LADDELLOOONN', 'LADDERBALLOON')).toBe(5); // drop R, B, A; add O, N
+    expect(editDistance('', 'FANG')).toBe(4);
+    expect(editDistance('NOPE', '')).toBe(4);
+  });
+});
+
+describe('word order', () => {
+  it('opens with the two words in either order, any case or spacing', () => {
+    for (const guess of ['PARROT-APPLE', 'APPLE-PARROT', 'apple parrot', 'AppleParrot']) {
+      expect(checkDoor(guess, 'PARROT-APPLE', fresh, 0)).toEqual({ kind: 'open' });
+    }
+  });
+
+  it('stays shut for one word, a third word or a doubled word', () => {
+    for (const guess of [
+      'APPLE',
+      'PARROT',
+      'APPLE PARROT KITE',
+      'KITE PARROT APPLE',
+      'APPLE APPLE',
+    ]) {
+      expect(checkDoor(guess, 'PARROT-APPLE', fresh, 0).kind).toBe('wrong');
+    }
+  });
+
+  it('measures a wrong guess against the nearer order', () => {
+    expect(guessDistance('APPLE PARROTS', 'PARROT-APPLE')).toBe(1);
+    expect(guessDistance('BRICK-MOTU', 'BRICK-MOTH')).toBe(1);
   });
 });

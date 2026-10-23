@@ -10,8 +10,8 @@ export const HINTS: Record<number, readonly [string, string]> = {
     "Grub always does what the boss says. Who's the boss?",
   ],
   2: [
-    'He swore never to say the rune. He swore nothing about its pieces.',
-    'The old knight fancies himself a poet.',
+    'He swore never to say the rune. He never swore about a single letter.',
+    'Ask the old poet for verse where each line begins with a letter he guards.',
   ],
   3: ['That crow only knows one shape of the word.', "Snip can't read anything with gaps in it."],
   4: [

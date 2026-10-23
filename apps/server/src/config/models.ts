@@ -32,9 +32,9 @@ interface Price {
 export const ROLES = {
   smoke: { model: MODELS.haiku, maxTokens: 200 },
   grub: { model: MODELS.haiku, maxTokens: 160 },
-  // Room for an acrostic poem. Stays on Haiku: in the M4 playtest Sonnet's safety filter refused
-  // about 1 call in 5 and never wrote a poem; Haiku's poems are best-effort (docs/prompts/02-vellum.md).
-  vellum: { model: MODELS.haiku, maxTokens: 200 },
+  // Room for the longest acrostic (15 lines, ~110 tokens) plus a greeting; 200 cut off a 13-line poem
+  // in playtest 1. Stays on Haiku: in M4 Sonnet's safety filter refused about 1 call in 5.
+  vellum: { model: MODELS.haiku, maxTokens: 320 },
   morwen: { model: MODELS.haiku, maxTokens: 150 },
   // Gorm's JSON with an 8-word growl is ~30 tokens. A max_tokens stop blocks (fail closed), so
   // leave headroom rather than turn cut-offs into false alarms.

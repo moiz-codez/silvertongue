@@ -90,7 +90,8 @@ CREATE TABLE messages (
 CREATE TABLE door_attempts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   player_id TEXT NOT NULL, floor INTEGER NOT NULL,
-  correct INTEGER NOT NULL, created_at INTEGER NOT NULL   -- the guess itself is not stored
+  correct INTEGER NOT NULL, created_at INTEGER NOT NULL,  -- the guess itself is not stored
+  distance INTEGER                  -- wrong guesses: edit distance to the nearer word order of the rune (letters only); never sent to any client (schema v5)
 );
 
 CREATE TABLE llm_calls (
@@ -318,7 +319,7 @@ All pure, all unit-tested.
 - `snip(reply, rune)`: exactly as in `prompts/03-morwen-snip.md`: three shapes, case-insensitive, replaced with `█`.
 - `parseVerdict(raw, allowValue)`: strip code fences, `JSON.parse`, validate with a strict zod schema (extra keys fail); return `allowed: true` only when `verdict` equals `allowValue` compared case-insensitively. Any exception, or any `stop_reason` other than `end_turn` / `stop_sequence` (e.g. `refusal`, `max_tokens`), → `allowed: false`. Structured outputs make bad JSON rare, but this is the safety net.
 - `sanitize(text)`: trim; cap at `MAX_MESSAGE_CHARS`; remove `[...]` tags innermost-first (so `[[x]]` goes completely) and an unclosed trailing `[...`, treating lookalike brackets `［］【】〔〕` as square ones; replace every angle bracket, lookalikes included (`< > ＜ ＞ ﹤ ﹥ 〈 〉 ⟨ ⟩ ‹ ›`), with plain `(` `)`, so the player can't close `<traveller_message>` or type anything that looks like a tag. Keep line breaks (poems).
-- Door check: `normalize(guess) === normalize(rune)`.
+- Door check: `normalize(guess)` equals the rune's two words joined in either order (`runeOrders` in `game/door.ts`).
 
 ## Background jobs
 

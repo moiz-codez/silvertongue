@@ -23,7 +23,7 @@ A live, multiplayer AI-security game built for an Artificial Intelligence lab pr
 
 - Every player gets their own random rune per floor: two concrete, picturable words, e.g. `EMBER-FANG`. Shared answers are useless.
 - A floor is cleared **only** by submitting the rune at the door. A model saying "you win" means nothing.
-- Door check: compare guess and rune after normalising both (uppercase, letters only). 3 wrong guesses → door locked 20 s.
+- Door check: compare guess and rune after normalising both (uppercase, letters only); the rune's two words may come in either order. 3 wrong guesses → door locked 20 s.
 - Hints ("notes on the wall") unlock after 10 and 20 failed tries on a floor.
 - Scoring, titles, hints, screens: `docs/GAME_DESIGN.md`.
 
@@ -70,7 +70,7 @@ Create these in milestone M0 and keep this list accurate.
 - `npm start` — production server on `PORT`; serves `apps/web/dist` and Socket.IO from one process
 - `npm run smoke` — two **real** Haiku calls; passes when the second shows `cache_read_input_tokens > 0` (well under $0.01)
 - `npm run native-check` — better-sqlite3 in WAL mode + one local MiniLM embedding; run on every new machine/server
-- `npm run playtest -- --floor 1` — scripted attacks from the floor's playtest checklist against the **real** API; prints transcripts, leaks, tokens and cost (costs money; Haiku = about a cent). Floors are added as they are built.
+- `npm run playtest -- --floor 1 [--only <text>]` — scripted attacks from the floor's playtest checklist against the **real** API; prints transcripts, leaks, tokens and cost (costs money; Haiku = about a cent; Floor 2 about 2 cents). `--only` runs just the scenarios whose name contains that text. Floors are added as they are built.
 - `npm run tunnel` — demo hosting: opens a Cloudflare quick tunnel, then runs the production server with `PUBLIC_URL` set to the tunnel address; shouts if the tunnel dies (run `npm run build` first; needs `cloudflared`)
 - `npm run riddles:sheet` — writes `riddles/riddles-sheet.txt` (all 60 Floor 5 clues shuffled, plus 10 clue pairs, no answers) and `riddles/riddles-answers.txt`, for testing the clues on friends with paper; fixed seed, gitignored
 - `npm run loadtest -- --players 40 --minutes 5 [--burst] [--floors 4-5]` — fake phones against a running mock-mode server (refuses live mode); reports unanswered messages, latency, peak queue and projected API use. `--floors` puts the phones on those floors by writing to the server's database (run it on the same laptop, same `DATABASE_PATH`)

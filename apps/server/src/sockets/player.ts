@@ -25,7 +25,7 @@ import { FLOOR_TURNS } from '../floors/index.ts';
 import { SEALED } from '../floors/05-ashveil/pipeline.ts';
 import type { JudgeResult } from '../floors/judge.ts';
 import type { Turn } from '../floors/messages.ts';
-import { checkDoor } from '../game/door.ts';
+import { checkDoor, guessDistance } from '../game/door.ts';
 import { HINT_AT, unlockedNotes } from '../game/hints.ts';
 import { generateRunes } from '../game/runes.ts';
 import { scoreFloorClear } from '../game/scoring.ts';
@@ -385,6 +385,7 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
               call,
               [...history, { speaker: 'player', text }],
               rune,
+              id,
             );
             const blocked = reply.result.stopReason === 'refusal';
             logCall(gameId, id, floor, floorTurn.role, reply.result, blocked ? 'refusal' : 'ok');
@@ -537,6 +538,7 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
             floor,
             streak: result.next.streak,
             lockedUntil: result.next.lockedUntil,
+            distance: guessDistance(parsed.data.guess, rune),
             now,
           });
           doorCooldownUntil.set(id, now + ctx.game.cooldown_ms);

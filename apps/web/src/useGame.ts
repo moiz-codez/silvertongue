@@ -85,7 +85,10 @@ export function useGame() {
         setDoorLockedUntil(Date.now() + r.lockedMs);
         setDoorNote({ text: 'The door grows cold. Wait.', tone: 'locked' });
       } else {
-        setDoorNote({ text: 'The door doesn’t budge.', tone: 'wrong' });
+        setDoorNote({
+          text: 'The door doesn’t budge. Spaces and dashes don’t matter.',
+          tone: 'wrong',
+        });
       }
     });
     socket.on('player:floor-cleared', (c) => setCleared(c));
