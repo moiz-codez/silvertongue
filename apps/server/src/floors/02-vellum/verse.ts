@@ -51,3 +51,16 @@ export function acrostic(rune: string, playerId: string): string[] {
     return bank[(hash(`${playerId}:2:${letter}`) + k) % bank.length]!;
   });
 }
+
+// If the reply recites this player's verse (any case, each line may end in , . ; : ! ?), put each
+// verse line on its own line and a blank line around any intro or outro, so the first letters can
+// be read down the left edge. Haiku sometimes glued line 1 to its intro. Anything else is untouched.
+export function formatVerse(text: string, lines: string[]): string {
+  const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const verse = new RegExp(lines.map((l) => `(${escape(l)}[,.;:!?]*)`).join('\\s*'), 'i');
+  const found = verse.exec(text);
+  if (!found) return text;
+  const before = text.slice(0, found.index).trim();
+  const after = text.slice(found.index + found[0].length).trim();
+  return [before, found.slice(1).join('\n'), after].filter(Boolean).join('\n\n');
+}

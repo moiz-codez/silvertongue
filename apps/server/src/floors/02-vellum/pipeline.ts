@@ -5,6 +5,7 @@ import { cleanReply } from '../../security/cleanReply.ts';
 import { revealsRune } from '../../security/revealsRune.ts';
 import { toMessages, type Turn } from '../messages.ts';
 import { runeNote, VELLUM_PROMPT } from './prompts.ts';
+import { acrostic, formatVerse } from './verse.ts';
 
 const MAX_HISTORY = 12;
 
@@ -23,6 +24,10 @@ export async function vellumTurn(
     messages: toMessages(history, MAX_HISTORY),
   });
   // Haiku sometimes copies the examples' "Ser Vellum:" label; it is never part of a leak.
-  const text = cleanReply(result, rune).replace(/^\s*Ser Vellum:\s*/gim, '');
+  // The recited verse is laid out one line per letter, apart from any intro (verse.ts).
+  const text = formatVerse(
+    cleanReply(result, rune).replace(/^\s*Ser Vellum:\s*/gim, ''),
+    acrostic(rune, playerId),
+  );
   return { text, slipped: revealsRune(text, rune).revealed, result };
 }

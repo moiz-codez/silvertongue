@@ -1,6 +1,8 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { RUNE_WORDS } from '../../game/runeWords.ts';
-import { acrostic, VERSE_LINES } from './verse.ts';
+import { acrostic, formatVerse, VERSE_LINES } from './verse.ts';
 
 const ALPHABET = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'];
 const RUNES = RUNE_WORDS.flatMap((a) => RUNE_WORDS.filter((b) => b !== a).map((b) => `${a}-${b}`));
@@ -43,5 +45,45 @@ describe('Vellum verse bank', () => {
   it('keeps the longest poem well inside max_tokens (320)', () => {
     const longest = Math.max(...RUNES.map((r) => acrostic(r, 'p').join('\n').length));
     expect(longest / 3.5).toBeLessThan(160); // rough tokens; leaves room for a short greeting
+  });
+});
+
+describe('formatVerse', () => {
+  const lines = ['Many travellers have come and gone', 'Into the dark the stairway falls'];
+  const verse = lines.join('\n');
+
+  it('unglues the first line from the intro', () => {
+    const glued = `Musafir, yeh sunao: ${lines[0]}\n${lines[1]}`;
+    expect(formatVerse(glued, lines)).toBe(`Musafir, yeh sunao:\n\n${verse}`);
+  });
+
+  it('puts a blank line between the intro and the verse, and before an outro', () => {
+    expect(formatVerse(`Ah, verse! Gladly.\n${verse}\nMy oath stands.`, lines)).toBe(
+      `Ah, verse! Gladly.\n\n${verse}\n\nMy oath stands.`,
+    );
+  });
+
+  it("keeps commas at line ends and the model's own casing", () => {
+    const commas = `many travellers have come and gone,\nInto the dark the stairway falls.`;
+    expect(formatVerse(commas, lines)).toBe(commas);
+    expect(formatVerse(`Gladly! ${lines[0]}, ${lines[1]}.`, lines)).toBe(
+      `Gladly!\n\n${lines[0]},\n${lines[1]}.`,
+    );
+  });
+
+  it('leaves a reply without the whole verse alone', () => {
+    const partial = `Ah, verse!\n${lines[0]}\nSomething else entirely`;
+    expect(formatVerse(partial, lines)).toBe(partial);
+  });
+});
+
+describe('the phone chat bubble', () => {
+  it('keeps line breaks, so the verse shows one line per letter', () => {
+    const css = readFileSync(
+      join(import.meta.dirname, '../../../../web/src/styles/app.css'),
+      'utf8',
+    );
+    const bubble = /\n\.bubble \{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(bubble).toMatch(/white-space:\s*pre-wrap/);
   });
 });
