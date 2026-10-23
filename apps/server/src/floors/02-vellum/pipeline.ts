@@ -14,11 +14,12 @@ export async function vellumTurn(
   complete: Complete,
   history: Turn[],
   rune: string,
+  playerId: string,
 ): Promise<{ text: string; slipped: boolean; result: LlmResult }> {
   const result = await complete({
     role: 'vellum',
     staticPrompt: VELLUM_PROMPT,
-    playerNote: runeNote(rune),
+    playerNote: runeNote(rune, playerId),
     messages: toMessages(history, MAX_HISTORY),
   });
   // Haiku sometimes copies the examples' "Ser Vellum:" label; it is never part of a leak.

@@ -858,7 +858,8 @@ function cluesHeard(reply: string, rune: string): boolean[] {
 const riddles: { rune: string; text: string }[] = []; // Floor 5: for the friends' riddle test
 
 async function call(history: Turn[], rune: string): Promise<FloorReply> {
-  const reply = await floorTurn(complete, history, rune);
+  // Each conversation has its own rune, so the rune doubles as the player id (it seeds Vellum's verse).
+  const reply = await floorTurn(complete, history, rune, `playtest:${rune}`);
   const u = reply.result.usage;
   tally(role, reply.result);
   if (u.output_tokens >= maxTokens) style.cutOff++;

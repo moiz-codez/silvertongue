@@ -385,6 +385,7 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
               call,
               [...history, { speaker: 'player', text }],
               rune,
+              id,
             );
             const blocked = reply.result.stopReason === 'refusal';
             logCall(gameId, id, floor, floorTurn.role, reply.result, blocked ? 'refusal' : 'ok');

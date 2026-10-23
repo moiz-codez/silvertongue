@@ -39,7 +39,12 @@ export const FLOOR_TURNS: Record<
   number,
   {
     role: RoleName;
-    turn: (complete: Complete, history: Turn[], rune: string) => Promise<FloorReply>;
+    turn: (
+      complete: Complete,
+      history: Turn[],
+      rune: string,
+      playerId: string,
+    ) => Promise<FloorReply>;
     lostWords: string; // in character, when the API refused the reply twice
     guard?: InputGuard;
     replyJudge?: ReplyJudge;
