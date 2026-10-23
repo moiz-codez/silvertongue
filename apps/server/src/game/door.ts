@@ -13,13 +13,25 @@ export type DoorResult =
   | { kind: 'locked'; lockedUntil: number } // guess ignored, nothing changes
   | { kind: 'wrong'; next: DoorState };
 
+// The rune's two words in either order, normalised: PARROT-APPLE also opens with APPLE PARROT, since
+// riddles and slips sometimes give the words the other way round.
+export function runeOrders(rune: string): [string, string] {
+  const [first = '', second = ''] = rune.split('-');
+  return [normalize(first + second), normalize(second + first)];
+}
+
+// How far a wrong guess was from the rune: the nearer of the two word orders.
+export function guessDistance(guess: string, rune: string): number {
+  return Math.min(...runeOrders(rune).map((r) => editDistance(normalize(guess), r)));
+}
+
 // The only way to clear a floor. Pure: the caller saves `next` and the clear.
 export function checkDoor(guess: string, rune: string, state: DoorState, now: number): DoorResult {
   if (state.lockedUntil !== null && now < state.lockedUntil) {
     return { kind: 'locked', lockedUntil: state.lockedUntil };
   }
   const g = normalize(guess);
-  if (g !== '' && g === normalize(rune)) return { kind: 'open' };
+  if (g !== '' && runeOrders(rune).includes(g)) return { kind: 'open' };
 
   const streak = state.streak + 1;
   if (streak >= DOOR_STRIKES) {

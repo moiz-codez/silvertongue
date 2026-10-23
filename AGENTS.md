@@ -23,7 +23,7 @@ A live, multiplayer AI-security game built for an Artificial Intelligence lab pr
 
 - Every player gets their own random rune per floor: two concrete, picturable words, e.g. `EMBER-FANG`. Shared answers are useless.
 - A floor is cleared **only** by submitting the rune at the door. A model saying "you win" means nothing.
-- Door check: compare guess and rune after normalising both (uppercase, letters only). 3 wrong guesses → door locked 20 s.
+- Door check: compare guess and rune after normalising both (uppercase, letters only); the rune's two words may come in either order. 3 wrong guesses → door locked 20 s.
 - Hints ("notes on the wall") unlock after 10 and 20 failed tries on a floor.
 - Scoring, titles, hints, screens: `docs/GAME_DESIGN.md`.
 

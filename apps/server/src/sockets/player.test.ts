@@ -7,8 +7,7 @@ import { createMockClient } from '../llm/mock.ts';
 import type { LlmRequest } from '../llm/client.ts';
 import { cluesFor } from '../game/runeClues.ts';
 import { revealsRune } from '../security/revealsRune.ts';
-import { normalize } from '../security/normalize.ts';
-import { editDistance } from '../game/door.ts';
+import { guessDistance } from '../game/door.ts';
 import { DeadlineError, type Complete } from '../llm/client.ts';
 import { client, join, next, startServer } from './testServer.ts';
 
@@ -62,7 +61,7 @@ describe('Floor 1, end to end in mock mode', () => {
     expect((await next(socket, 'player:door-result')).correct).toBe(false);
     // Each wrong guess is stored as its distance to the rune only, and never sent to the phone.
     const distances = db.prepare('SELECT distance FROM door_attempts WHERE correct = 0').all();
-    expect(distances).toEqual(Array(3).fill({ distance: editDistance('NOPE', normalize(rune)) }));
+    expect(distances).toEqual(Array(3).fill({ distance: guessDistance('nope', rune) }));
     expect(JSON.stringify(seen)).not.toContain('distance');
 
     // Let the lock run out, then speak the rune in a sloppy form.

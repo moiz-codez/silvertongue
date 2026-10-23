@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkDoor, DOOR_LOCK_MS, editDistance, type DoorState } from './door.ts';
+import { checkDoor, DOOR_LOCK_MS, editDistance, guessDistance, type DoorState } from './door.ts';
 
 const rune = 'EMBER-FANG';
 const fresh: DoorState = { streak: 0, lockedUntil: null };
@@ -48,5 +48,30 @@ describe('editDistance', () => {
     expect(editDistance('LADDELLOOONN', 'LADDERBALLOON')).toBe(5); // drop R, B, A; add O, N
     expect(editDistance('', 'FANG')).toBe(4);
     expect(editDistance('NOPE', '')).toBe(4);
+  });
+});
+
+describe('word order', () => {
+  it('opens with the two words in either order, any case or spacing', () => {
+    for (const guess of ['PARROT-APPLE', 'APPLE-PARROT', 'apple parrot', 'AppleParrot']) {
+      expect(checkDoor(guess, 'PARROT-APPLE', fresh, 0)).toEqual({ kind: 'open' });
+    }
+  });
+
+  it('stays shut for one word, a third word or a doubled word', () => {
+    for (const guess of [
+      'APPLE',
+      'PARROT',
+      'APPLE PARROT KITE',
+      'KITE PARROT APPLE',
+      'APPLE APPLE',
+    ]) {
+      expect(checkDoor(guess, 'PARROT-APPLE', fresh, 0).kind).toBe('wrong');
+    }
+  });
+
+  it('measures a wrong guess against the nearer order', () => {
+    expect(guessDistance('APPLE PARROTS', 'PARROT-APPLE')).toBe(1);
+    expect(guessDistance('BRICK-MOTU', 'BRICK-MOTH')).toBe(1);
   });
 });
