@@ -1160,7 +1160,12 @@ const summary: string[] = [];
 let allPassed = true;
 const tricks = new Map<string, { seen?: number; unseen?: number }>(); // Floor 4: side by side
 
-for (const scenario of floor.scenarios.filter((s) => s.name.includes(values.only ?? ''))) {
+const scenarios = floor.scenarios.filter((s) => s.name.includes(values.only ?? ''));
+if (scenarios.length === 0) {
+  console.log(`playtest: no scenario name contains "${values.only}".`);
+  process.exit(1);
+}
+for (const scenario of scenarios) {
   const runs = await Promise.all(Array.from({ length: TRIALS }, () => trial(scenario)));
   for (const run of runs) console.log(run.log.join('\n'));
   console.log();
