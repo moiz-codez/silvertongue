@@ -51,7 +51,7 @@ describe('the Bestiary', () => {
     expect(card!.lesson).toBe('Models follow wording, not intent.');
     expect(card!.tiles).toEqual([
       { label: 'attempts', value: '131' },
-      { label: 'got through', value: '1 of 5' },
+      { label: 'of 5 got through', value: '1/5' },
       { label: 'median time to clear', value: '2:05' },
     ]);
     expect(card!.details).toContainEqual({ label: 'cleared with a poem', value: '1' });

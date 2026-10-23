@@ -120,7 +120,7 @@ function floorCard(f: FloorStats, techniques: boolean): BestiaryCard {
     lesson: text.lesson,
     tiles: [
       { label: plural(f.attempts, 'attempt').replace(/^\d+ /, ''), value: String(f.attempts) },
-      { label: 'got through', value: `${f.cleared} of ${f.reached}` },
+      { label: `of ${f.reached} got through`, value: `${f.cleared}/${f.reached}` },
       { label: 'median time to clear', value: f.clearMs.length ? clock(median(f.clearMs)) : '—' },
     ],
     details: details(f),

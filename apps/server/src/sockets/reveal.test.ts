@@ -85,7 +85,7 @@ describe('the reveal', () => {
     });
     expect(floor1.tiles).toEqual([
       { label: 'attempts', value: '4' },
-      { label: 'got through', value: '3 of 4' },
+      { label: 'of 4 got through', value: '3/4' },
       expect.objectContaining({ label: 'median time to clear' }),
     ]);
 
