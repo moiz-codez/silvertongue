@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import type { AdminClientEvents, AdminServerEvents, AdminState } from '@silvertongue/shared/events';
 import { getRune, saveGame } from '../db/queries.ts';
 import type { Complete } from '../llm/client.ts';
-import { ADMIN_TOKEN, client, join, next, open, startServer } from './testServer.ts';
+import { ADMIN_TOKEN, client, join, next, open, startServer, until } from './testServer.ts';
 
 type Admin = Socket<AdminServerEvents, AdminClientEvents>;
 
@@ -75,7 +75,7 @@ describe('admin', () => {
     expect(await again.socket.emitWithAck('player:resume', { token: phone.token })).toEqual({
       ok: false,
     });
-    await new Promise((r) => setTimeout(r, 600));
+    await until(latest, (s) => s.players[0]?.kicked === true);
     expect(latest()?.players).toEqual([expect.objectContaining({ nickname: 'Ali', kicked: true })]);
     expect(await socket.emitWithAck('admin:kick', { playerId: 'nobody' })).toMatchObject({
       ok: false,
@@ -112,17 +112,17 @@ describe('admin', () => {
     expect(await client(url).socket.emitWithAck('player:resume', { token: phone.token })).toEqual({
       ok: false,
     });
-    await new Promise((r) => setTimeout(r, 600));
+    await until(latest, (s) => s.status === 'lobby');
     expect(latest()).toMatchObject({ status: 'lobby', players: [] });
   });
 
   it('never sees a rune, token or token hash', async () => {
     const { db, url } = await startServer();
-    const { seen } = admin(url);
+    const { seen, latest: adminState } = admin(url);
     const phone = await joined(url, 'Ali');
     phone.socket.emit('player:door', { guess: getRune(db, phone.playerId, 1) });
     await next(phone.socket, 'player:floor-cleared');
-    await new Promise((r) => setTimeout(r, 600));
+    await until(adminState, (s) => s.players[0]?.floor === 2); // the clear has reached the screen
 
     const everything = JSON.stringify(seen);
     expect(everything).toContain('Ali');
@@ -163,7 +163,7 @@ describe('admin', () => {
     const cooling = next(phone.socket, 'player:state', (s) => s.cooldownMs > 5000);
     phone.socket.emit('player:message', { text: 'hello' });
     await cooling;
-    await new Promise((r) => setTimeout(r, 600));
+    await until(latest, (s) => s.settings.cooldownMs === 8000);
     expect(latest()?.settings).toEqual({ cooldownMs: 8000, maxMessages: 10, llmMode: 'mock' });
   });
 
@@ -177,8 +177,10 @@ describe('admin', () => {
         llmMode: 'live',
       }),
     ).toEqual({ ok: false, error: "The server has no ANTHROPIC_API_KEY, so it can't go Live." });
-    await new Promise((r) => setTimeout(r, 600));
-    expect(latest()).toMatchObject({ liveAvailable: false, settings: { llmMode: 'mock' } });
+    expect(await until(latest, () => true)).toMatchObject({
+      liveAvailable: false,
+      settings: { llmMode: 'mock' },
+    });
   });
 
   it('shows MOCK when a game saved as Live runs on a server without an API key', async () => {
@@ -186,8 +188,10 @@ describe('admin', () => {
     ctx.game = { ...ctx.game, llm_mode: 'live' }; // e.g. saved as Live, then restarted without the key
     saveGame(db, ctx.game, Date.now());
     const { latest } = admin(url);
-    await new Promise((r) => setTimeout(r, 300));
-    expect(latest()).toMatchObject({ liveAvailable: false, settings: { llmMode: 'mock' } });
+    expect(await until(latest, () => true)).toMatchObject({
+      liveAvailable: false,
+      settings: { llmMode: 'mock' },
+    });
   });
 
   it('keeps Live and the other settings through a Reset', async () => {
@@ -202,7 +206,7 @@ describe('admin', () => {
       }),
     ).toEqual({ ok: true });
     expect(await socket.emitWithAck('admin:command', { type: 'reset' })).toEqual({ ok: true });
-    await new Promise((r) => setTimeout(r, 600));
+    await until(latest, (s) => s.status === 'lobby');
     expect(latest()).toMatchObject({
       status: 'lobby',
       liveAvailable: true,
@@ -216,7 +220,7 @@ describe('admin', () => {
     const { latest } = admin(url);
     phone.socket.emit('player:message', { text: 'hello' });
     await next(phone.socket, 'player:bubble', (b) => b.speaker === 'guardian');
-    await new Promise((r) => setTimeout(r, 600));
+    await until(latest, (s) => s.health.callsLastMin === 1 && s.health.inFlight === 0);
     expect(latest()?.health).toMatchObject({
       queued: 0,
       inFlight: 0,
@@ -243,14 +247,14 @@ describe('admin', () => {
     const paused = next(phone.socket, 'player:state', (s) => s.gameStatus === 'paused');
     phone.socket.emit('player:message', { text: 'hello' });
     await paused;
-    await new Promise((r) => setTimeout(r, 600));
+    await until(latest, (s) => s.budgetAlert);
     expect(latest()).toMatchObject({ status: 'paused', budgetAlert: true });
 
     // The admin resumes on purpose: the next call doesn't pause again.
     expect(await socket.emitWithAck('admin:command', { type: 'resume' })).toEqual({ ok: true });
     phone.socket.emit('player:message', { text: 'hello again' });
     await next(phone.socket, 'player:bubble', (b) => b.speaker === 'guardian');
-    await new Promise((r) => setTimeout(r, 600));
+    await until(latest, (s) => s.status === 'running');
     expect(latest()).toMatchObject({ status: 'running', budgetAlert: true });
   });
 
