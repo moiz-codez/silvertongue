@@ -616,9 +616,10 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
   function checkBudget(): void {
     if (ctx.game.budget_alert_at !== null) return;
     if (q.gameSpendUsd(db, ctx.game.id) < env.BUDGET_USD) return;
-    if (ctx.game.status === 'running') ctx.runCommand('pause');
+    // The alert first, so the pause's tagger catch-up already sees the budget is spent.
     ctx.game = { ...ctx.game, budget_alert_at: Date.now() };
     q.saveGame(db, ctx.game, Date.now());
+    if (ctx.game.status === 'running') ctx.runCommand('pause');
   }
 
   function logCall(

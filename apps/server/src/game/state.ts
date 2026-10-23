@@ -13,7 +13,7 @@ export interface GameClock {
 
 const MOVES: Record<GameCommand, { from: GameStatus[]; to: GameStatus }> = {
   start: { from: ['lobby'], to: 'running' },
-  pause: { from: ['running'], to: 'paused' },
+  pause: { from: ['running', 'reveal'], to: 'paused' }, // from reveal: "Back to game"
   resume: { from: ['paused'], to: 'running' },
   reveal: { from: ['running', 'paused'], to: 'reveal' },
   end: { from: ['lobby', 'running', 'paused', 'reveal'], to: 'ended' },

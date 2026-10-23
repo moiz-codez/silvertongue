@@ -12,6 +12,7 @@ import { createMockClient } from './llm/mock.ts';
 import { createQueue } from './llm/queue.ts';
 import { registerAdmin } from './sockets/admin.ts';
 import { registerProjector } from './sockets/projector.ts';
+import { createReveal } from './sockets/reveal.ts';
 import { registerPlayerHandlers, type GameContext, type PlayerServer } from './sockets/player.ts';
 
 // `mock` is the client used in mock mode (tests pass a fake one). The live client is only
@@ -20,7 +21,7 @@ export async function createApp(
   env: Env,
   db: Db,
   mock: Complete = createMockClient(),
-  opts = { logger: true },
+  opts: { logger: boolean; tagEveryMs?: number } = { logger: true },
 ) {
   const app = Fastify({ logger: opts.logger });
 
@@ -64,8 +65,9 @@ export async function createApp(
   };
   const io: PlayerServer = new Server(app.server);
   const phones = registerPlayerHandlers(io, ctx);
-  const projectorChanged = registerProjector(io, ctx);
-  const admin = registerAdmin(io, ctx, phones);
+  const reveal = createReveal(ctx);
+  const projectorChanged = registerProjector(io, ctx, reveal);
+  const admin = registerAdmin(io, ctx, phones, reveal);
   ctx.changed = () => {
     projectorChanged();
     admin.changed();
@@ -75,7 +77,14 @@ export async function createApp(
   // The health tiles show the last minute, so they need refreshing even when nothing happens.
   const healthTimer = setInterval(admin.changed, 5000);
   healthTimer.unref();
-  app.addHook('onClose', async () => clearInterval(healthTimer));
+  // The technique tagger, in the background (tests switch it off with tagEveryMs: 0).
+  const tagEveryMs = opts.tagEveryMs ?? 3000;
+  const tagTimer = tagEveryMs > 0 ? setInterval(reveal.tick, tagEveryMs) : undefined;
+  tagTimer?.unref();
+  app.addHook('onClose', async () => {
+    clearInterval(healthTimer);
+    clearInterval(tagTimer);
+  });
 
   return { app, io, ctx, phones };
 }

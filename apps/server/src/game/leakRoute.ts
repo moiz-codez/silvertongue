@@ -70,9 +70,7 @@ function routeOf(floor: number, reply: LoggedMessage, rune: string): LeakRoute |
     case 4:
       return shown.revealed ? 'plan' : undefined;
     case 5:
-      return reply.verdict === 'CLEAN' && cluesFor(rune).some((c) => hasClue(reply.text, c))
-        ? 'riddle'
-        : undefined;
+      return reply.verdict === 'CLEAN' && isRiddle(reply.text, rune) ? 'riddle' : undefined;
     default:
       return undefined;
   }
@@ -95,6 +93,11 @@ function givesLetters(replies: LoggedMessage[], rune: string): boolean {
     }
   }
   return letters.size > 0 && given.size * 2 >= letters.size;
+}
+
+// Does the Queen's reply carry one of this rune's two clues?
+export function isRiddle(text: string, rune: string): boolean {
+  return cluesFor(rune).some((clue) => hasClue(text, clue));
 }
 
 // The clue word for word, or most of its longer words (the Queen sometimes rephrases a little).

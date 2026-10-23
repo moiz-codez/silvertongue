@@ -425,6 +425,80 @@ export function listClearsWithoutRoute(
     .all(gameId) as { player_id: string; floor: number }[];
 }
 
+// ---------- the reveal ----------
+
+export interface GameProgressRow {
+  player_id: string;
+  floor: number;
+  reached_at: number;
+  cleared_at: number | null;
+  leak_route: string | null;
+  winning_message_id: number | null;
+  leak_message_id: number | null;
+}
+
+export function listGameProgress(db: Db, gameId: string): GameProgressRow[] {
+  return db
+    .prepare(
+      `SELECT fp.player_id, fp.floor, fp.reached_at, fp.cleared_at, fp.leak_route,
+              fp.winning_message_id, fp.leak_message_id
+       FROM floor_progress fp JOIN players p ON p.id = fp.player_id WHERE p.game_id = ?`,
+    )
+    .all(gameId) as GameProgressRow[];
+}
+
+export interface GameMessageRow {
+  id: number;
+  player_id: string;
+  floor: number;
+  speaker: string;
+  text: string; // what the player saw
+  verdict: string | null;
+  technique: string | null;
+}
+
+export function listGameMessages(db: Db, gameId: string): GameMessageRow[] {
+  return db
+    .prepare(
+      'SELECT id, player_id, floor, speaker, text, verdict, technique FROM messages WHERE game_id = ? ORDER BY id',
+    )
+    .all(gameId) as GameMessageRow[];
+}
+
+// Player messages the tagger hasn't labelled yet: winning messages first, so the reveal's
+// "most common winning trick" is ready soonest.
+export function listUntagged(
+  db: Db,
+  gameId: string,
+  limit: number,
+): { id: number; player_id: string; floor: number; text: string }[] {
+  return db
+    .prepare(
+      `SELECT m.id, m.player_id, m.floor, m.text FROM messages m
+       WHERE m.game_id = ? AND m.speaker = 'player' AND m.technique IS NULL
+       ORDER BY m.id IN (SELECT winning_message_id FROM floor_progress
+                         WHERE winning_message_id IS NOT NULL) DESC, m.id
+       LIMIT ?`,
+    )
+    .all(gameId, limit) as { id: number; player_id: string; floor: number; text: string }[];
+}
+
+export function setTechnique(db: Db, messageId: number, technique: string): void {
+  db.prepare('UPDATE messages SET technique = ? WHERE id = ?').run(technique, messageId);
+}
+
+// Untagged player messages in this game: all of them, and the winning ones.
+export function countUntagged(db: Db, gameId: string): { all: number; winning: number } {
+  return db
+    .prepare(
+      `SELECT COUNT(*) AS "all",
+              COUNT(*) FILTER (WHERE id IN (SELECT winning_message_id FROM floor_progress
+                                            WHERE winning_message_id IS NOT NULL)) AS winning
+       FROM messages WHERE game_id = ? AND speaker = 'player' AND technique IS NULL`,
+    )
+    .get(gameId) as { all: number; winning: number };
+}
+
 // ---------- messages ----------
 
 export function listFloorMessages(db: Db, playerId: string, floor: number): MessageRow[] {
@@ -501,8 +575,8 @@ export function insertLlmCall(
   db: Db,
   c: {
     gameId: string;
-    playerId: string;
-    floor: number;
+    playerId: string | null; // null: the tagger's batches belong to no one player
+    floor: number | null;
     role: string;
     model: string;
     inputTokens: number;

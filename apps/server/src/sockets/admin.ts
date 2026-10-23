@@ -21,6 +21,7 @@ import * as q from '../db/queries.ts';
 import { applyCommand, elapsedMs } from '../game/state.ts';
 import { cleanNickname, NICKNAME_TAKEN, nicknameProblem } from '../security/nickname.ts';
 import type { GameContext, PhoneControls, PlayerServer } from './player.ts';
+import type { Reveal } from './reveal.ts';
 import { clientIp, isLocal, slidingLimit } from './clientIp.ts';
 import { throttle } from './throttle.ts';
 
@@ -33,7 +34,12 @@ export const tokenMatches = (given: unknown, expected: string) =>
 
 // Returns `changed` ("something changed": call it freely, it sends at most 2 updates a second)
 // and `runCommand`, which the budget brake also uses to pause the game.
-export function registerAdmin(io: PlayerServer, ctx: GameContext, phones: PhoneControls) {
+export function registerAdmin(
+  io: PlayerServer,
+  ctx: GameContext,
+  phones: PhoneControls,
+  reveal: Reveal,
+) {
   const { db, env } = ctx;
   const admin = io.of('/admin') as unknown as Namespace<AdminClientEvents, AdminServerEvents>;
 
@@ -91,6 +97,8 @@ export function registerAdmin(io: PlayerServer, ctx: GameContext, phones: PhoneC
         createdAt: a.created_at,
         status: a.status,
       })),
+      tagging: reveal.progress(),
+      reveal: reveal.position(),
     };
   }
 
@@ -107,6 +115,8 @@ export function registerAdmin(io: PlayerServer, ctx: GameContext, phones: PhoneC
       return { ok: true };
     }
 
+    if (type === 'next' || type === 'prev') return reveal.step(type === 'next' ? 1 : -1);
+
     const before = ctx.game;
     const moved = applyCommand(before, type, now);
     if (!moved.ok) return moved;
@@ -117,6 +127,7 @@ export function registerAdmin(io: PlayerServer, ctx: GameContext, phones: PhoneC
     }
     ctx.game = moved.game;
     phones.refreshAll(); // every phone moves to Floor 1, the pause banner, the closed screen…
+    reveal.afterCommand(type); // pause and reveal start the tagger's catch-up
     return { ok: true };
   }
 

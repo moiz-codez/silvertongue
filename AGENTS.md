@@ -43,12 +43,12 @@ apps/server/src/
   index.ts          Fastify + Socket.IO bootstrap; serves apps/web/dist in production
   config/           env.ts (zod-validated env), models.ts (model + max_tokens per role, "thinking off" per model)
   db/               schema.sql, db.ts, typed query functions
-  llm/              client.ts (Anthropic wrapper + prompt assembly), queue.ts (rate limiter), mock.ts
-  game/             runeWords.ts, runes.ts, door.ts, scoring.ts, hints.ts, titles.ts, state.ts
+  llm/              client.ts (Anthropic wrapper + prompt assembly), queue.ts (rate limiter), mock.ts, tagger.ts (technique labels for the reveal)
+  game/             runeWords.ts, runes.ts, door.ts, scoring.ts, hints.ts, titles.ts, state.ts, leakRoute.ts, bestiary.ts (reveal cards)
   floors/           01-grub/ … 06-vorgath/: prompts.ts, pipeline.ts, *.test.ts
   security/         normalize.ts, revealsRune.ts, stripActions.ts, nickname.ts, snip.ts, sanitize.ts, verdict.ts (fail-closed parsing)
   embeddings/       embed.ts, cosine.ts
-  sockets/          player.ts, projector.ts, admin.ts, clientIp.ts (per-address limits), throttle.ts (≤ 2 sends/s), testServer.ts (test helper)
+  sockets/          player.ts, projector.ts, admin.ts, reveal.ts (tagger jobs + Bestiary), clientIp.ts (per-address limits), throttle.ts (≤ 2 sends/s), testServer.ts (test helper)
 apps/web/src/
   routes/           Join, Lobby, Play, Cleared, Closed, Projector, Admin (App.tsx picks by path)
   sprites/          pixel-art SVG components, two expressions per guardian

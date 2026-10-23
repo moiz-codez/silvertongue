@@ -7,6 +7,7 @@ import { GUARDIANS } from '@silvertongue/shared/floors';
 import * as q from '../db/queries.ts';
 import { elapsedMs } from '../game/state.ts';
 import type { GameContext, PlayerServer } from './player.ts';
+import type { Reveal } from './reveal.ts';
 import { clientIp } from './clientIp.ts';
 import { throttle } from './throttle.ts';
 
@@ -15,7 +16,7 @@ const BEST_ATTEMPTS = 5;
 const MAX_SCREENS_PER_IP = 5; // a projector or two plus spares; stops one address opening hundreds
 
 // Returns "something changed": call it freely, it sends at most 2 snapshots a second.
-export function registerProjector(io: PlayerServer, ctx: GameContext): () => void {
+export function registerProjector(io: PlayerServer, ctx: GameContext, reveal: Reveal): () => void {
   // Its own namespace with its own event types; it listens to nothing.
   const screen = io.of('/projector') as unknown as Namespace<object, ProjectorServerEvents>;
   screen.use((socket, next) => {
@@ -50,6 +51,7 @@ export function registerProjector(io: PlayerServer, ctx: GameContext): () => voi
       bestAttempts: q
         .listApprovedAttempts(db, game.id, BEST_ATTEMPTS)
         .map((a) => ({ nickname: a.nickname, floor: a.floor, text: a.text })),
+      reveal: reveal.view(), // numbers, fixed text and approved quotes only (game/bestiary.ts)
     };
   }
 

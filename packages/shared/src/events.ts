@@ -91,6 +91,34 @@ export interface FeedItem {
   text: string;
 }
 
+// The reveal (Bestiary). Numbers, fixed text from the prompt docs, template sentences and
+// admin-approved quotes only: nothing else a player typed, never a rune.
+export interface Tile {
+  label: string;
+  value: string;
+}
+
+export interface BestiaryCard {
+  kind: 'floor';
+  floor: number;
+  name: string;
+  technique: string;
+  lesson: string;
+  tiles: Tile[]; // attempts, got through, median time
+  details: Tile[]; // this floor's own stats
+  howBeat: string;
+  topTrick: string | null; // null when the tagger couldn't finish
+  quote: { nickname: string; text: string } | null;
+}
+
+export interface ClosingCard {
+  kind: 'closing';
+  line: string;
+  top: { nickname: string; floor: number; title: string }[];
+}
+
+export type RevealCard = BestiaryCard | ClosingCard;
+
 export interface ProjectorSnapshot {
   status: GameStatus;
   elapsedMs: number;
@@ -100,6 +128,8 @@ export interface ProjectorSnapshot {
   wards: { ears: number; tongues: number }; // real seals this game; the glyphs pulse when one rises
   // Admin-approved winning messages, at most 5, newest first. Nothing else typed by a player.
   bestAttempts: { nickname: string; floor: number; text: string }[];
+  // While the reveal runs: the card on screen. Null before the cards are ready.
+  reveal: { card: RevealCard; index: number; total: number } | null;
 }
 
 export interface ProjectorServerEvents {
@@ -153,6 +183,8 @@ export interface AdminState {
   budgetUsd: number;
   budgetAlert: boolean; // spend crossed the budget and the game paused itself
   moderation: ModerationItem[]; // newest first
+  tagging: { done: number; total: number } | null; // the tagger's catch-up, while it runs
+  reveal: { index: number; total: number } | null; // the card on the projector
 }
 
 export type AdminReply = { ok: true } | { ok: false; error: string };

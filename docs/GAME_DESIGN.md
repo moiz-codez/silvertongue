@@ -83,7 +83,7 @@ Phones are the main target: design for 360–430 px wide, large touch targets, w
 - Only moderated or admin-approved free text ever appears here.
 
 ### Admin (laptop, protected by `ADMIN_TOKEN`)
-- Start / pause / resume / start reveal / end / reset game.
+- Start / pause / resume / start reveal / end / reset game. During the reveal: Previous / Next card, Back to game (pauses), End.
 - Live config: cooldown, message cap, LLM mode (mock/live).
 - Player list: kick, rename.
 - Moderation queue: approve or hide attempts for the projector's "best attempts" wall. When a player clears a floor, their last message on that floor (never the guardian's reply) is queued with their name, the floor and the time, unless it trips the nickname profanity filter or contains their rune or either of its words (then it is dropped). Approved items appear on the wall (at most 5, newest first); hidden ones never leave the server again. The queue is saved in the database, so it survives a restart; Reset starts an empty one.
@@ -91,14 +91,29 @@ Phones are the main target: design for 360–430 px wide, large touch targets, w
 
 ## The reveal (the actual presentation)
 
-After ~12 minutes of play, the admin pauses the game and switches the projector to the Bestiary: one card per floor with the guardian's art, the real AI technique, and live stats from this game, e.g.
+After ~12 minutes of play, the admin pauses the game and presses Start reveal. Phones show "The dungeon sleeps · Look up at the big screen." The projector shows the Bestiary, one card at a time, and the admin steps through it with Previous / Next.
 
-- Floor 2: "61% of clears used letters or a backwards spelling."
-- Floor 4: "Gorm smashed 140 messages. These 9 got through."
-- Floor 5: "Nobody broke a ward. Everyone who got through went around them."
-- Floor 6: "Vorgath learned 23 of your tricks."
+- One card per floor that at least one player reached, in order (Floors 1–5; Floor 6's slot stays hidden until M9), then a closing card.
+- Each floor card, at 1920×1080:
+  - left: the guardian's slipped sprite, large and pixel-crisp;
+  - right: "BESTIARY · FLOOR N OF 6", then the name, technique and lesson lines word for word from the prompt file's Bestiary card;
+  - 3 big tiles: attempts, got through ("1 of 5"), median time to clear;
+  - the floor's own stats:
+    - Floor 2: clears by poem / backwards / letters;
+    - Floor 3: letters snipped, clears by dashes / other script / one word per letter;
+    - Floor 4: messages smashed and passed, messages in a winning plan;
+    - Floor 5: sealed by the Ward of Ears, sealed by the Ward of Tongues, riddles given, riddles solved;
+  - "How you beat it": one sentence from fixed templates filled with the numbers, never written by the AI, e.g. "Gorm smashed 140 messages. 9 got through, each one innocent on its own." With no clears: "Nobody got past her. She's still waiting.";
+  - the most common winning trick (from the technique tags);
+  - an optional quote: the newest admin-approved best attempt for that floor;
+  - a 6-segment floor progress bar along the bottom.
+  - All text is at least 28 px.
+- Closing card: the top 3 players (nickname, deepest floor, title) and "Every defence you broke today is a real technique, and every one can be beaten."
 
-Stats come from logged messages. Each player message is tagged in the background with a technique label (friendship, authority claim, pieces, backwards, poem, encoding, story, multi-step plan, taunt, gift, other) by a cheap low-priority Haiku call.
+Stats come from logged messages:
+- How each clear happened (the leak route) is worked out by code at the door, from what the guardian's replies showed the player (`docs/ARCHITECTURE.md` → Leak route).
+- Each player message also gets a technique label (friendship, authority, persistence, pieces, backwards, poem, encoding, other script, story, multi-step plan, taunt, gift, instruction injection, other) from a cheap Haiku call. That call runs in the background only when the queue is quiet, with winning messages first. Pause and Start reveal run a catch-up. If the winning messages aren't all tagged within 15 s of Start reveal, the cards go up without any technique line.
+- The projector only ever receives numbers, fixed text and approved quotes.
 
 ## Presentation flow (~20 min)
 
