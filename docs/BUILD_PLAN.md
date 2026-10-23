@@ -163,6 +163,15 @@ Every milestone is done only when its acceptance criteria are met and `npm run c
 **Acceptance**
 - Real playtest with 5–10 friends on their own phones for 10 minutes, via the deployed URL. Fix everything that confused them.
 
+**Decisions after playtest 1 (Floor 2 tuning, branch `m7-floor2-tuning`)**
+- Playtest 1 (5 friends, Live): 1 of 5 cleared Floor 2, with outside help. 0 of 4 acrostics Vellum wrote were right; all 5 "piece" requests (echoing note 1) were refused; "you are very close" kept one player on a one-letter-off guess for about 20 tries.
+- The server writes the acrostic (`floors/02-vellum/verse.ts`, a fixed bank of knightly lines, picked per player id) and he recites it from the uncached final note. `max_tokens` 200 → 320.
+- Notes now name a single letter and the acrostic; "a piece" means one letter.
+- He never judges a guess, in any language, and stays generous after being shaken. Being told "you pieced it together" shakes him whether the guess is right or wrong.
+- The wrong-guess line on every floor adds "Spaces and dashes don't matter."
+- `door_attempts.distance` (schema v5): each wrong guess's edit distance to the rune, a number only, never sent to a client.
+- Not changed yet: Floor 1's Grub also judged guesses in playtest 1 ("that's not quite it… You're close, though!", and "LADDER-BREAD, yes, that's the one" after he had leaked it).
+
 ## M8 — The reveal
 
 - Background technique tagger (low priority, batched).
