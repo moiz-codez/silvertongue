@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkDoor, DOOR_LOCK_MS, type DoorState } from './door.ts';
+import { checkDoor, DOOR_LOCK_MS, editDistance, type DoorState } from './door.ts';
 
 const rune = 'EMBER-FANG';
 const fresh: DoorState = { streak: 0, lockedUntil: null };
@@ -37,5 +37,16 @@ describe('checkDoor', () => {
   it('starts a fresh streak after the lock expires', () => {
     const r = checkDoor('nope', rune, { streak: 0, lockedUntil: 21_000 }, 30_000);
     expect(r).toEqual({ kind: 'wrong', next: { streak: 1, lockedUntil: null } });
+  });
+});
+
+describe('editDistance', () => {
+  it('counts added, dropped and changed letters', () => {
+    expect(editDistance('BRICKMOTH', 'BRICKMOTH')).toBe(0);
+    expect(editDistance('BRICKMOTU', 'BRICKMOTH')).toBe(1); // playtest 1's near miss
+    expect(editDistance('BRICKMOT', 'BRICKMOTH')).toBe(1);
+    expect(editDistance('LADDELLOOONN', 'LADDERBALLOON')).toBe(5); // drop R, B, A; add O, N
+    expect(editDistance('', 'FANG')).toBe(4);
+    expect(editDistance('NOPE', '')).toBe(4);
   });
 });

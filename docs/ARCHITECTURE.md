@@ -90,7 +90,8 @@ CREATE TABLE messages (
 CREATE TABLE door_attempts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   player_id TEXT NOT NULL, floor INTEGER NOT NULL,
-  correct INTEGER NOT NULL, created_at INTEGER NOT NULL   -- the guess itself is not stored
+  correct INTEGER NOT NULL, created_at INTEGER NOT NULL,  -- the guess itself is not stored
+  distance INTEGER                  -- wrong guesses: edit distance to the rune (letters only); never sent to any client (schema v5)
 );
 
 CREATE TABLE llm_calls (

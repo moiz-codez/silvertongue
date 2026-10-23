@@ -341,7 +341,14 @@ export function countPlayerMessage(db: Db, playerId: string, floor: number): voi
 
 export function recordWrongDoor(
   db: Db,
-  p: { playerId: string; floor: number; streak: number; lockedUntil: number | null; now: number },
+  p: {
+    playerId: string;
+    floor: number;
+    streak: number;
+    lockedUntil: number | null;
+    distance: number;
+    now: number;
+  },
 ): void {
   db.transaction(() => {
     db.prepare(
@@ -349,8 +356,8 @@ export function recordWrongDoor(
        WHERE player_id = ? AND floor = ?`,
     ).run(p.streak, p.lockedUntil, p.playerId, p.floor);
     db.prepare(
-      'INSERT INTO door_attempts (player_id, floor, correct, created_at) VALUES (?, ?, 0, ?)',
-    ).run(p.playerId, p.floor, p.now);
+      'INSERT INTO door_attempts (player_id, floor, correct, created_at, distance) VALUES (?, ?, 0, ?, ?)',
+    ).run(p.playerId, p.floor, p.now, p.distance);
   })();
 }
 

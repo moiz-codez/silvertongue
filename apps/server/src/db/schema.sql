@@ -62,7 +62,8 @@ CREATE INDEX messages_by_player_floor ON messages (player_id, floor, id);
 CREATE TABLE door_attempts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   player_id TEXT NOT NULL, floor INTEGER NOT NULL,
-  correct INTEGER NOT NULL, created_at INTEGER NOT NULL   -- the guess itself is never stored
+  correct INTEGER NOT NULL, created_at INTEGER NOT NULL,  -- the guess itself is never stored
+  distance INTEGER                  -- wrong guesses: edit distance to the rune (letters only); never sent
 );
 
 CREATE TABLE llm_calls (

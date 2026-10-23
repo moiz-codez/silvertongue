@@ -128,12 +128,16 @@ it('migrates a version-1 file without losing data', () => {
     CREATE TABLE games (id TEXT PRIMARY KEY, status TEXT NOT NULL, created_at INTEGER NOT NULL,
       started_at INTEGER, ended_at INTEGER);
     INSERT INTO games (id, status, created_at, started_at) VALUES ('g1', 'running', 1, 1);
+    CREATE TABLE door_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, player_id TEXT NOT NULL,
+      floor INTEGER NOT NULL, correct INTEGER NOT NULL, created_at INTEGER NOT NULL);
     PRAGMA user_version = 1;`);
   old.close();
 
   const db = openDb(file);
-  expect(db.pragma('user_version', { simple: true })).toBe(4);
+  expect(db.pragma('user_version', { simple: true })).toBe(5);
   expect(db.prepare('SELECT COUNT(*) AS n FROM attempts').get()).toEqual({ n: 0 }); // M7's table
+  const doorColumns = db.prepare('SELECT name FROM pragma_table_info(?)').all('door_attempts');
+  expect(doorColumns.map((c) => (c as { name: string }).name)).toContain('distance'); // v5
   // A game from before settings were stored gets them from .env (the seed).
   expect(getCurrentGame(db, 2, SEED)).toMatchObject({
     id: 'g1',
