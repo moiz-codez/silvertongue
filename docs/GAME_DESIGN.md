@@ -31,6 +31,7 @@ Each floor beats the previous floor's trick on purpose, so no single trick clear
 ### The door
 - Separate input under the chat: "Speak the rune at the door".
 - Normalise guess and rune (uppercase, strip everything that isn't A–Z) and compare. `ember fang`, `Ember-Fang` and `EMBERFANG` all open `EMBER-FANG`.
+- A wrong guess says "The door doesn’t budge. Spaces and dashes don’t matter." on every floor (playtest 1: a player one letter off kept retrying the same guess with different spacing and dashes).
 - 3 wrong guesses in a row → door locked 20 s ("The door grows cold. Wait.").
 - Correct → floor cleared, expression switches to the guardian's slip-up face, player moves to the next floor.
 
