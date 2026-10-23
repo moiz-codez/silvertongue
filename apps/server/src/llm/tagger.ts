@@ -157,13 +157,16 @@ export function readLabels(text: string, count: number): Technique[] | null {
   return labels;
 }
 
-// The player's own rune words, hidden before the text leaves the server, also when spaced or
-// dashed ("W-O-L-F").
-export function maskRune(text: string, rune: string): string {
-  return rune
-    .split('-')
+// The player's rune words (all floors), hidden before the text leaves the server, also when
+// spaced, dashed ("W-O-L-F"), backwards, accented or in fullwidth letters. ponytail: leetspeak
+// ("W0LF") still gets through; the tagger only returns a label, so nothing reaches a client.
+export function maskRune(text: string, runes: string[]): string {
+  const plain = text.normalize('NFKD').replace(/\p{M}/gu, '');
+  return runes
+    .flatMap((rune) => rune.split('-'))
     .filter(Boolean)
-    .reduce((t, word) => t.replace(new RegExp([...word].join('[^a-z]*'), 'gi'), '■'), text);
+    .flatMap((word) => [word, [...word].reverse().join('')])
+    .reduce((t, word) => t.replace(new RegExp([...word].join('[^a-z]*'), 'gi'), '■'), plain);
 }
 
 export async function tagBatch(

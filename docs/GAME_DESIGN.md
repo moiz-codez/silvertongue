@@ -83,7 +83,7 @@ Phones are the main target: design for 360–430 px wide, large touch targets, w
 - Only moderated or admin-approved free text ever appears here.
 
 ### Admin (laptop, protected by `ADMIN_TOKEN`)
-- Start / pause / resume / start reveal / end / reset game. During the reveal: Previous / Next card, Back to game (pauses), End.
+- Start / pause / resume / start reveal / end / reset game. During the reveal: Previous / Next card, Back to game (pauses), End. Back to game is a fallback (e.g. the reveal started too early): the cards have shown how each floor was beaten, so resumed play is spoiled.
 - Live config: cooldown, message cap, LLM mode (mock/live).
 - Player list: kick, rename.
 - Moderation queue: approve or hide attempts for the projector's "best attempts" wall. When a player clears a floor, their last message on that floor (never the guardian's reply) is queued with their name, the floor and the time, unless it trips the nickname profanity filter or contains their rune or either of its words (then it is dropped). Approved items appear on the wall (at most 5, newest first); hidden ones never leave the server again. The queue is saved in the database, so it survives a restart; Reset starts an empty one.

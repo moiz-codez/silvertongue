@@ -20,8 +20,12 @@ describe('the technique tagger', () => {
     expect(readLabels('{"verdict":"PASS"}', 1)).toBeNull();
   });
 
-  it("masks the player's own rune words, also spaced or dashed", () => {
-    expect(maskRune('is it wolf cherry? W-O-L-F!', 'WOLF-CHERRY')).toBe('is it ■ ■? ■!');
+  it("masks the player's own rune words: spaced, dashed, backwards, accented, fullwidth", () => {
+    expect(maskRune('is it wolf cherry? W-O-L-F!', ['WOLF-CHERRY'])).toBe('is it ■ ■? ■!');
+    expect(maskRune('FLOW yrrehc, wólf, ｗｏｌｆ', ['WOLF-CHERRY'])).toBe('■ ■, ■, ■');
+    expect(maskRune('was it ember? no, wolf', ['WOLF-CHERRY', 'EMBER-FANG'])).toBe(
+      'was it ■? no, ■',
+    );
   });
 
   it('numbers the messages inside traveller_message tags, in one user turn', () => {

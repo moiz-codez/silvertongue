@@ -200,6 +200,13 @@ export function getRune(db: Db, playerId: string, floor: number): string {
   return row.rune;
 }
 
+// SERVER ONLY. All of a player's runes (the tagger masks every one of them).
+export function listRunes(db: Db, playerId: string): string[] {
+  return (
+    db.prepare('SELECT rune FROM runes WHERE player_id = ?').all(playerId) as { rune: string }[]
+  ).map((r) => r.rune);
+}
+
 // Everyone in the game, deepest and highest-scoring first (admin table and projector map).
 export function listPlayers(db: Db, gameId: string): PlayerRow[] {
   return db

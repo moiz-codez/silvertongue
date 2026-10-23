@@ -107,6 +107,24 @@ describe('the reveal', () => {
       ],
     });
 
+    // Hiding the quote and kicking a player take them off the cards at once, without a step.
+    await desk.emitWithAck('admin:moderate', { id: item('quokka'), action: 'hide' });
+    await desk.emitWithAck('admin:kick', { playerId: sara.id });
+    await until(snapshot, (s) => {
+      const top = (s.reveal?.card as { top?: { nickname: string }[] }).top ?? [];
+      return (
+        top
+          .map((p) => p.nickname)
+          .sort()
+          .join() === 'Ali,Bo,Cy'
+      ); // Sara gone, Cy moves up
+    });
+    await desk.emitWithAck('admin:command', { type: 'prev' });
+    await desk.emitWithAck('admin:command', { type: 'prev' });
+    expect((await until(snapshot, (s) => s.reveal?.index === 0)).reveal!.card).toMatchObject({
+      quote: null,
+    });
+
     // Nothing a player typed reaches the projector except the approved quote, and no rune ever.
     const everything = JSON.stringify(seen);
     for (const word of ['zebra', 'walrus', 'narwhal', 'axolotl']) {

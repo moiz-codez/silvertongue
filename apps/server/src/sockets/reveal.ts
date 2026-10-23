@@ -24,7 +24,7 @@ export function createReveal(ctx: GameContext) {
   let ticking: Promise<void> | null = null; // the background tagger's one call
   let catchUpRun: Promise<void> | null = null;
   let tagging: { done: number; total: number } | null = null;
-  let cards: RevealCard[] | null = null; // ready for the projector
+  let ready = false; // the cards can go up
   let techniques = false; // every winning message had a tag when the cards were made
   let index = 0;
 
@@ -40,10 +40,10 @@ export function createReveal(ctx: GameContext) {
 
   // One tagger call. Any failure only means "no label": those messages are skipped from now on.
   async function tag(rows: ReturnType<typeof nextBatch>): Promise<void> {
-    const texts = rows.map((m) => maskRune(m.text, q.getRune(db, m.player_id, m.floor)));
     try {
+      const texts = rows.map((m) => maskRune(m.text, q.listRunes(db, m.player_id)));
       const { labels, result } = await tagBatch(ctx.complete, texts);
-      log(result, result.stopReason === 'refusal' ? 'refusal' : 'ok');
+      log(result, result.stopReason === 'refusal' ? 'refusal' : labels ? 'ok' : 'unreadable');
       if (!labels) throw new Error('unreadable labels');
       rows.forEach((m, i) => q.setTechnique(db, m.id, labels[i]!));
     } catch {
@@ -70,14 +70,19 @@ export function createReveal(ctx: GameContext) {
   }
 
   // Every few seconds while the game is on: one batch, only when no player is waiting.
+  // It runs from a timer, so nothing in it may throw.
   function tick(): void {
-    if (ticking || catchUpRun || !canSpend()) return;
-    if (ctx.game.status !== 'running' && ctx.game.status !== 'paused') return;
-    const queue = ctx.queueStats();
-    if (queue.queued > 0 || queue.inFlight >= QUIET_IN_FLIGHT) return;
-    const rows = nextBatch(BATCH_SIZE);
-    if (rows.length === 0) return;
-    ticking = tag(rows).finally(() => (ticking = null));
+    try {
+      if (ticking || catchUpRun || !canSpend()) return;
+      if (ctx.game.status !== 'running' && ctx.game.status !== 'paused') return;
+      const queue = ctx.queueStats();
+      if (queue.queued > 0 || queue.inFlight >= QUIET_IN_FLIGHT) return;
+      const rows = nextBatch(BATCH_SIZE);
+      if (rows.length === 0) return;
+      ticking = tag(rows).finally(() => (ticking = null));
+    } catch (e) {
+      ctx.logError(e);
+    }
   }
 
   // Fills in clears from older games, then tags everything left, winning messages first.
@@ -125,7 +130,7 @@ export function createReveal(ctx: GameContext) {
     await Promise.race([catchUp(), sleep(REVEAL_WAIT_MS)]);
     if (ctx.game.status !== 'reveal') return;
     techniques = q.countUntagged(db, ctx.game.id).winning === 0;
-    cards = buildCards(floorStats(), leaders(), techniques);
+    ready = true;
     index = 0;
     ctx.changed();
   }
@@ -189,6 +194,12 @@ export function createReveal(ctx: GameContext) {
     });
   }
 
+  // Built fresh for every screen update, so a quote the admin hides or a player they kick leaves
+  // the card at once.
+  function cards(): RevealCard[] {
+    return buildCards(floorStats(), leaders(), techniques);
+  }
+
   function leaders() {
     return q
       .listPlayers(db, ctx.game.id)
@@ -203,29 +214,30 @@ export function createReveal(ctx: GameContext) {
     afterCommand(type: string): void {
       if (type === 'pause') void catchUp();
       if (type === 'reveal') {
-        cards = null;
+        ready = false;
         void prepare();
       }
     },
 
     step(by: number): AdminReply {
-      if (ctx.game.status !== 'reveal' || !cards) {
+      if (ctx.game.status !== 'reveal' || !ready) {
         return { ok: false, error: 'The Bestiary is still being written.' };
       }
-      // Rebuilt on every step, so a quote approved during the reveal shows up.
-      cards = buildCards(floorStats(), leaders(), techniques);
-      index = Math.max(0, Math.min(cards.length - 1, index + by));
+      index = Math.max(0, Math.min(cards().length - 1, index + by));
       return { ok: true };
     },
 
     // For the projector: the card on screen, while the reveal is on and the cards are ready.
     view() {
-      if (ctx.game.status !== 'reveal' || !cards) return null;
-      return { card: cards[index]!, index, total: cards.length };
+      if (ctx.game.status !== 'reveal' || !ready) return null;
+      const all = cards();
+      index = Math.min(index, all.length - 1);
+      return { card: all[index]!, index, total: all.length };
     },
 
     // For the admin screen.
     progress: () => tagging && { ...tagging },
-    position: () => (ctx.game.status === 'reveal' && cards ? { index, total: cards.length } : null),
+    position: () =>
+      ctx.game.status === 'reveal' && ready ? { index, total: cards().length } : null,
   };
 }

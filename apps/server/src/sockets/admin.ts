@@ -188,6 +188,7 @@ export function registerAdmin(
         if (!player) return { ok: false, error: 'No such player in this game.' };
         q.kickPlayer(db, player.id);
         phones.kick(player.id);
+        ctx.changed(); // off the projector at once (map, wall, Bestiary podium)
         return { ok: true };
       }),
     );

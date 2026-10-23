@@ -6,7 +6,7 @@ Source of truth for the tagger's wording. Code: `apps/server/src/llm/tagger.ts` 
 
 Labels player messages with the trick each one tries, so the Bestiary can say "most common winning trick: asking for a poem". Labels are stats, not security: a bad answer becomes `other` or is skipped, and it never blocks a player.
 
-- Input: up to 10 player messages, one user turn, each in `<traveller_message n="1..10">` tags. Before sending, each message's own rune words are masked with ■ (also spaced or dashed). Never a rune, never a guardian reply.
+- Input: up to 10 player messages, one user turn, each in `<traveller_message n="1..10">` tags. Before sending, the player's rune words (all floors) are masked with ■ (also spaced, dashed, backwards, accented or fullwidth; not leetspeak). Never a rune, never a guardian reply.
 - Output: structured JSON, one fixed schema: `{ labels: [{ n: integer, technique: enum }] }`, `additionalProperties: false`. A missing, duplicate or unknown `n` gives that message `other`. Unreadable JSON: the batch is skipped for the rest of the run (never retried in a loop).
 - Labels: `friendship`, `authority`, `persistence`, `pieces`, `backwards`, `poem`, `encoding`, `other_script`, `story`, `multi_step`, `taunt`, `gift`, `instruction_injection`, `other`.
 - When: in the background every 3 s while the game runs or is paused, one batch at a time, only when no call is queued and fewer than 5 are in flight, at the queue's background priority. Winning messages (the player message just before each leak) go first. Pause and Start reveal run a catch-up (3 batches at a time) with progress on the admin screen; Start reveal waits at most 15 s for it. Stops when the budget is spent.
