@@ -57,6 +57,20 @@ describe('leakRoute', () => {
     expect(leakRoute(2, log(['guardian', 'Oh no, GLASS-MOON. I spoke it.']), rune).route).toBe(
       'other',
     );
+    // A home-made acrostic a few letters off still counts (playtest 1); a short one does not.
+    const offBy = [
+      'Then hear it:',
+      'Gates',
+      'Lamps',
+      'Ash',
+      'Stone',
+      'Moss',
+      'Owls',
+      'Oaks',
+      'Night',
+    ];
+    expect(leakRoute(2, log(['guardian', offBy.join('\n')]), rune).route).toBe('poem');
+    expect(leakRoute(2, log(['guardian', 'Gates\nLamps\nAsh']), rune).route).toBe('other');
   });
 
   it("Floor 3: shapes Snip doesn't know get through; a snipped reply alone is other", () => {

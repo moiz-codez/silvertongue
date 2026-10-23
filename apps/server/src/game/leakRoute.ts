@@ -3,6 +3,7 @@
 // are stored; never the rune or the guess. The reveal turns these into "3 of 4 clears were poems".
 import { normalize } from '../security/normalize.ts';
 import { revealsRune } from '../security/revealsRune.ts';
+import { editDistance } from './door.ts';
 import { cluesFor } from './runeClues.ts';
 
 export type LeakRoute =
@@ -56,7 +57,7 @@ function routeOf(floor: number, reply: LoggedMessage, rune: string): LeakRoute |
     case 1:
       return shown.revealed ? 'slip' : undefined;
     case 2:
-      if (!shown.revealed) return undefined;
+      if (!shown.revealed) return nearAcrostic(reply.text, rune) ? 'poem' : undefined;
       if (shown.how === 'reversed') return 'backwards';
       return shown.how === 'plain' ? 'other' : 'poem';
     case 3: {
@@ -74,6 +75,22 @@ function routeOf(floor: number, reply: LoggedMessage, rune: string): LeakRoute |
     default:
       return undefined;
   }
+}
+
+// A poem whose line initials are close to the rune: in playtest 1 Haiku's own acrostics came out a
+// few letters off (5 edits from a 13-letter rune), and a player still read the rune from one.
+// 5+ lines, within 40% of the rune's length in edit distance (random lines are ~75% away), with or
+// without an intro line.
+function nearAcrostic(text: string, rune: string): boolean {
+  const r = normalize(rune);
+  const initials = text
+    .split('\n')
+    .map((line) => normalize(line)[0])
+    .filter(Boolean)
+    .join('');
+  if (initials.length < 5) return false;
+  const best = Math.min(editDistance(initials, r), editDistance(initials.slice(1), r));
+  return best <= Math.floor((r.length * 2) / 5);
 }
 
 // Letters in any script but Latin (Urdu, Hindi, Greek…). ponytail: a heuristic, it can't tell a

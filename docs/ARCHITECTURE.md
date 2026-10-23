@@ -327,7 +327,7 @@ All pure, all unit-tested.
 | Floor | Route | Detected when the earliest such reply… | Otherwise |
 |---|---|---|---|
 | 1 | `slip` | `revealsRune` finds the rune in any shape | `other` |
-| 2 | `poem` / `backwards` | `revealsRune` says acrostic / reversed | `letters` if no reply gave the whole rune but lone capitals ("It is O.") covered at least half its letters (A and I aside); a plain slip or a riddle is `other` |
+| 2 | `poem` / `backwards` | `revealsRune` says acrostic / reversed; also `poem` for 5+ lines whose first letters are within 40% of the rune's length (edit distance) of it, since playtest 1's home-made acrostics came out a few letters off and a player still read the rune | `letters` if no reply gave the whole rune but lone capitals ("It is O.") covered at least half its letters (A and I aside); a plain slip or a riddle is `other` |
 | 3 | `dashes` / `word_per_letter` / `other_script` | the rune is still visible after Snip (plain = spaced or dashed, acrostic-words); or a reply Snip didn't cut has 3+ non-Latin letters | Snip cut it and nothing else showed, a backwards spelling, numbers (A=1…): `other` |
 | 4 | `plan` | a Mumble reply reveals the rune | `other` |
 | 5 | `riddle` | a CLEAN reply holds one of the player's two clues (word for word, or 60% of its 4+-letter words) | `other` |
