@@ -4,7 +4,7 @@ import Database from 'better-sqlite3';
 
 export type Db = Database.Database;
 
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 
 // Steps that bring an older file up to date. Key = the version the step upgrades FROM.
 const MIGRATIONS: Record<number, string> = {
@@ -36,6 +36,11 @@ const MIGRATIONS: Record<number, string> = {
     );`,
   // How far each wrong door guess was from the rune (a number; the guess is never stored).
   4: `ALTER TABLE door_attempts ADD COLUMN distance INTEGER;`,
+  // How each floor was cleared, for the reveal (a label and a message id, never the rune).
+  5: `
+    ALTER TABLE floor_progress ADD COLUMN leak_route TEXT;
+    ALTER TABLE floor_progress ADD COLUMN winning_message_id INTEGER;
+    ALTER TABLE floor_progress ADD COLUMN leak_message_id INTEGER;`,
 };
 
 // Opens (or creates) the database file. Pass ':memory:' in tests.

@@ -2,6 +2,7 @@
 // Rows returned here are server-side only: client payloads are built from them field by field.
 import { randomUUID } from 'node:crypto';
 import type { GameStatus } from '@silvertongue/shared/events';
+import type { Clear } from '../game/leakRoute.ts';
 import type { Db } from './db.ts';
 
 export interface PlayerRow {
@@ -371,16 +372,24 @@ export function isFloorClearedInGame(db: Db, gameId: string, floor: number): boo
     .get(gameId, floor);
 }
 
-// Marks the floor cleared, adds the points and moves the player down one floor.
+// Marks the floor cleared (and how), adds the points and moves the player down one floor.
 export function clearFloor(
   db: Db,
-  p: { playerId: string; floor: number; points: number; firstBlood: boolean; now: number },
+  p: {
+    playerId: string;
+    floor: number;
+    points: number;
+    firstBlood: boolean;
+    clear: Clear;
+    now: number;
+  },
 ): void {
   db.transaction(() => {
     db.prepare(
       `UPDATE floor_progress SET cleared_at = ?, first_blood = ?, wrong_door_streak = 0, door_locked_until = NULL
        WHERE player_id = ? AND floor = ?`,
     ).run(p.now, p.firstBlood ? 1 : 0, p.playerId, p.floor);
+    setClear(db, p.playerId, p.floor, p.clear);
     db.prepare(
       'INSERT INTO door_attempts (player_id, floor, correct, created_at) VALUES (?, ?, 1, ?)',
     ).run(p.playerId, p.floor, p.now);
@@ -394,6 +403,26 @@ export function clearFloor(
       ).run(p.playerId, p.floor + 1, p.now);
     }
   })();
+}
+
+export function setClear(db: Db, playerId: string, floor: number, clear: Clear): void {
+  db.prepare(
+    `UPDATE floor_progress SET leak_route = ?, winning_message_id = ?, leak_message_id = ?
+     WHERE player_id = ? AND floor = ?`,
+  ).run(clear.route, clear.winningMessageId, clear.leakMessageId, playerId, floor);
+}
+
+// Clears from before routes were recorded (older games), for the reveal to fill in.
+export function listClearsWithoutRoute(
+  db: Db,
+  gameId: string,
+): { player_id: string; floor: number }[] {
+  return db
+    .prepare(
+      `SELECT fp.player_id, fp.floor FROM floor_progress fp JOIN players p ON p.id = fp.player_id
+       WHERE p.game_id = ? AND fp.cleared_at IS NOT NULL AND fp.leak_route IS NULL`,
+    )
+    .all(gameId) as { player_id: string; floor: number }[];
 }
 
 // ---------- messages ----------

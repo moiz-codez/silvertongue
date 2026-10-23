@@ -72,6 +72,9 @@ CREATE TABLE floor_progress (
   wrong_door_streak INTEGER NOT NULL DEFAULT 0,
   door_locked_until INTEGER,
   first_blood INTEGER NOT NULL DEFAULT 0,
+  leak_route TEXT,                      -- set on a clear: how the rune leaked (label only, see below)
+  winning_message_id INTEGER,           -- the player message just before the leak
+  leak_message_id INTEGER,              -- the guardian reply that leaked it
   PRIMARY KEY (player_id, floor)
 );
 
@@ -319,7 +322,16 @@ All pure, all unit-tested.
 - `snip(reply, rune)`: exactly as in `prompts/03-morwen-snip.md`: three shapes, case-insensitive, replaced with `█`.
 - `parseVerdict(raw, allowValue)`: strip code fences, `JSON.parse`, validate with a strict zod schema (extra keys fail); return `allowed: true` only when `verdict` equals `allowValue` compared case-insensitively. Any exception, or any `stop_reason` other than `end_turn` / `stop_sequence` (e.g. `refusal`, `max_tokens`), → `allowed: false`. Structured outputs make bad JSON rare, but this is the safety net.
 - `sanitize(text)`: trim; cap at `MAX_MESSAGE_CHARS`; remove `[...]` tags innermost-first (so `[[x]]` goes completely) and an unclosed trailing `[...`, treating lookalike brackets `［］【】〔〕` as square ones; replace every angle bracket, lookalikes included (`< > ＜ ＞ ﹤ ﹥ 〈 〉 ⟨ ⟩ ‹ ›`), with plain `(` `)`, so the player can't close `<traveller_message>` or type anything that looks like a tag. Keep line breaks (poems).
-- Door check: `normalize(guess)` equals the rune's two words joined in either order (`runeOrders` in `game/door.ts`).
+- Door check: `normalize(guess)` equals the rune's two words joined in either order (`runeOrders` in `game/door.ts`). A guess with no letters is ignored (`no_letters`): no strike, no failed try, no cooldown.
+- Leak route (`game/leakRoute.ts`): on a clear, code reads the text each guardian reply showed the player (after every filter) and stores how the rune leaked, plus the winning message (the player message just before the leaking reply, else the floor's last one). The reveal backfills clears from older games the same way. Only the label and message ids are stored, never the rune or the guess.
+
+| Floor | Route | Detected when the earliest such reply… | Otherwise |
+|---|---|---|---|
+| 1 | `slip` | `revealsRune` finds the rune in any shape | `other` |
+| 2 | `poem` / `backwards` | `revealsRune` says acrostic / reversed | `letters` if no reply gave the whole rune but lone capitals ("It is O.") covered at least half its letters (A and I aside); a plain slip or a riddle is `other` |
+| 3 | `dashes` / `word_per_letter` / `other_script` | the rune is still visible after Snip (plain = spaced or dashed, acrostic-words); or a reply Snip didn't cut has 3+ non-Latin letters | Snip cut it and nothing else showed, a backwards spelling, numbers (A=1…): `other` |
+| 4 | `plan` | a Mumble reply reveals the rune | `other` |
+| 5 | `riddle` | a CLEAN reply holds one of the player's two clues (word for word, or 60% of its 4+-letter words) | `other` |
 
 ## Background jobs
 

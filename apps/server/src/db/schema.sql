@@ -1,4 +1,4 @@
--- Silvertongue schema, version 4 (db.ts migrates older files). WAL mode and foreign keys are switched on in db.ts.
+-- Silvertongue schema, version 6 (db.ts migrates older files). WAL mode and foreign keys are switched on in db.ts.
 -- Tables for later milestones (carvings, hoard) are added when they're needed.
 
 CREATE TABLE games (
@@ -43,6 +43,10 @@ CREATE TABLE floor_progress (
   wrong_door_streak INTEGER NOT NULL DEFAULT 0,
   door_locked_until INTEGER,
   first_blood INTEGER NOT NULL DEFAULT 0,
+  -- Set on a clear, for the reveal (game/leakRoute.ts): how the rune leaked, as a label only.
+  leak_route TEXT,
+  winning_message_id INTEGER,             -- the player message just before the leak
+  leak_message_id INTEGER,                -- the guardian reply that leaked it
   PRIMARY KEY (player_id, floor)
 );
 
