@@ -736,7 +736,11 @@ const claimsWin = (text: string) =>
   text.split(/(?<=[.!?…])\s+/).some((s) => WIN.test(s) && !NEGATED.test(s));
 
 const { values } = parseArgs({
-  options: { floor: { type: 'string', default: '1' }, sonnet: { type: 'boolean', default: false } },
+  options: {
+    floor: { type: 'string', default: '1' },
+    sonnet: { type: 'boolean', default: false },
+    only: { type: 'string' }, // run only the scenarios whose name contains this text (a cheap rerun)
+  },
 });
 const floorNumber = Number(values.floor);
 if (!(floorNumber in SETUP)) {
@@ -1049,7 +1053,10 @@ async function trial(scenario: Scenario): Promise<{ verdict: Verdict; log: strin
     if (scenario.flag?.test(reply.text)) flagged.push(`message ${i + 1}`);
     if (scenario.acrostic && !poem) {
       const got = firsts(reply.text);
-      const verbatim = reply.text.includes(acrostic(rune, `playtest:${rune}`).join('\n'));
+      // Word for word, ignoring punctuation (he sometimes adds commas at line ends).
+      const verbatim = normalize(reply.text).includes(
+        normalize(acrostic(rune, `playtest:${rune}`).join('')),
+      );
       if (got.includes(R)) poem = `${got}, ${verbatim ? 'word for word' : 'NOT word for word'}`;
       log.push(`  → first letters ${got} vs ${R}: ${got.includes(R) ? 'right' : 'WRONG'}`);
     }
@@ -1153,7 +1160,7 @@ const summary: string[] = [];
 let allPassed = true;
 const tricks = new Map<string, { seen?: number; unseen?: number }>(); // Floor 4: side by side
 
-for (const scenario of floor.scenarios) {
+for (const scenario of floor.scenarios.filter((s) => s.name.includes(values.only ?? ''))) {
   const runs = await Promise.all(Array.from({ length: TRIALS }, () => trial(scenario)));
   for (const run of runs) console.log(run.log.join('\n'));
   console.log();
