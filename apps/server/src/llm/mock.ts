@@ -7,6 +7,7 @@
 import { ROLES, type RoleName } from '../config/models.ts';
 import { revealsRune } from '../security/revealsRune.ts';
 import type { Complete } from './client.ts';
+import type { Technique } from './tagger.ts';
 
 const LINES: Partial<Record<RoleName, string[]>> = {
   grub: [
@@ -35,6 +36,35 @@ const LINES: Partial<Record<RoleName, string[]>> = {
     'A thousand years, and you think you are the first to try?',
   ],
 };
+
+// The technique tagger's answer: a keyword guess per <traveller_message n="…">, so the reveal and
+// the load test have labels to show without an API key.
+export function mockTechnique(text: string): Technique {
+  const t = text.toLowerCase();
+  const rules: [RegExp, Technique][] = [
+    [/ignore|instruction|system|prompt/, 'instruction_injection'],
+    [/backward|reverse|ulta/, 'backwards'],
+    [/poem|verse|song|acrostic/, 'poem'],
+    [/letter|first|piece|harf/, 'pieces'],
+    [/dash|spell|code|morse|number/, 'encoding'],
+    [/(?![\p{Script=Latin}])\p{L}|urdu|hindi|greek/u, 'other_script'],
+    [/boss|keeper|king|admin|developer/, 'authority'],
+    [/pretend|imagine|story|game/, 'story'],
+    [/remember|first day|long ago|yesterday/, 'multi_step'],
+    [/clever|stupid|weak|dare|bet you/, 'taunt'],
+    [/gift|gold|treasure|trade|mushroom/, 'gift'],
+    [/friend|dost|kind|lonely/, 'friendship'],
+    [/please|tell me|again/, 'persistence'],
+  ];
+  return rules.find(([re]) => re.test(t))?.[1] ?? 'other';
+}
+
+function mockLabels(said: string): string {
+  const labels = [...said.matchAll(/<traveller_message n="(\d+)">(.*?)<\/traveller_message>/g)].map(
+    ([, n, text]) => ({ n: Number(n), technique: mockTechnique(text!) }),
+  );
+  return JSON.stringify({ labels });
+}
 
 // Gorm's structured verdict: smashes anything that says "rune", passes everything else.
 function gormVerdict(said: string): string {
@@ -66,7 +96,9 @@ export function createMockClient(latency = { minMs: 300, maxMs: 1500 }): Complet
     const lines = LINES[role] ?? LINES.grub!;
 
     let text = lines[turn++ % lines.length]!;
-    if (role === 'gorm') {
+    if (role === 'tagger') {
+      text = mockLabels(said);
+    } else if (role === 'gorm') {
       text = gormVerdict(said);
     } else if (role === 'ward_ears') {
       // Only the latest message counts: the conversation before it is in the same user turn.

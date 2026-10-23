@@ -222,7 +222,7 @@ await anthropic.messages.create({
 const text = response.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
 ```
 
-**Sampling, thinking and structured outputs.** No call sends `temperature`, `top_p` or `top_k`: Haiku 5.5 and Sonnet 5.5 return a 400 for non-default values. Every game call turns thinking off (`{ type: 'disabled' }` on Haiku 5.5, `{ type: 'between_tools' }` on Sonnet 5.5, which rejects `disabled`), and no call sets or changes `effort`. Guards and judges get consistency from structured outputs instead of temperature 0: each role has one fixed schema (below), so the cache and the compiled grammar are reused. Guardians get their voice and consistency from the prompt and its examples. No request ends with an assistant turn (prefill is rejected), and reply text is always read from `type === 'text'` blocks, never `content[0]`.
+**Sampling, thinking and structured outputs.** No call sends `temperature`, `top_p` or `top_k`: Haiku 5.5 and Sonnet 5.5 return a 400 for non-default values. Every game call turns thinking off (`{ type: 'disabled' }` on Haiku 5.5, `{ type: 'between_tools' }` on Sonnet 5.5, which rejects `disabled`), and no call sets or changes `effort`. Guards, judges and the tagger get consistency from structured outputs, not sampling settings: each role has one fixed schema (below), so the cache and the compiled grammar are reused. Guardians get their voice and consistency from the prompt and its examples. No request ends with an assistant turn (prefill is rejected), and reply text is always read from `type === 'text'` blocks, never `content[0]`.
 
 | Role | Schema (`output_config.format`, `type: 'json_schema'`, `additionalProperties: false` on every object) |
 |---|---|
@@ -230,7 +230,7 @@ const text = response.content.filter((b) => b.type === 'text').map((b) => b.text
 | Ward of Ears (floor 5) | `{ verdict: enum ['PASS','SEAL'] }` |
 | Ward of Ears + Carvings (floor 6) | `{ verdict: enum ['PASS','SEAL'], matched_carving: integer \| null, is_gift: boolean }` |
 | Ward of Tongues (floors 5–6) | `{ verdict: enum ['CLEAN','LEAK'] }` |
-| Technique tagger | `{ labels: [{ index: integer, technique: enum [friendship, authority, …, other] }] }` |
+| Technique tagger | `{ labels: [{ n: integer, technique: enum [friendship, authority, …, other] }] }` (`n` = the message's number in the batch) |
 
 Length limits (Gorm's 8-word growl) aren't expressible in the schema; the prompt asks for them and the server truncates.
 
@@ -335,7 +335,7 @@ All pure, all unit-tested.
 
 ## Background jobs
 
-- **Technique tagger:** batches of ~10 untagged player messages → one Haiku call (thinking off, structured output with a fixed label enum) → one label each from: friendship, authority, persistence, pieces, backwards, poem, encoding, other_script, story, multi_step, taunt, gift, instruction_injection, other. Low priority. Feeds the reveal stats.
+- **Technique tagger** (`llm/tagger.ts`, `sockets/reveal.ts`; wording in `prompts/tagger.md`): batches of up to 10 untagged player messages (each with its own rune words masked) → one Haiku call (thinking off, structured output with a fixed label enum) → one label each from: friendship, authority, persistence, pieces, backwards, poem, encoding, other_script, story, multi_step, taunt, gift, instruction_injection, other. Winning messages first. A 3 s tick sends one batch at the queue's background priority, only while the game runs or is paused, nothing is queued and fewer than 5 calls are in flight, and the budget isn't spent. Pause and Start reveal run a catch-up (3 batches at a time, progress on the admin screen). A failed batch is skipped, never retried in a loop. Logged in `llm_calls` as role `tagger`, so it counts toward spend. Mock mode: a keyword tagger (`mockTechnique`).
 - **Carver (Floor 6):** on every floor clear anywhere, as specified in `prompts/06-vorgath.md`. Seed 5 carvings at game start.
 
 ## Embeddings (Floor 6)
