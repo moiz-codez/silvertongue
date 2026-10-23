@@ -6,6 +6,8 @@
      background. Muted grey is one shade lighter than on the phone (same hue and saturation):
      6.9:1 -> 7.5:1 on the panels, 6.5:1 -> 7.1:1 on the name chips. */
   --color-muted: #b5ac9f;
+  /* The Bestiary's empty progress segments are only an outline: lighter, same hue, 2.0:1 -> 3.0:1. */
+  --color-border-strong: #665f75;
   font-size: min(1vw, 1.7778vh);
   width: 100em;
   height: 56.25em;
