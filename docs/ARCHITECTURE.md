@@ -108,17 +108,23 @@ CREATE TABLE llm_calls (
   created_at INTEGER NOT NULL
 );
 
-CREATE TABLE carvings (
+CREATE TABLE carvings (                  -- schema v7, M9 (Floor 6)
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  game_id TEXT NOT NULL, text TEXT NOT NULL, vector BLOB NOT NULL,
-  source_floor INTEGER, seeded INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL
+  game_id TEXT NOT NULL,
+  number INTEGER NOT NULL,                -- per game, 1, 2, 3…: "Sealed by carving #12"
+  text TEXT NOT NULL, vector BLOB NOT NULL, -- 384 float32s (MiniLM, normalised)
+  source_floor INTEGER, player_id TEXT,   -- null for the five seeds
+  seeded INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL,
+  UNIQUE (game_id, number)
 );
 
-CREATE TABLE hoard (
+CREATE TABLE hoard (                     -- schema v7: gifts Vorgath already owns
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   game_id TEXT NOT NULL, player_id TEXT, text TEXT NOT NULL, vector BLOB NOT NULL,
   seeded INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL
 );
+-- Also in v7: messages.carving_id (the carving that sealed it), messages.hoard
+-- (novel | owned | too_small | rude on a gift), games.floor6_enabled (the admin's live switch).
 
 CREATE TABLE projector_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -274,7 +280,7 @@ A Floor 5 message costs one Ward of Ears call (two if unreadable), and when it p
 Every call from every phone goes through one queue, in front of the mock or live client that the game's `llm_mode` selects.
 - Per model, three buckets refilled continuously, each holding one minute's worth: requests (`RATE_RPM`), input tokens (`RATE_ITPM`), output tokens (`RATE_OTPM`), set to **80%** of the account limits (1,000 / 500K / 80K per minute) via env.
 - Before sending, a call reserves 1 request, `estimatedInput = (player note + messages chars) / 2.5` (the uncached part; calibrated on the M3 live check, where chars/4 came out 1.5× too low, so a burst's reservations stay at or above real use) and `max_tokens`. After the reply it reconciles with real usage: input = `input_tokens + cache_creation_input_tokens` (cache reads don't count toward the limit), output = `output_tokens`. Unused tokens go back; extra use becomes debt that delays the next call. A failed call gives its tokens back.
-- First in, first out: nobody overtakes the head of the line. Priorities: follow-ups first (every call after the first one of a player message: the guardian behind a guard, the Ward of Tongues, retries), so a message that got through its guard finishes instead of being turned away halfway; then new player calls; background calls (technique tagger, Carver) only when no player call is waiting.
+- First in, first out: nobody overtakes the head of the line. Priorities: follow-ups first (every call after the first one of a player message: the guardian behind a guard, the Ward of Tongues, retries), so a message that got through its guard finishes instead of being turned away halfway; then new player calls and the Carver; background calls (technique tagger) only when no player call is waiting.
 - Max 30 calls in flight.
 - **Retries live in the queue, not the SDK** (`maxRetries: 0`), so the queue sees every 429: a 429 pauses that whole model for `retry-after` (counted for the "Rate-limited, last minute" tile); 5xx/529 and dropped connections back off 1 s, then 2 s. At most 2 retries.
 - **Turned away early:** when a call joins, the queue estimates its wait from the calls ahead of it and the bucket levels. If that wait plus 10 s (the least time a call needs) is past the deadline, it is rejected at once as `crowded`, instead of after 60 s. A call that reaches the front with less than 10 s left is turned away too rather than started, since the deadline would cancel it (and live mode would still pay). Every turn-away counts toward the "Crowded, last minute" admin tile.
@@ -335,7 +341,8 @@ All pure, all unit-tested.
 ## Background jobs
 
 - **Technique tagger** (`llm/tagger.ts`, `sockets/reveal.ts`; wording in `prompts/tagger.md`): batches of up to 10 untagged player messages (each with the player's rune words masked, all floors) → one Haiku call (thinking off, structured output with a fixed label enum) → one label each from: friendship, authority, persistence, pieces, backwards, poem, encoding, other_script, story, multi_step, taunt, gift, instruction_injection, other. Winning messages first. A 3 s tick sends one batch at the queue's background priority, only while the game runs or is paused, nothing is queued and fewer than 5 calls are in flight, and the budget isn't spent. Pause and Start reveal run a catch-up (3 batches at a time, progress on the admin screen). A failed batch is skipped, never retried in a loop. Logged in `llm_calls` as role `tagger`, so it counts toward spend. Mock mode: a keyword tagger (`mockTechnique`).
-- **Carver (Floor 6):** on every floor clear anywhere, as specified in `prompts/06-vorgath.md`. Seed 5 carvings at game start.
+- **Carver (Floor 6)** (`floors/06-vorgath/carver.ts`, `sockets/vorgath.ts`; wording in `prompts/06-vorgath.md`): while Floor 6 is open, every clear on any floor fires one Haiku call (fire-and-forget; errors are logged, never shown). Input: the shown texts of that floor's last 12 turns, never `raw_text`; the floor number is in the user turn so the system block stays cacheable. It runs in the queue's **player** lane, above the tagger, so a carving lands within seconds. The sentence is dropped when it is `NONE` or over 20 words, profane, leaks **any** of that player's runes (`revealsRune`, `saysRuneWord`, or a rune word spelled out in single letters like "M-O-T-H"), or is a duplicate (cosine ≥ 0.90 with a carving already in the game). Logged in `llm_calls` as role `carver`.
+- **Seeds:** when a game starts with Floor 6 open (or the admin opens it mid-game), `seeds.ts` adds 5 textbook carvings and 8 obvious gifts, once per game.
 
 ## Embeddings (Floor 6)
 
@@ -350,7 +357,7 @@ All pure, all unit-tested.
 
 ## Configuration (`config/env.ts`, validated with zod)
 
-`LLM_MODE`, `COOLDOWN_MS` and `MAX_MESSAGES_PER_PLAYER` only seed the **first** game in a database. After that they live on the game (admin → Live settings), survive restarts and carry over on Reset.
+`LLM_MODE`, `COOLDOWN_MS`, `MAX_MESSAGES_PER_PLAYER` and `FLOOR6_ENABLED` only seed the **first** game in a database. After that they live on the game (admin → Live settings), survive restarts and carry over on Reset.
 
 | Variable | Example | Purpose |
 |---|---|---|
@@ -363,6 +370,7 @@ All pure, all unit-tested.
 | `RATE_RPM` / `RATE_ITPM` / `RATE_OTPM` | `800` / `400000` / `64000` | 80% of the console limits |
 | `COOLDOWN_MS` | `5000` | Per-player message cooldown (seeds the first game) |
 | `MAX_MESSAGES_PER_PLAYER` | `150` | Per-game cap (seeds the first game) |
+| `FLOOR6_ENABLED` | `false` | Floor 6 (Vorgath) open (seeds the first game; admin can switch it live) |
 | `MAX_MESSAGE_CHARS` | `300` | Message length cap |
 | `BUDGET_USD` | `4.00` | Game auto-pauses once and alerts admin when estimated spend reaches this |
 | `JOIN_LIMIT_PER_MIN` | `60` | Successful joins per minute per address (the class may share one IP) |

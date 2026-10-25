@@ -29,6 +29,7 @@ export interface GameSettings {
   cooldown_ms: number;
   max_messages: number;
   llm_mode: 'mock' | 'live';
+  floor6_enabled: boolean; // Vorgath is open
 }
 
 export interface GameRow extends GameSettings {
@@ -51,7 +52,7 @@ export interface MessageRow {
 // ---------- games ----------
 
 const GAME_COLUMNS =
-  'id, status, started_at, paused_at, paused_ms, cooldown_ms, max_messages, llm_mode, budget_alert_at';
+  'id, status, started_at, paused_at, paused_ms, cooldown_ms, max_messages, llm_mode, floor6_enabled, budget_alert_at';
 
 // At startup: the newest game that isn't over, so a restart never resets progress.
 // Only when every game has ended is a new one opened, in the lobby.
@@ -62,13 +63,21 @@ export function getCurrentGame(db: Db, now: number, seed: GameSettings): GameRow
       `SELECT ${GAME_COLUMNS} FROM games WHERE status != 'ended' ORDER BY created_at DESC, rowid DESC LIMIT 1`,
     )
     .get() as
-    (Omit<GameRow, keyof GameSettings> & Partial<Record<keyof GameSettings, null>>) | undefined;
+    | (Omit<GameRow, keyof GameSettings> & {
+        cooldown_ms: number | null;
+        max_messages: number | null;
+        llm_mode: GameSettings['llm_mode'] | null;
+        floor6_enabled: number | null; // SQLite has no booleans
+      })
+    | undefined;
   if (!existing) return createGame(db, now, seed);
   const game: GameRow = {
     ...existing,
     cooldown_ms: existing.cooldown_ms ?? seed.cooldown_ms,
     max_messages: existing.max_messages ?? seed.max_messages,
     llm_mode: existing.llm_mode ?? seed.llm_mode,
+    floor6_enabled:
+      existing.floor6_enabled === null ? seed.floor6_enabled : existing.floor6_enabled === 1,
   };
   saveGame(db, game, now);
   return game;
@@ -85,6 +94,7 @@ export function createGame(db: Db, now: number, settings: GameSettings): GameRow
     cooldown_ms: settings.cooldown_ms,
     max_messages: settings.max_messages,
     llm_mode: settings.llm_mode,
+    floor6_enabled: settings.floor6_enabled,
   };
   db.prepare("INSERT INTO games (id, status, created_at) VALUES (?, 'lobby', ?)").run(game.id, now);
   saveGame(db, game, now);
@@ -94,7 +104,7 @@ export function createGame(db: Db, now: number, settings: GameSettings): GameRow
 export function saveGame(db: Db, game: GameRow, now: number): void {
   db.prepare(
     `UPDATE games SET status = ?, started_at = ?, paused_at = ?, paused_ms = ?,
-       cooldown_ms = ?, max_messages = ?, llm_mode = ?, budget_alert_at = ?,
+       cooldown_ms = ?, max_messages = ?, llm_mode = ?, floor6_enabled = ?, budget_alert_at = ?,
        ended_at = CASE WHEN ? = 'ended' THEN ? ELSE ended_at END
      WHERE id = ?`,
   ).run(
@@ -105,6 +115,7 @@ export function saveGame(db: Db, game: GameRow, now: number): void {
     game.cooldown_ms,
     game.max_messages,
     game.llm_mode,
+    game.floor6_enabled ? 1 : 0,
     game.budget_alert_at,
     game.status,
     now,
@@ -615,4 +626,121 @@ export function insertLlmCall(
     c.status,
     c.now,
   );
+}
+
+// ---------- Floor 6: carvings and the hoard ----------
+
+export interface CarvingRow {
+  id: number;
+  number: number;
+  text: string;
+  vector: Buffer;
+  source_floor: number | null;
+  seeded: number;
+}
+
+// Numbers carvings 1, 2, 3… within the game, so "carving #12" means the same thing all game.
+export function insertCarving(
+  db: Db,
+  c: {
+    gameId: string;
+    text: string;
+    vector: Buffer;
+    sourceFloor: number | null;
+    playerId: string | null;
+    seeded: boolean;
+    now: number;
+  },
+): number {
+  const { next } = db
+    .prepare('SELECT COALESCE(MAX(number), 0) + 1 AS next FROM carvings WHERE game_id = ?')
+    .get(c.gameId) as { next: number };
+  db.prepare(
+    `INSERT INTO carvings (game_id, number, text, vector, source_floor, player_id, seeded, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(c.gameId, next, c.text, c.vector, c.sourceFloor, c.playerId, c.seeded ? 1 : 0, c.now);
+  return next;
+}
+
+// Oldest first.
+export function listCarvings(db: Db, gameId: string): CarvingRow[] {
+  return db
+    .prepare(
+      `SELECT id, number, text, vector, source_floor, seeded FROM carvings
+       WHERE game_id = ? ORDER BY number`,
+    )
+    .all(gameId) as CarvingRow[];
+}
+
+export function insertHoard(
+  db: Db,
+  h: {
+    gameId: string;
+    playerId: string | null;
+    text: string;
+    vector: Buffer;
+    seeded: boolean;
+    now: number;
+  },
+): void {
+  db.prepare(
+    `INSERT INTO hoard (game_id, player_id, text, vector, seeded, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  ).run(h.gameId, h.playerId, h.text, h.vector, h.seeded ? 1 : 0, h.now);
+}
+
+export function listHoardVectors(db: Db, gameId: string): Buffer[] {
+  return (
+    db.prepare('SELECT vector FROM hoard WHERE game_id = ?').all(gameId) as { vector: Buffer }[]
+  ).map((r) => r.vector);
+}
+
+// For the admin screen only: the texts never go to the projector.
+export function listHoardForAdmin(db: Db, gameId: string) {
+  return db
+    .prepare(
+      `SELECT h.id, h.text, h.seeded, p.nickname FROM hoard h
+       LEFT JOIN players p ON p.id = h.player_id
+       WHERE h.game_id = ? ORDER BY h.id`,
+    )
+    .all(gameId) as { id: number; text: string; seeded: number; nickname: string | null }[];
+}
+
+export function isFloor6Seeded(db: Db, gameId: string): boolean {
+  return (
+    db.prepare('SELECT 1 FROM carvings WHERE game_id = ? AND seeded = 1 LIMIT 1').get(gameId) !==
+    undefined
+  );
+}
+
+export function setMessageCarving(db: Db, messageId: number, carvingId: number): void {
+  db.prepare('UPDATE messages SET carving_id = ? WHERE id = ?').run(carvingId, messageId);
+}
+
+export function setMessageHoard(db: Db, messageId: number, result: string): void {
+  db.prepare('UPDATE messages SET hoard = ? WHERE id = ?').run(result, messageId);
+}
+
+// Numbers only: what the projector and the Bestiary may show.
+export function vorgathCounts(db: Db, gameId: string) {
+  return db
+    .prepare(
+      `SELECT
+         (SELECT COUNT(*) FROM carvings WHERE game_id = ?) AS carvings,
+         (SELECT COUNT(*) FROM carvings WHERE game_id = ? AND seeded = 1) AS seededCarvings,
+         (SELECT COUNT(*) FROM hoard WHERE game_id = ?) AS hoard,
+         (SELECT COUNT(*) FROM hoard WHERE game_id = ? AND seeded = 0) AS giftsAccepted,
+         (SELECT COUNT(*) FROM messages WHERE game_id = ? AND hoard = 'owned') AS owned,
+         (SELECT COUNT(*) FROM messages WHERE game_id = ? AND hoard = 'too_small') AS tooSmall,
+         (SELECT COUNT(*) FROM messages WHERE game_id = ? AND carving_id IS NOT NULL) AS sealedByCarving`,
+    )
+    .get(gameId, gameId, gameId, gameId, gameId, gameId, gameId) as {
+    carvings: number;
+    seededCarvings: number;
+    hoard: number;
+    giftsAccepted: number;
+    owned: number;
+    tooSmall: number;
+    sealedByCarving: number;
+  };
 }

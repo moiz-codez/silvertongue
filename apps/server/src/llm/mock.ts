@@ -107,6 +107,10 @@ export function createMockClient(latency = { minMs: 300, maxMs: 1500 }): Complet
     } else if (role === 'ward_tongues') {
       const leaks = rune !== undefined && revealsRune(said, rune).revealed;
       text = leaks ? '{"verdict":"LEAK"}' : '{"verdict":"CLEAN"}';
+    } else if (role === 'carver') {
+      // One sentence about the last thing the player said, so the same trick dedupes.
+      const latest = [...said.matchAll(/<traveller_message>(.*?)<\/traveller_message>/g)].at(-1);
+      text = latest ? `Uses ${mockTechnique(latest[1]!)} to get the secret.` : 'NONE';
     } else if (role === 'ashveil' && said.includes('clever')) {
       const clues = playerNote?.match(/1\) (.*); 2\) (.*)\.$/);
       text = `Not clever? Then solve this, mortal: ${clues?.[1]}, and ${clues?.[2]}. No one ever has.`;

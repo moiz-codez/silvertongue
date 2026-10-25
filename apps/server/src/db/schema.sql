@@ -1,5 +1,4 @@
--- Silvertongue schema, version 6 (db.ts migrates older files). WAL mode and foreign keys are switched on in db.ts.
--- Tables for later milestones (carvings, hoard) are added when they're needed.
+-- Silvertongue schema, version 7 (db.ts migrates older files). WAL mode and foreign keys are switched on in db.ts.
 
 CREATE TABLE games (
   id TEXT PRIMARY KEY,
@@ -10,6 +9,7 @@ CREATE TABLE games (
   -- Live settings, changed from the admin screen. The first game takes them from .env;
   -- Reset copies them into the next game, and a restart keeps them.
   cooldown_ms INTEGER, max_messages INTEGER, llm_mode TEXT,
+  floor6_enabled INTEGER,                 -- 1 = Vorgath is open (a live setting like the three above)
   budget_alert_at INTEGER                 -- set when spend crossed BUDGET_USD and the game paused itself
 );
 
@@ -59,6 +59,8 @@ CREATE TABLE messages (
   verdict TEXT,
   in_guardian_history INTEGER NOT NULL DEFAULT 1,
   technique TEXT,
+  carving_id INTEGER,                     -- Floor 6: the carving that sealed this player message
+  hoard TEXT,                             -- Floor 6: novel | owned | too_small | rude, when it was a gift
   created_at INTEGER NOT NULL
 );
 CREATE INDEX messages_by_player_floor ON messages (player_id, floor, id);
@@ -92,6 +94,29 @@ CREATE TABLE projector_events (
   created_at INTEGER NOT NULL
   -- no text column: the line is built when sent, from the player's CURRENT name,
   -- so a rename or kick also changes or removes their old lines on the projector
+);
+
+CREATE TABLE carvings (                 -- Floor 6: tricks Vorgath has learned. Text is for the phone and admin, never the projector
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  game_id TEXT NOT NULL,
+  number INTEGER NOT NULL,                -- "carving #12": 1, 2, 3… within the game, seeds first
+  text TEXT NOT NULL,
+  vector BLOB NOT NULL,                   -- 384 Float32 (embeddings/embed.ts), for the duplicate check
+  source_floor INTEGER,                   -- the floor whose clear it describes; null for a seed
+  player_id TEXT,                         -- whose clear it describes; null for a seed
+  seeded INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  UNIQUE (game_id, number)
+);
+
+CREATE TABLE hoard (                    -- Floor 6: gifts Vorgath keeps. Text is for the admin only
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  game_id TEXT NOT NULL,
+  player_id TEXT,                         -- null for a seed
+  text TEXT NOT NULL,
+  vector BLOB NOT NULL,
+  seeded INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
 );
 
 -- The "best attempts" wall: only approved rows reach the projector; hidden rows never leave the server.

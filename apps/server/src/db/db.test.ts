@@ -28,7 +28,12 @@ afterEach(() => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-const SEED = { cooldown_ms: 5000, max_messages: 150, llm_mode: 'mock' } as const;
+const SEED = {
+  cooldown_ms: 5000,
+  max_messages: 150,
+  llm_mode: 'mock',
+  floor6_enabled: false,
+} as const;
 const runes = ['EMBER-FANG', 'IRON-MOTH', 'SALT-RIVER', 'ASH-LANTERN', 'FROST-BELL', 'BONE-HARP'];
 
 it('uses WAL mode and survives a restart without resetting the game', () => {
@@ -139,16 +144,22 @@ it('migrates a version-1 file without losing data', () => {
       floor INTEGER NOT NULL, correct INTEGER NOT NULL, created_at INTEGER NOT NULL);
     CREATE TABLE floor_progress (player_id TEXT NOT NULL, floor INTEGER NOT NULL,
       reached_at INTEGER NOT NULL, cleared_at INTEGER, PRIMARY KEY (player_id, floor));
+    CREATE TABLE messages (id INTEGER PRIMARY KEY AUTOINCREMENT, game_id TEXT NOT NULL,
+      player_id TEXT NOT NULL, floor INTEGER NOT NULL, speaker TEXT NOT NULL, text TEXT NOT NULL,
+      created_at INTEGER NOT NULL);
     PRAGMA user_version = 1;`);
   old.close();
 
   const db = openDb(file);
-  expect(db.pragma('user_version', { simple: true })).toBe(6);
+  expect(db.pragma('user_version', { simple: true })).toBe(7);
   expect(db.prepare('SELECT COUNT(*) AS n FROM attempts').get()).toEqual({ n: 0 }); // M7's table
   const doorColumns = db.prepare('SELECT name FROM pragma_table_info(?)').all('door_attempts');
   expect(doorColumns.map((c) => (c as { name: string }).name)).toContain('distance'); // v5
   const progressColumns = db.prepare('SELECT name FROM pragma_table_info(?)').all('floor_progress');
   expect(progressColumns.map((c) => (c as { name: string }).name)).toContain('leak_route'); // v6
+  const messageColumns = db.prepare('SELECT name FROM pragma_table_info(?)').all('messages');
+  expect(messageColumns.map((c) => (c as { name: string }).name)).toContain('carving_id'); // v7
+  expect(db.prepare('SELECT COUNT(*) AS n FROM carvings').get()).toEqual({ n: 0 }); // v7
   // A game from before settings were stored gets them from .env (the seed).
   expect(getCurrentGame(db, 2, SEED)).toMatchObject({
     id: 'g1',

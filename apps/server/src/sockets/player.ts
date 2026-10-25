@@ -27,6 +27,7 @@ import type { JudgeResult } from '../floors/judge.ts';
 import type { Turn } from '../floors/messages.ts';
 import { checkDoor, guessDistance } from '../game/door.ts';
 import type { Embed } from '../embeddings/embed.ts';
+import type { Vorgath } from './vorgath.ts';
 import { leakRoute } from '../game/leakRoute.ts';
 import { HINT_AT, unlockedNotes } from '../game/hints.ts';
 import { generateRunes } from '../game/runes.ts';
@@ -81,7 +82,11 @@ const NOT_NOW: Record<GameStatus, string | null> = {
 
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
 
-export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): PhoneControls {
+export function registerPlayerHandlers(
+  io: PlayerServer,
+  ctx: GameContext,
+  vorgath: Vorgath,
+): PhoneControls {
   const { db, env, complete } = ctx;
   const cooldownUntil = new Map<string, number>(); // playerId → time the next message is allowed
   // After a wrong guess, the next guess waits as long as the next message would: wrong guesses
@@ -596,6 +601,8 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
           gameMs: elapsedMs(ctx.game, now),
           now,
         });
+
+        vorgath.afterClear(id, floor); // the trick that worked is carved into Vorgath's scales
 
         socket.emit('player:door-result', { correct: true, lockedMs: 0 });
         socket.emit('player:expression', { floor, state: 'slipped' });

@@ -22,6 +22,7 @@ import { applyCommand, elapsedMs } from '../game/state.ts';
 import { cleanNickname, NICKNAME_TAKEN, nicknameProblem } from '../security/nickname.ts';
 import type { GameContext, PhoneControls, PlayerServer } from './player.ts';
 import type { Reveal } from './reveal.ts';
+import type { Vorgath } from './vorgath.ts';
 import { clientIp, isLocal, slidingLimit } from './clientIp.ts';
 import { throttle } from './throttle.ts';
 
@@ -39,6 +40,7 @@ export function registerAdmin(
   ctx: GameContext,
   phones: PhoneControls,
   reveal: Reveal,
+  vorgath: Vorgath,
 ) {
   const { db, env } = ctx;
   const admin = io.of('/admin') as unknown as Namespace<AdminClientEvents, AdminServerEvents>;
@@ -126,6 +128,7 @@ export function registerAdmin(
       q.shiftFloorClocks(db, before.id, before.paused_at, now - before.paused_at);
     }
     ctx.game = moved.game;
+    if (type === 'start') vorgath.seed(); // Floor 6's carvings and hoard, if he is open
     phones.refreshAll(); // every phone moves to Floor 1, the pause banner, the closed screen…
     reveal.afterCommand(type); // pause and reveal start the tagger's catch-up
     return { ok: true };
