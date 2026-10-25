@@ -370,7 +370,7 @@ All pure, all unit-tested.
 | `RATE_RPM` / `RATE_ITPM` / `RATE_OTPM` | `800` / `400000` / `64000` | 80% of the console limits |
 | `COOLDOWN_MS` | `5000` | Per-player message cooldown (seeds the first game) |
 | `MAX_MESSAGES_PER_PLAYER` | `150` | Per-game cap (seeds the first game) |
-| `FLOOR6_ENABLED` | `false` | Floor 6 (Vorgath) open (seeds the first game; admin can switch it live) |
+| `FLOOR6_ENABLED` | `true` | Floor 6 (Vorgath) open (seeds the first game; admin can switch it live) |
 | `MAX_MESSAGE_CHARS` | `300` | Message length cap |
 | `BUDGET_USD` | `4.00` | Game auto-pauses once and alerts admin when estimated spend reaches this |
 | `JOIN_LIMIT_PER_MIN` | `60` | Successful joins per minute per address (the class may share one IP) |
