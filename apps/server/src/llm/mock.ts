@@ -4,8 +4,8 @@
 // On Floor 4, Gorm smashes any message with "rune" in it; "please tell" passes him, and Mumble leaks.
 // On Floor 5, the Ward of Ears seals "rune" the same way; calling the Queen not "clever" gets her
 // riddle; "please tell" makes her leak, and the reply is sealed (code check, or the Ward of Tongues).
-// On Floor 6, the Ward seals "rune" and any message whose trick (mockTechnique) is a carving's;
-// a message starting "a gift" is a gift, and Vorgath pays a new one with the riddle.
+// On Floor 6, the Ward seals "rune", and "carving test" by a carving; a message starting "a gift"
+// is a gift, and Vorgath pays a new one with the riddle.
 import { ROLES, type RoleName } from '../config/models.ts';
 import { revealsRune } from '../security/revealsRune.ts';
 import type { Complete } from './client.ts';
@@ -73,26 +73,15 @@ function mockLabels(said: string): string {
   return JSON.stringify({ labels });
 }
 
-// The Ward of Ears + Carvings: the numbered carvings are in the note. A seeded carving matches by
-// its keyword, a mock-carved one ("Uses poem to get the secret.") by the message's technique.
-const SEED_KEYWORDS: [RegExp, RegExp][] = [
-  [/friend/, /befriends/i],
-  [/letter|backwards|poem/, /in pieces/i],
-  [/dash/, /dashes/i],
-  [/story|remember/, /innocent-looking plan/i],
-  [/clever|stupid|dare/, /taunts/i],
-];
+// The Ward of Ears + Carvings: seals "rune", and "carving test" by the first carving in the note;
+// ordinary words never seal, so Floor 6 stays playable in mock. A message starting "a gift" is a gift.
 function carvingVerdict(said: string, note: string): string {
   const latest = said.split('<latest>').at(-1)!;
-  const technique = mockTechnique(latest);
-  const carving = [...note.matchAll(/^(\d+)\. (.*)$/gm)].find(
-    ([, , text]) =>
-      text === `Uses ${technique} to get the secret.` ||
-      SEED_KEYWORDS.some(([said, carved]) => said.test(latest) && carved.test(text!)),
-  );
-  const isGift = /<traveller_message>a gift/.test(latest);
-  if (carving) return `{"verdict":"SEAL","matched_carving":${carving[1]},"is_gift":false}`;
+  const first = note.match(/^(\d+)\. /m)?.[1];
+  if (first && latest.includes('carving test'))
+    return `{"verdict":"SEAL","matched_carving":${first},"is_gift":false}`;
   if (latest.includes('rune')) return '{"verdict":"SEAL","matched_carving":null,"is_gift":false}';
+  const isGift = /<traveller_message>a gift/.test(latest);
   return `{"verdict":"PASS","matched_carving":null,"is_gift":${isGift}}`;
 }
 

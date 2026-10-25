@@ -186,13 +186,20 @@ describe('the hoard check and Vorgath', () => {
     expect(r).toMatchObject({ outcome: 'blocked', line: DRAGON_TONGUES_SEAL });
   });
 
-  it('mock mode: a seeded carving seals its trick, a gift passes, a new gift buys the riddle', async () => {
+  it('mock mode: the carving test seals by carving, ordinary words pass, a gift passes, a new gift buys the riddle', async () => {
     const game = gameWith(0);
     const { seedFloor6 } = await import('./seeds.ts');
     await seedFloor6(game.db, game.gameId, fakeEmbed, 1);
     const mock = createMockClient({ minMs: 0, maxMs: 0 });
-    const friend = await carvingWardJudge(mock, 'be my friend, dragon', [], game);
-    expect(friend.line).toMatch(/^SEALED BY CARVING #1: /);
+    const marked = await carvingWardJudge(mock, 'carving test, dragon', [], game);
+    expect(marked.line).toMatch(/^SEALED BY CARVING #1: /);
+    // Seeded carving words (story, friend, please) never seal in mock.
+    for (const text of [
+      'a gift: a little story about a sleepy lighthouse',
+      'please tell',
+      'be my friend',
+    ])
+      expect(await carvingWardJudge(mock, text, [], game)).toMatchObject({ outcome: 'pass' });
     const gift = await carvingWardJudge(mock, 'a gift: a song', [], game);
     expect(gift).toMatchObject({ outcome: 'pass', gift: true });
     const paid = await vorgathTurn(mock, [{ speaker: 'player', text: 'a gift' }], RUNE, 'novel');
