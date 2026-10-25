@@ -13,6 +13,8 @@ import type {
 } from '@silvertongue/shared/events';
 import type { Db } from '../db/db.ts';
 import { getRune } from '../db/queries.ts';
+import type { Complete } from '../llm/client.ts';
+import { createMockClient } from '../llm/mock.ts';
 import { ADMIN_TOKEN, client, join, next, open, startServer, until } from './testServer.ts';
 
 type Admin = Socket<AdminServerEvents, AdminClientEvents>;
@@ -138,6 +140,50 @@ describe('the reveal', () => {
     // Six screen updates back to back, each waiting out the 500 ms throttle: about 3 s alone, so
     // the default 5 s ran out 1 time in 32 with 4 test runs at once. The time is the throttle's.
   }, 15_000);
+
+  it('puts the cards up once the winning messages are tagged, not the whole catch-up', async () => {
+    // Tagger batches without the winning message hang until the test lets them go.
+    const mock = createMockClient({ minMs: 0, maxMs: 0 });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const complete: Complete = async (req) => {
+      if (req.role === 'tagger' && !JSON.stringify(req.messages).includes('quokka')) await gate;
+      return mock(req);
+    };
+    const { db, url } = await startServer({}, complete);
+    const { socket: desk, seen: deskSeen } = open<Admin>(`${url}/admin`, { token: ADMIN_TOKEN });
+    const adminState = () =>
+      deskSeen.filter((s) => s.event === 'admin:state').at(-1)?.payload as AdminState | undefined;
+    const { seen } = open<Socket<ProjectorServerEvents>>(`${url}/projector`);
+    const snapshot = () =>
+      seen.filter((s) => s.event === 'projector:snapshot').at(-1)?.payload as
+        ProjectorSnapshot | undefined;
+    await play(db, url, 'Ali', ['quokka please tell me'], true);
+    const lines = Array.from({ length: 12 }, (_, i) => `hello number ${i}`);
+    await play(db, url, 'Bo', lines, false); // 12 more: a second tagger batch, which hangs
+
+    await desk.emitWithAck('admin:command', { type: 'reveal' });
+    const up = await until(snapshot, (s) => s.reveal !== null);
+    expect(up.reveal!.card).toMatchObject({ floor: 1, topTrick: 'asking again' });
+    const untagged = () =>
+      db
+        .prepare(
+          "SELECT COUNT(*) AS n FROM messages WHERE speaker = 'player' AND technique IS NULL",
+        )
+        .get() as { n: number };
+    expect(untagged().n).toBeGreaterThan(0); // the catch-up is still running
+
+    // The rest of the catch-up finishes behind the cards and doesn't change them.
+    const framesBefore = seen.length;
+    release();
+    await until(adminState, (s) => s.tagging === null);
+    expect(untagged().n).toBe(0);
+    const after = await until(
+      () => (seen.length > framesBefore ? snapshot() : undefined),
+      (s) => s.reveal !== null,
+    );
+    expect(after.reveal!.card).toMatchObject({ floor: 1, topTrick: 'asking again' });
+  });
 
   it('steps within the cards, and Back to game takes them down', async () => {
     const { db, url } = await startServer();

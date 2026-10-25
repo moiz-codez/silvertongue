@@ -113,7 +113,7 @@ After ~12 minutes of play, the admin pauses the game and presses Start reveal. P
 
 Stats come from logged messages:
 - How each clear happened (the leak route) is worked out by code at the door, from what the guardian's replies showed the player (`docs/ARCHITECTURE.md` → Leak route).
-- Each player message also gets a technique label (friendship, authority, persistence, pieces, backwards, poem, encoding, other script, story, multi-step plan, taunt, gift, instruction injection, other) from a cheap Haiku call. That call runs in the background only when the queue is quiet, with winning messages first. Pause and Start reveal run a catch-up. If the winning messages aren't all tagged within 15 s of Start reveal, the cards go up without any technique line.
+- Each player message also gets a technique label (friendship, authority, persistence, pieces, backwards, poem, encoding, other script, story, multi-step plan, taunt, gift, instruction injection, other) from a cheap Haiku call. That call runs in the background only when the queue is quiet, with winning messages first. Pause and Start reveal run a catch-up. The cards go up as soon as every winning message is tagged; the rest of the catch-up finishes behind them. If the winning messages aren't all tagged within 15 s of Start reveal, the cards go up without any technique line.
 - The projector only ever receives numbers, fixed text and approved quotes.
 
 ## Presentation flow (~20 min)

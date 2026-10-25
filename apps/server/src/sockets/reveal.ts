@@ -125,14 +125,23 @@ export function createReveal(ctx: GameContext) {
     }
   }
 
-  // Start reveal: the projector holds until the catch-up is done or 15 s have passed.
+  // Start reveal: the projector holds until every winning message has a tag (they go first), the
+  // catch-up ends, or 15 s have passed. The rest of the catch-up keeps going without changing the
+  // cards: they only use the winning messages' tags.
   async function prepare(): Promise<void> {
-    await Promise.race([catchUp(), sleep(REVEAL_WAIT_MS)]);
+    const running = catchUp();
+    await Promise.race([running, winningTagged(Date.now() + REVEAL_WAIT_MS)]);
     if (ctx.game.status !== 'reveal') return;
     techniques = q.countUntagged(db, ctx.game.id).winning === 0;
     ready = true;
     index = 0;
     ctx.changed();
+  }
+
+  // Also gives up at the deadline, or when the catch-up ends (a failed batch is never retried).
+  async function winningTagged(deadline: number): Promise<void> {
+    while (catchUpRun && Date.now() < deadline && q.countUntagged(db, ctx.game.id).winning > 0)
+      await sleep(100);
   }
 
   function floorStats(): FloorStats[] {
