@@ -114,7 +114,7 @@ export interface BestiaryCard {
 export interface ClosingCard {
   kind: 'closing';
   line: string;
-  top: { nickname: string; floor: number; title: string }[];
+  top: { nickname: string; cleared: number; title: string }[]; // cleared: floors cleared, 0–6
 }
 
 export type RevealCard = BestiaryCard | ClosingCard;

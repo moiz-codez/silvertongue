@@ -77,7 +77,7 @@ describe('the reveal', () => {
     expect(floor1).toMatchObject({
       kind: 'floor',
       floor: 1,
-      name: 'Grub — a plain system prompt.',
+      name: 'Grub: a plain system prompt.',
       lesson: 'An instruction is a request, not a lock.',
       howBeat: '3 of you got the rune out of him, and he never meant to say it.',
       topTrick: 'asking again', // mock tagger: 2 winners only said "please tell me", 1 said "friend"

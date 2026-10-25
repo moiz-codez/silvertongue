@@ -39,7 +39,7 @@ const CARDS: Record<
   { name: string; technique: string; lesson: string; him: string; hes: string }
 > = {
   1: {
-    name: 'Grub — a plain system prompt.',
+    name: 'Grub: a plain system prompt.',
     technique: 'The only thing guarding the rune was one sentence asking him not to share it.',
     lesson: 'An instruction is a request, not a lock.',
     him: 'him',
@@ -146,7 +146,7 @@ function details(f: FloorStats): Tile[] {
       ];
     case 3:
       return [
-        { label: 'letters snipped', value: String(f.lettersSnipped) },
+        count(f.lettersSnipped, 'letter', 'snipped'),
         route('dashes', 'cleared with dashes'),
         route('other_script', 'cleared in another script'),
         route('word_per_letter', 'cleared one word per letter'),
@@ -154,19 +154,16 @@ function details(f: FloorStats): Tile[] {
       ];
     case 4:
       return [
-        { label: 'messages smashed', value: String(f.smashed) },
-        { label: 'messages passed', value: String(f.passed) },
-        {
-          label: 'messages in a winning plan',
-          value: f.planLengths.length ? String(median(f.planLengths)) : '—',
-        },
+        count(f.smashed, 'message', 'smashed'),
+        count(f.passed, 'message', 'passed'),
+        planTile(f.planLengths),
       ];
     case 5:
       return [
         { label: 'sealed by the Ward of Ears', value: String(f.earsSeals) },
         { label: 'sealed by the Ward of Tongues', value: String(f.tonguesSeals) },
-        { label: 'riddles given', value: String(f.riddlesGiven) },
-        route('riddle', 'riddles solved'),
+        count(f.riddlesGiven, 'riddle', 'given'),
+        count(f.routes.riddle ?? 0, 'riddle', 'solved'),
       ];
     default:
       return [];
@@ -181,7 +178,12 @@ export function howBeat(f: FloorStats): string {
   }
   if (f.cleared === 0) return `Nobody got past ${him}. ${hes} still waiting.`;
 
-  const who = f.reached === 1 ? `The only one of you who reached ${him}` : `${f.cleared} of you`;
+  const who =
+    f.reached === 1
+      ? `The only one of you who reached ${him}`
+      : f.cleared === 1
+        ? 'One of you'
+        : `${f.cleared} of you`;
   const share = (k: number) => (f.cleared === 1 ? 'The only clear' : `${k} of ${f.cleared} clears`);
   const main = (routes: LeakRoute[]) => {
     const best = routes.map((r) => [r, f.routes[r] ?? 0] as const).sort((a, b) => b[1] - a[1])[0];
@@ -208,8 +210,9 @@ export function howBeat(f: FloorStats): string {
       return `${share(top[1])} used ${how[top[0] as 'dashes']}: a shape Snip was never told about.`;
     }
     case 4: {
+      const plans = f.planLengths.length === 1 ? 'The winning plan' : 'The winning plans';
       const steps = f.planLengths.length
-        ? ` The winning plans took ${plural(median(f.planLengths), 'message')}.`
+        ? ` ${plans} took ${plural(median(f.planLengths), 'message')}.`
         : '';
       return `Gorm smashed ${plural(f.smashed, 'message')}. ${f.passed} got through, each one innocent on its own.${steps}`;
     }
@@ -246,7 +249,7 @@ function closingCard(leaders: Leader[]): ClosingCard {
       .slice(0, 3)
       .map((l) => ({
         nickname: l.nickname,
-        floor: Math.min(l.floor, 6),
+        cleared: Math.min(l.floor - 1, 6), // the deepest floor CLEARED, never one not built yet
         title: titleFor(l.floor - 1),
       })),
   };
@@ -261,6 +264,22 @@ export function median(values: number[]): number {
 function clock(ms: number): string {
   const s = Math.round(ms / 1000);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+// A detail tile with the noun matching its number: "1 riddle given", "3 riddles given".
+function count(n: number, one: string, verb: string): Tile {
+  return { value: String(n), label: `${plural(n, one).replace(/^\d+ /, '')} ${verb}` };
+}
+
+// Floor 4: one plan's length, or the median of several ("—" before anyone clears).
+function planTile(lengths: number[]): Tile {
+  if (!lengths.length) return { value: '—', label: 'messages in a winning plan' };
+  const n = median(lengths);
+  const noun = n === 1 ? 'message' : 'messages';
+  return {
+    value: String(n),
+    label: `${noun} in ${lengths.length === 1 ? 'the' : 'a'} winning plan`,
+  };
 }
 
 function plural(n: number, one: string, many = `${one}s`): string {

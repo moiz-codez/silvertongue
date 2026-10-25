@@ -77,6 +77,11 @@ describe('the Bestiary', () => {
       'Gorm smashed 140 messages. 9 got through, each one innocent on its own. The winning plans took 5 messages.',
     );
     expect(
+      howBeat(floor(4, { reached: 9, cleared: 1, smashed: 1, passed: 1, planLengths: [1] })),
+    ).toBe(
+      'Gorm smashed 1 message. 1 got through, each one innocent on its own. The winning plan took 1 message.',
+    );
+    expect(
       howBeat(
         floor(5, {
           reached: 7,
@@ -91,6 +96,28 @@ describe('the Bestiary', () => {
     );
   });
 
+  it('matches every counted noun to its number: 0, 1 and many', () => {
+    const tiles = (over: Partial<FloorStats>, n: number) =>
+      (buildCards([floor(n, { reached: 2, ...over })], [], true)[0] as BestiaryCard).details;
+    expect(tiles({ riddlesGiven: 1, routes: { riddle: 1 }, cleared: 1 }, 5)).toEqual(
+      expect.arrayContaining([
+        { label: 'riddle given', value: '1' },
+        { label: 'riddle solved', value: '1' },
+      ]),
+    );
+    expect(tiles({ riddlesGiven: 0 }, 5)).toContainEqual({ label: 'riddles given', value: '0' });
+    expect(tiles({ lettersSnipped: 1 }, 3)).toContainEqual({ label: 'letter snipped', value: '1' });
+    expect(tiles({ smashed: 2, passed: 1, planLengths: [3] }, 4)).toEqual([
+      { label: 'messages smashed', value: '2' },
+      { label: 'message passed', value: '1' },
+      { label: 'messages in the winning plan', value: '3' },
+    ]);
+    expect(tiles({}, 4)[2]).toEqual({ label: 'messages in a winning plan', value: '—' });
+    expect(howBeat(floor(1, { reached: 4, cleared: 1 }))).toBe(
+      'One of you got the rune out of him, and he never meant to say it.',
+    );
+  });
+
   it('names the most common winning trick only when techniques are on', () => {
     expect(topTrick(['other', 'friendship', 'authority', 'friendship'])).toBe('friendship');
     expect(topTrick(['other'])).toBeNull();
@@ -101,7 +128,7 @@ describe('the Bestiary', () => {
     expect(off.topTrick).toBeNull();
   });
 
-  it('closes with the top 3 players, their deepest floor and title', () => {
+  it('closes with the top 3 players, the floors they cleared and their title', () => {
     const closing = buildCards(
       [],
       [
@@ -116,9 +143,9 @@ describe('the Bestiary', () => {
       kind: 'closing',
       line: CLOSING_LINE,
       top: [
-        { nickname: 'Sara', floor: 6, title: 'Dragontongue' },
-        { nickname: 'Ali', floor: 3, title: 'Oathbreaker' },
-        { nickname: 'Mo', floor: 2, title: 'Goblin Charmer' },
+        { nickname: 'Sara', cleared: 6, title: 'Dragontongue' },
+        { nickname: 'Ali', cleared: 2, title: 'Oathbreaker' },
+        { nickname: 'Mo', cleared: 1, title: 'Goblin Charmer' },
       ],
     });
   });

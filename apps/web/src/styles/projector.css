@@ -24,6 +24,22 @@
   font-size: 2em;
 }
 
+/* In the pixel font a 5 reads as an S ("5/5" looked like "S/S"), so every number on the big
+   screen uses bold Plex Sans with even-width digits. The pixel font stays for headings. */
+.pj-steps span,
+.pj-gate span,
+.pj-floor-number,
+.pj-floor-count,
+.pj-timer strong,
+.bx-tile strong,
+.bx-details strong,
+.bx-segment,
+.bx-rank {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---------- Lobby ---------- */
 
 .pj-lobby {
@@ -73,7 +89,6 @@
   place-items: center;
   border: 2px solid var(--color-accent);
   color: var(--color-accent);
-  font-family: var(--font-heading);
 }
 
 .pj-gate {
@@ -210,7 +225,6 @@
 
 .pj-floor-number,
 .pj-floor-count {
-  font-family: var(--font-heading);
   font-size: 1.8em;
 }
 
@@ -317,10 +331,8 @@
 }
 
 .pj-timer strong {
-  font-family: var(--font-heading);
   color: var(--color-accent);
   font-size: 2.6em;
-  font-variant-numeric: tabular-nums;
 }
 
 .pj-feed {
@@ -472,7 +484,6 @@
 }
 
 .bx-tile strong {
-  font-family: var(--font-heading);
   font-size: 5.2em;
   line-height: 1;
   white-space: nowrap;
@@ -493,7 +504,6 @@
 
 .bx-details strong {
   color: var(--color-text);
-  font-family: var(--font-heading);
   font-size: 1.3em;
 }
 
@@ -548,7 +558,6 @@
 .bx-segment {
   padding: 0.3em 0;
   text-align: center;
-  font-family: var(--font-heading);
   font-size: 1.5em;
   color: var(--color-muted);
   border: 0.07em solid var(--color-border-strong);
@@ -606,7 +615,6 @@
 
 .bx-rank {
   color: var(--color-accent);
-  font-family: var(--font-heading);
   font-size: 3em;
   line-height: 1;
 }

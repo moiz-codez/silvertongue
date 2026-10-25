@@ -103,7 +103,7 @@ No temperature setting: these models reject it, and thinking is off on every cal
 
 ## Bestiary card (for the reveal)
 
-> **Grub — a plain system prompt.**
+> **Grub: a plain system prompt.**
 > The only thing guarding the rune was one sentence asking him not to share it.
 > **An instruction is a request, not a lock.**
 > [Live stats: attempts, median time to clear, most common winning trick]

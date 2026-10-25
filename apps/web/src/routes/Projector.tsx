@@ -233,7 +233,10 @@ function Bestiary({ card }: { card: BestiaryCard | ClosingCard }) {
               <span className="bx-rank">{i + 1}</span>
               <strong>{p.nickname}</strong>
               <span>
-                {p.title} · Floor {p.floor}
+                {p.title} ·{' '}
+                {p.cleared === 0
+                  ? 'No floor cleared'
+                  : `Cleared ${p.cleared} ${p.cleared === 1 ? 'floor' : 'floors'}`}
               </span>
             </li>
           ))}
