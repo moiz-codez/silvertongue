@@ -33,13 +33,17 @@ const noTags = (s: string) => s.replace(/[<>]/g, ''); // her words can't close o
 // The Ward of Ears sees the last 12 things said on this floor (sealed messages included), then the
 // latest message, all in one user turn. Player text is always inside <traveller_message> tags
 // (already sanitized, so it has no angle brackets).
-export function earsMessages(text: string, earlier: Turn[]): Anthropic.MessageParam[] {
+export function earsMessages(
+  text: string,
+  earlier: Turn[],
+  replyTag = 'queen_reply', // Floor 6: dragon_reply
+): Anthropic.MessageParam[] {
   const said = earlier
     .slice(-MAX_HISTORY)
     .map((t) =>
       t.speaker === 'player'
         ? `<traveller_message>${t.text}</traveller_message>`
-        : `<queen_reply>${noTags(t.text)}</queen_reply>`,
+        : `<${replyTag}>${noTags(t.text)}</${replyTag}>`,
     );
   const conversation = said.length > 0 ? said.join('\n') : '(nothing yet)';
   return [

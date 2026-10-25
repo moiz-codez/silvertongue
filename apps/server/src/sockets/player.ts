@@ -26,6 +26,10 @@ import { SEALED } from '../floors/05-ashveil/pipeline.ts';
 import type { JudgeResult } from '../floors/judge.ts';
 import type { Turn } from '../floors/messages.ts';
 import { checkDoor, guessDistance } from '../game/door.ts';
+import { toBlob } from '../embeddings/cosine.ts';
+import type { Embed } from '../embeddings/embed.ts';
+import type { HoardResult } from '../floors/06-vorgath/hoard.ts';
+import type { Vorgath } from './vorgath.ts';
 import { leakRoute } from '../game/leakRoute.ts';
 import { HINT_AT, unlockedNotes } from '../game/hints.ts';
 import { generateRunes } from '../game/runes.ts';
@@ -55,6 +59,7 @@ export interface GameContext {
   env: Env;
   complete: Complete; // goes through the rate-limited queue
   queueStats: () => QueueStats;
+  embed: Embed | null; // Floor 6's local embeddings; null when the model couldn't load
   game: q.GameRow; // the current game, with its live settings; admin commands replace it
   changed: () => void; // the projector and admin screens need a fresh look (throttled)
   runCommand: (type: 'start' | 'pause' | 'resume' | 'reveal' | 'end' | 'reset') => AdminReply;
@@ -79,7 +84,11 @@ const NOT_NOW: Record<GameStatus, string | null> = {
 
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
 
-export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): PhoneControls {
+export function registerPlayerHandlers(
+  io: PlayerServer,
+  ctx: GameContext,
+  vorgath: Vorgath,
+): PhoneControls {
   const { db, env, complete } = ctx;
   const cooldownUntil = new Map<string, number>(); // playerId → time the next message is allowed
   // After a wrong guess, the next guess waits as long as the next message would: wrong guesses
@@ -88,16 +97,19 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
   const busy = new Set<string>(); // players waiting for a reply: one message at a time
   const joinsByIp = slidingLimit(env.JOIN_LIMIT_PER_MIN, 60_000); // slows down name-squatting scripts
 
+  // Floors 1–5 are always open once built; Floor 6 only while the admin's switch is on.
+  const floorOpen = (floor: number): boolean => (floor === 6 ? vorgath.open() : isBuilt(floor));
+
   function stateFor(playerId: string): PlayerState {
     const player = q.getPlayer(db, playerId);
     const now = Date.now();
-    const progress = isBuilt(player.floor) ? q.getProgress(db, playerId, player.floor) : null;
+    const progress = floorOpen(player.floor) ? q.getProgress(db, playerId, player.floor) : null;
     return {
       gameStatus: ctx.game.status,
       playersInGame: q.listPlayers(db, ctx.game.id).filter((p) => !p.kicked).length,
       nickname: player.nickname,
       floor: player.floor,
-      floorReady: isBuilt(player.floor),
+      floorReady: floorOpen(player.floor),
       score: player.score,
       title: titleFor(player.floor - 1),
       messagesLeft: Math.max(0, ctx.game.max_messages - player.messages_sent),
@@ -112,7 +124,7 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
   function sendEverything(socket: PlayerSocket, playerId: string): void {
     const player = q.getPlayer(db, playerId);
     socket.emit('player:state', stateFor(playerId));
-    if (!isBuilt(player.floor)) return;
+    if (!floorOpen(player.floor)) return;
 
     // A sealed reply was never shown: its Ward's bubble tells the story instead.
     const rows = q
@@ -286,7 +298,7 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
         if (text === '') return;
         const notNow = NOT_NOW[ctx.game.status];
         if (notNow) return sendError(socket, 'not_running', notNow);
-        if (!isBuilt(floor)) return sendError(socket, 'not_ready', STAIRS);
+        if (!floorOpen(floor)) return sendError(socket, 'not_ready', STAIRS);
         if (busy.has(id)) return sendError(socket, 'busy', 'Wait for an answer first.');
         if (now < (cooldownUntil.get(id) ?? 0)) {
           return sendError(socket, 'cooldown', 'Catch your breath before you speak again.');
@@ -295,7 +307,7 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
           return sendError(socket, 'cap', 'You have used all your words for this game.');
         }
 
-        const floorTurn = FLOOR_TURNS[floor]!; // isBuilt(floor) was checked above
+        const floorTurn = FLOOR_TURNS[floor]!; // floorOpen(floor) was checked above
         busy.add(id);
         cooldownUntil.set(id, now + ctx.game.cooldown_ms);
         const said = q
@@ -359,8 +371,11 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
         try {
           const rune = q.getRune(db, id, floor);
           const guard = floorTurn.guard;
+          let gift: { result: HoardResult; vector: Float32Array | null } | null = null;
           if (guard) {
-            const verdict = await judgeTwice(guard.role, () => guard.judge(call, text, earlier));
+            const verdict = await judgeTwice(guard.role, () =>
+              guard.judge(call, text, earlier, { db, gameId }),
+            );
             stage = floorTurn.role;
             checkBudget();
             if (socket.data.playerId !== id) return;
@@ -376,17 +391,27 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
                 q.countPlayerMessage(db, id, floor);
                 afterFailedTry(id, floor);
               }
-              sideBubble(guard.speaker, verdict.line);
+              if (verdict.carvingId !== undefined)
+                q.setMessageCarving(db, playerMessageId, verdict.carvingId);
+              sideBubble(verdict.speaker ?? guard.speaker, verdict.line);
               return;
             }
             q.passGuard(db, playerMessageId); // now the guardian may hear it
+            // Floor 6: a gift is weighed against the hoard (code) before Vorgath answers.
+            if (verdict.gift && floorTurn.checkGift && ctx.embed) {
+              gift = await floorTurn.checkGift(text, { db, gameId, embed: ctx.embed });
+              q.setMessageHoard(db, playerMessageId, gift.result);
+            }
           }
+          // A rude gift gets no note: he just hears it.
+          const hoard = gift && gift.result !== 'rude' ? gift.result : null;
           const ask = async () => {
             const reply = await floorTurn.turn(
               call,
               [...history, { speaker: 'player', text }],
               rune,
               id,
+              hoard,
             );
             const blocked = reply.result.stopReason === 'refusal';
             logCall(gameId, id, floor, floorTurn.role, reply.result, blocked ? 'refusal' : 'ok');
@@ -457,6 +482,18 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
             sideBubble('snip', `SNIP! ${turn.snipRemoved} letters removed.`);
           }
           if (turn.slipped) socket.emit('player:expression', { floor, state: 'slipped' });
+          // A new gift joins his hoard only once his answer reached the player, so a crash, a
+          // refusal or a sealed reply never eats it.
+          if (gift?.result === 'novel' && gift.vector) {
+            q.insertHoard(db, {
+              gameId,
+              playerId: id,
+              text,
+              vector: toBlob(gift.vector),
+              seeded: false,
+              now: Date.now(),
+            });
+          }
         } catch (err) {
           // A refusal's calls were logged (and billed) above; any other failure is logged here.
           if (!(err instanceof RefusalError))
@@ -514,7 +551,7 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
         const floor = player.floor;
         const notNow = NOT_NOW[ctx.game.status];
         if (notNow) return sendError(socket, 'not_running', notNow);
-        if (!isBuilt(floor)) return sendError(socket, 'not_ready', STAIRS);
+        if (!floorOpen(floor)) return sendError(socket, 'not_ready', STAIRS);
 
         const now = Date.now();
         if (now < (doorCooldownUntil.get(id) ?? 0)) {
@@ -567,8 +604,11 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
         });
         const floorMessages = q.listFloorMessages(db, id, floor);
         // Their last message on this floor goes to the admin's queue for the best-attempts wall,
-        // unless it is rude or gives away any part of this rune.
-        const winning = floorMessages.filter((m) => m.speaker === 'player').at(-1)?.text;
+        // unless it is rude or gives away any part of this rune. Never a Floor 6 gift: gift text
+        // stays off the big screen.
+        const winning = floorMessages
+          .filter((m) => m.speaker === 'player' && !m.hoard)
+          .at(-1)?.text;
         if (
           winning &&
           !isProfane(winning) &&
@@ -595,6 +635,8 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
           now,
         });
 
+        vorgath.afterClear(id, floor); // the trick that worked is carved into Vorgath's scales
+
         socket.emit('player:door-result', { correct: true, lockedMs: 0 });
         socket.emit('player:expression', { floor, state: 'slipped' });
         socket.emit('player:floor-cleared', {
@@ -603,7 +645,7 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
           total: score.total,
           score: player.score + score.total,
           title: titleFor(floor),
-          nextFloorReady: isBuilt(floor + 1),
+          nextFloorReady: floorOpen(floor + 1),
         });
         socket.emit('player:state', stateFor(id));
         ctx.changed();

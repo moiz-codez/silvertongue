@@ -146,6 +146,7 @@ describe('admin', () => {
         cooldownMs: 999_999,
         maxMessages: 10,
         llmMode: 'mock',
+        floor6Enabled: false,
       }),
     ).toEqual({ ok: false, error: 'Cooldown 0–60 s, messages 1–500.' });
 
@@ -155,6 +156,7 @@ describe('admin', () => {
         cooldownMs: 8000,
         maxMessages: 10,
         llmMode: 'mock',
+        floor6Enabled: false,
       }),
     ).toEqual({ ok: true });
     await capped;
@@ -164,7 +166,12 @@ describe('admin', () => {
     phone.socket.emit('player:message', { text: 'hello' });
     await cooling;
     await until(latest, (s) => s.settings.cooldownMs === 8000);
-    expect(latest()?.settings).toEqual({ cooldownMs: 8000, maxMessages: 10, llmMode: 'mock' });
+    expect(latest()?.settings).toEqual({
+      cooldownMs: 8000,
+      maxMessages: 10,
+      llmMode: 'mock',
+      floor6Enabled: false,
+    });
   });
 
   it('refuses Live when the server has no API key', async () => {
@@ -175,6 +182,7 @@ describe('admin', () => {
         cooldownMs: 5000,
         maxMessages: 150,
         llmMode: 'live',
+        floor6Enabled: false,
       }),
     ).toEqual({ ok: false, error: "The server has no ANTHROPIC_API_KEY, so it can't go Live." });
     expect(await until(latest, () => true)).toMatchObject({
@@ -203,6 +211,7 @@ describe('admin', () => {
         cooldownMs: 7000,
         maxMessages: 90,
         llmMode: 'live',
+        floor6Enabled: true,
       }),
     ).toEqual({ ok: true });
     expect(await socket.emitWithAck('admin:command', { type: 'reset' })).toEqual({ ok: true });
@@ -210,7 +219,7 @@ describe('admin', () => {
     expect(latest()).toMatchObject({
       status: 'lobby',
       liveAvailable: true,
-      settings: { cooldownMs: 7000, maxMessages: 90, llmMode: 'live' },
+      settings: { cooldownMs: 7000, maxMessages: 90, llmMode: 'live', floor6Enabled: true },
     });
   });
 

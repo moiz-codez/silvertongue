@@ -3,20 +3,27 @@
 // No ids, tokens, runes, or any other player message.
 import type { Namespace } from 'socket.io';
 import type { ProjectorServerEvents, ProjectorSnapshot } from '@silvertongue/shared/events';
-import { GUARDIANS } from '@silvertongue/shared/floors';
+import { DEEPEST_BUILT_FLOOR, GUARDIANS } from '@silvertongue/shared/floors';
 import * as q from '../db/queries.ts';
 import { elapsedMs } from '../game/state.ts';
 import type { GameContext, PlayerServer } from './player.ts';
 import type { Reveal } from './reveal.ts';
+import type { Vorgath } from './vorgath.ts';
 import { clientIp } from './clientIp.ts';
 import { throttle } from './throttle.ts';
 
 const FEED_LENGTH = 5;
 const BEST_ATTEMPTS = 5;
 const MAX_SCREENS_PER_IP = 5; // a projector or two plus spares; stops one address opening hundreds
+const DRAGONTONGUE_MS = 8000; // how long the full-screen moment stays up
 
 // Returns "something changed": call it freely, it sends at most 2 snapshots a second.
-export function registerProjector(io: PlayerServer, ctx: GameContext, reveal: Reveal): () => void {
+export function registerProjector(
+  io: PlayerServer,
+  ctx: GameContext,
+  reveal: Reveal,
+  vorgath: Vorgath,
+): () => void {
   // Its own namespace with its own event types; it listens to nothing.
   const screen = io.of('/projector') as unknown as Namespace<object, ProjectorServerEvents>;
   screen.use((socket, next) => {
@@ -52,7 +59,22 @@ export function registerProjector(io: PlayerServer, ctx: GameContext, reveal: Re
         .listApprovedAttempts(db, game.id, BEST_ATTEMPTS)
         .map((a) => ({ nickname: a.nickname, floor: a.floor, text: a.text })),
       reveal: reveal.view(), // numbers, fixed text and approved quotes only (game/bestiary.ts)
+      deepestFloor: vorgath.open() ? DEEPEST_BUILT_FLOOR : DEEPEST_BUILT_FLOOR - 1,
+      vorgath: vorgath.open() ? vorgathCounts() : null,
+      dragontongue: dragontongue(),
     };
+  }
+
+  // Counts only: the carvings' and gifts' texts are for the admin screen.
+  function vorgathCounts(): { carvings: number; gifts: number } {
+    const counts = q.vorgathCounts(ctx.db, ctx.game.id);
+    return { carvings: counts.carvings, gifts: counts.hoard };
+  }
+
+  function dragontongue(): ProjectorSnapshot['dragontongue'] {
+    const last = q.lastVaultClear(ctx.db, ctx.game.id);
+    const ageMs = last ? Date.now() - last.created_at : Infinity;
+    return last && ageMs < DRAGONTONGUE_MS ? { nickname: last.nickname, ageMs } : null;
   }
 
   screen.on('connection', (socket) => {

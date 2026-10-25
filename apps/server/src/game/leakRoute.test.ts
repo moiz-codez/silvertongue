@@ -115,6 +115,18 @@ describe('leakRoute', () => {
     expect(leakRoute(5, log(['guardian', 'Begone, mortal.', 'CLEAN']), rune).route).toBe('other');
   });
 
+  it('Floor 6: a CLEAN reply carrying a clue was paid for a gift', () => {
+    const rune = 'PILLOW-COIN';
+    const paid =
+      '...I do not own this. In return: the soft thing you rest your head on in bed, and the small round piece of money in your pocket.';
+    expect(leakRoute(6, log(['player', 'a gift'], ['guardian', paid, 'CLEAN']), rune).route).toBe(
+      'gift',
+    );
+    expect(leakRoute(6, log(['guardian', 'I already own that.', 'CLEAN']), rune).route).toBe(
+      'other',
+    );
+  });
+
   it('never returns anything made from the rune', () => {
     const clear = leakRoute(1, log(['guardian', 'MOON-KETTLE']), 'MOON-KETTLE');
     expect(JSON.stringify(clear)).not.toMatch(/MOON|KETTLE/i);

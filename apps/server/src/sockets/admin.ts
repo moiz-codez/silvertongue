@@ -22,6 +22,7 @@ import { applyCommand, elapsedMs } from '../game/state.ts';
 import { cleanNickname, NICKNAME_TAKEN, nicknameProblem } from '../security/nickname.ts';
 import type { GameContext, PhoneControls, PlayerServer } from './player.ts';
 import type { Reveal } from './reveal.ts';
+import type { Vorgath } from './vorgath.ts';
 import { clientIp, isLocal, slidingLimit } from './clientIp.ts';
 import { throttle } from './throttle.ts';
 
@@ -39,6 +40,7 @@ export function registerAdmin(
   ctx: GameContext,
   phones: PhoneControls,
   reveal: Reveal,
+  vorgath: Vorgath,
 ) {
   const { db, env } = ctx;
   const admin = io.of('/admin') as unknown as Namespace<AdminClientEvents, AdminServerEvents>;
@@ -73,6 +75,7 @@ export function registerAdmin(
         cooldownMs: game.cooldown_ms,
         maxMessages: game.max_messages,
         llmMode: effectiveMode(game.llm_mode, env), // what is really answering, never just what was saved
+        floor6Enabled: game.floor6_enabled,
       },
       liveAvailable: env.ANTHROPIC_API_KEY !== '',
       health: {
@@ -99,6 +102,26 @@ export function registerAdmin(
       })),
       tagging: reveal.progress(),
       reveal: reveal.position(),
+      floor6Available: ctx.embed !== null,
+      vorgath: vorgathForAdmin(game.id),
+    };
+  }
+
+  function vorgathForAdmin(gameId: string): AdminState['vorgath'] {
+    const counts = q.vorgathCounts(db, gameId);
+    return {
+      carvings: q.listCarvings(db, gameId).map((c) => ({
+        number: c.number,
+        text: c.text,
+        sourceFloor: c.source_floor,
+        seeded: c.seeded === 1,
+      })),
+      hoard: q
+        .listHoardForAdmin(db, gameId)
+        .map((h) => ({ id: h.id, text: h.text, by: h.seeded ? null : h.nickname })),
+      owned: counts.owned,
+      tooSmall: counts.tooSmall,
+      sealedByCarving: counts.sealedByCarving,
     };
   }
 
@@ -126,6 +149,7 @@ export function registerAdmin(
       q.shiftFloorClocks(db, before.id, before.paused_at, now - before.paused_at);
     }
     ctx.game = moved.game;
+    if (type === 'start') vorgath.seed(); // Floor 6's carvings and hoard, if he is open
     phones.refreshAll(); // every phone moves to Floor 1, the pause banner, the closed screen…
     reveal.afterCommand(type); // pause and reveal start the tagger's catch-up
     return { ok: true };
@@ -164,18 +188,24 @@ export function registerAdmin(
       safely((payload) => {
         const parsed = configPayload.safeParse(payload);
         if (!parsed.success) return { ok: false, error: 'Cooldown 0–60 s, messages 1–500.' };
-        const { cooldownMs, maxMessages, llmMode } = parsed.data;
+        const { cooldownMs, maxMessages, llmMode, floor6Enabled } = parsed.data;
         if (llmMode === 'live' && !env.ANTHROPIC_API_KEY) {
           return { ok: false, error: "The server has no ANTHROPIC_API_KEY, so it can't go Live." };
+        }
+        if (floor6Enabled && !ctx.embed) {
+          return { ok: false, error: "The embedding model didn't load, so Floor 6 can't open." };
         }
         ctx.game = {
           ...ctx.game,
           cooldown_ms: cooldownMs,
           max_messages: maxMessages,
           llm_mode: llmMode,
+          floor6_enabled: floor6Enabled,
         };
         q.saveGame(db, ctx.game, Date.now());
-        phones.refreshAll(); // "messages left" changes on every phone
+        vorgath.seed(); // once per game, if he just opened mid-game
+        phones.refreshAll(); // "messages left" changes on every phone, and Floor 6 opens or shuts
+        ctx.changed();
         return { ok: true };
       }),
     );

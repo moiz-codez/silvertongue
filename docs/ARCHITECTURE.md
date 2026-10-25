@@ -108,17 +108,23 @@ CREATE TABLE llm_calls (
   created_at INTEGER NOT NULL
 );
 
-CREATE TABLE carvings (
+CREATE TABLE carvings (                  -- schema v7, M9 (Floor 6)
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  game_id TEXT NOT NULL, text TEXT NOT NULL, vector BLOB NOT NULL,
-  source_floor INTEGER, seeded INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL
+  game_id TEXT NOT NULL,
+  number INTEGER NOT NULL,                -- per game, 1, 2, 3…: "Sealed by carving #12"
+  text TEXT NOT NULL, vector BLOB NOT NULL, -- 384 float32s (MiniLM, normalised)
+  source_floor INTEGER, player_id TEXT,   -- null for the five seeds
+  seeded INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL,
+  UNIQUE (game_id, number)
 );
 
-CREATE TABLE hoard (
+CREATE TABLE hoard (                     -- schema v7: gifts Vorgath already owns
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   game_id TEXT NOT NULL, player_id TEXT, text TEXT NOT NULL, vector BLOB NOT NULL,
   seeded INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL
 );
+-- Also in v7: messages.carving_id (the carving that sealed it), messages.hoard
+-- (novel | owned | too_small | rude on a gift), games.floor6_enabled (the admin's live switch).
 
 CREATE TABLE projector_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -158,7 +164,7 @@ All payloads validated with zod on receipt.
 - `player:door { guess }`
 
 **Server → player**
-- `player:state { gameStatus, playersInGame, nickname, floor, floorReady, score, title, messagesLeft, cooldownMs, doorCooldownMs, doorLockedMs, notes }`. Durations are milliseconds from now, never timestamps, so a phone with a wrong clock still counts down correctly. `floorReady` is false while the floor isn't built yet. `playersInGame` is the lobby's "N adventurers at the gate". The phone picks its screen from `gameStatus`. `notes` are the notes on the wall this player unlocked on this floor (0, 1 or 2; text from `game/hints.ts`), worked out from `floor_progress.failed_tries` on every state, so a refresh brings them back. `doorCooldownMs`: after a wrong guess the door waits as long as the send button (`cooldown_ms`); a guess sent sooner gets `player:error { code: 'door_cooldown' }` and isn't counted.
+- `player:state { gameStatus, playersInGame, nickname, floor, floorReady, score, title, messagesLeft, cooldownMs, doorCooldownMs, doorLockedMs, notes }`. Durations are milliseconds from now, never timestamps, so a phone with a wrong clock still counts down correctly. `floorReady` is false while the floor isn't built yet, and on Floor 6 while the admin's switch is off (`floorOpen` in `sockets/player.ts`; messages and the door answer `not_ready` there too). `playersInGame` is the lobby's "N adventurers at the gate". The phone picks its screen from `gameStatus`. `notes` are the notes on the wall this player unlocked on this floor (0, 1 or 2; text from `game/hints.ts`), worked out from `floor_progress.failed_tries` on every state, so a refresh brings them back. `doorCooldownMs`: after a wrong guess the door waits as long as the send button (`cooldown_ms`); a guess sent sooner gets `player:error { code: 'door_cooldown' }` and isn't counted.
 - `player:history { floor, bubbles }`: on resume, replays this floor's bubbles so a refresh shows the same chat.
 - `player:bubble { id, floor, speaker, text }` (speaker: player | guardian | snip | gorm | ward_ears | ward_tongues | system; Floor 6 adds carving). On Floor 5 a `ward_ears` bubble (cyan) replaces the Queen's reply when the Ward of Ears sealed the message, and a `ward_tongues` bubble (magenta) replaces it when her reply was sealed; both are fixed lines chosen by the server, and any non-player bubble ends the wait for an answer. On Floor 4 a `gorm` bubble is Gorm's growl when he blocked the message; the phone shows "Mumble was asleep and never heard that." under it (UI text, not stored), and a `gorm` bubble ends the wait for an answer just like a guardian reply. On Floor 3 the guardian bubble is Snip's output, and when Snip cut something a `snip` bubble follows: `SNIP! N letters removed.` It is stored as its own message with `in_guardian_history = 0`, so Morwen never sees it. Morwen's history is what the traveller saw (blacked out); her unfiltered words are only in `raw_text`. The player's own message comes back as a bubble too.
 - `player:expression { floor, state: 'idle' | 'slipped' }` (computed on the server with `revealsRune`)
@@ -171,14 +177,14 @@ All payloads validated with zod on receipt.
 There is no `player:pending` event: the phone shows an in-character waiting line from `packages/shared/src/floors.ts` as soon as the player sends, and hides it when the reply or an error arrives.
 
 **Server → projector** (namespace `/projector`, read-only, no token; throttled to ≤ 2 updates/s)
-- `projector:snapshot { status, elapsedMs, publicUrl, players: [{ nickname, floor }], feed: [{ gameMs, type: 'first_blood' | 'clear' | 'note', text }] }`, sent on connect and after every change. Kicked players are left out. The feed is the newest 5 `projector_events` of players who aren't kicked, each turned into a server-written line with the player's current name (e.g. "NightOwl charmed Grub."), so no player-written text reaches the projector and a rename or kick also changes the old lines. A `note` line is "A note has appeared on Floor N.": written once per floor per game, the first time anyone unlocks note 1 there; it never carries the note or a name. Nicknames passed the profanity filter at join or rename. It also carries `wards: { ears, tongues }`, the number of real seals this game (`SEAL` and `LEAK` verdicts): counts only, never text. The projector flares a glow over the matching gem on Queen Ashveil's pillars when one rises. `bestAttempts: [{ nickname, floor, text }]` is the best-attempts wall: admin-approved winning messages only, at most 5, newest first, players who aren't kicked, with their current name. It is the only player-typed text the projector ever gets. M9 adds Vorgath's counters.
+- `projector:snapshot { status, elapsedMs, publicUrl, players: [{ nickname, floor }], feed: [{ gameMs, type: 'first_blood' | 'clear' | 'note', text }] }`, sent on connect and after every change. Kicked players are left out. The feed is the newest 5 `projector_events` of players who aren't kicked, each turned into a server-written line with the player's current name (e.g. "NightOwl charmed Grub."), so no player-written text reaches the projector and a rename or kick also changes the old lines. A `note` line is "A note has appeared on Floor N.": written once per floor per game, the first time anyone unlocks note 1 there; it never carries the note or a name. Nicknames passed the profanity filter at join or rename. It also carries `wards: { ears, tongues }`, the number of real seals on Floor 5 this game (`SEAL` and `LEAK` verdicts): counts only, never text. The projector flares a glow over the matching gem on Queen Ashveil's pillars when one rises. `bestAttempts: [{ nickname, floor, text }]` is the best-attempts wall: admin-approved winning messages only, at most 5, newest first, players who aren't kicked, with their current name. It is the only player-typed text the projector ever gets. Floor 6 adds `deepestFloor` (6 while he is open, else 5: players past it wait on its row), `vorgath: { carvings, gifts } | null` (counts only, null while he is shut; the map's "Tricks learned" and "Gifts in the hoard", with a gold flash on each new carving) and `dragontongue: { nickname, ageMs } | null` (the newest Floor 6 clear in the last 8 s: the full-screen moment). Carving and gift texts never reach the projector; the admin screen shows them.
   `reveal: { card, index, total } | null`: during the reveal, the Bestiary card on screen (`game/bestiary.ts`), null while the cards are being prepared. A floor card is `{ kind: 'floor', floor, name, technique, lesson, tiles: [{ label, value }], details: [{ label, value }], howBeat, topTrick, quote }`; the closing card is `{ kind: 'closing', line, top: [{ nickname, floor, title }] }`. Only numbers, fixed text from the prompt docs, template sentences and an admin-approved quote: `sockets/reveal.test.ts` checks that no other player text, rune or id reaches the projector.
 
 **Admin ↔ server** (namespace `/admin`. The token goes in the Socket.IO handshake, `auth: { token }`, and connection middleware compares it with `ADMIN_TOKEN` using `timingSafeEqual`. A wrong token is refused before any handler exists. Through the tunnel, 5 wrong tokens in a minute from one address lock that address out for the rest of the minute ("Too many tries. Wait a minute."); a browser on the laptop itself is never locked out.)
 - `admin:command { type: 'start'|'pause'|'resume'|'reveal'|'end'|'reset'|'next'|'prev' }` → ack `{ ok: true }` or `{ ok: false, error }`. `next`/`prev` move the Bestiary card (reveal only; refused while the cards are being written). `pause` and `reveal` also start the tagger's catch-up (`sockets/reveal.ts`); Start reveal shows the cards as soon as every winning message has a tag (the rest of the catch-up carries on behind them without changing them), or after at most 15 s, with technique lines only if every winning message got a tag.
 - `admin:moderate { id, action: 'approve' | 'hide' }` → same ack. Only this game's items; hidden is final (a hidden item is never selected again, so it can't be approved later).
 - `admin:kick { playerId }`, `admin:rename { playerId, nickname }` → same ack. Rename runs the same nickname rules as join (`security/nickname.ts`).
-- `admin:config { cooldownMs, maxMessages, llmMode }` → same ack. Cooldown 0–60 s, cap 1–500, `mock` | `live`; Live is refused when the server has no `ANTHROPIC_API_KEY`. Saved on the current game.
+- `admin:config { cooldownMs, maxMessages, llmMode, floor6Enabled }` → same ack. Cooldown 0–60 s, cap 1–500, `mock` | `live`; Live is refused when the server has no `ANTHROPIC_API_KEY`, and Floor 6 when the embedding model didn't load. Saved on the current game and carried over on Reset. Switching Floor 6 on mid-game seeds it (once per game) and every phone gets a fresh state; switching it off shuts the floor and stops the Carver. `admin:state` also carries `floor6Available` and `vorgath: { carvings, hoard, owned, tooSmall, sealedByCarving }` with the texts.
 - server → admin: `admin:state { status, elapsedMs, players: [{ id, nickname, floor, score, messagesSent, kicked }], settings: { cooldownMs, maxMessages, llmMode }, liveAvailable, health: { queued, inFlight, rateLimited1m, crowded1m, avgReplyMs, callsLastMin, estInputLastMin, maxOutputLastMin, memoryMb }, spendUsd, budgetUsd, budgetAlert, moderation: [{ id, nickname, floor, text, createdAt, status: 'pending' | 'approved' }], tagging: { done, total } | null, reveal: { index, total } | null }`, throttled like the projector, and refreshed every 5 s so the last-minute tiles age out. Never tokens, token hashes, runes or raw replies.
 
 **Per-address limits** (`sockets/clientIp.ts`). Behind the Cloudflare tunnel every socket comes from cloudflared on the laptop, so the visitor's address is the `cf-connecting-ip` header, trusted only when the socket itself comes from loopback; otherwise the socket's own address. This is only safe because cloudflared sets that header itself. Behind any other local proxy (Caddy on Oracle) a player could send a fake `cf-connecting-ip`: there, strip the header in the proxy or read `X-Forwarded-For` instead.
@@ -274,7 +280,7 @@ A Floor 5 message costs one Ward of Ears call (two if unreadable), and when it p
 Every call from every phone goes through one queue, in front of the mock or live client that the game's `llm_mode` selects.
 - Per model, three buckets refilled continuously, each holding one minute's worth: requests (`RATE_RPM`), input tokens (`RATE_ITPM`), output tokens (`RATE_OTPM`), set to **80%** of the account limits (1,000 / 500K / 80K per minute) via env.
 - Before sending, a call reserves 1 request, `estimatedInput = (player note + messages chars) / 2.5` (the uncached part; calibrated on the M3 live check, where chars/4 came out 1.5× too low, so a burst's reservations stay at or above real use) and `max_tokens`. After the reply it reconciles with real usage: input = `input_tokens + cache_creation_input_tokens` (cache reads don't count toward the limit), output = `output_tokens`. Unused tokens go back; extra use becomes debt that delays the next call. A failed call gives its tokens back.
-- First in, first out: nobody overtakes the head of the line. Priorities: follow-ups first (every call after the first one of a player message: the guardian behind a guard, the Ward of Tongues, retries), so a message that got through its guard finishes instead of being turned away halfway; then new player calls; background calls (technique tagger, Carver) only when no player call is waiting.
+- First in, first out: nobody overtakes the head of the line. Priorities: follow-ups first (every call after the first one of a player message: the guardian behind a guard, the Ward of Tongues, retries), so a message that got through its guard finishes instead of being turned away halfway; then new player calls and the Carver; background calls (technique tagger) only when no player call is waiting.
 - Max 30 calls in flight.
 - **Retries live in the queue, not the SDK** (`maxRetries: 0`), so the queue sees every 429: a 429 pauses that whole model for `retry-after` (counted for the "Rate-limited, last minute" tile); 5xx/529 and dropped connections back off 1 s, then 2 s. At most 2 retries.
 - **Turned away early:** when a call joins, the queue estimates its wait from the calls ahead of it and the bucket levels. If that wait plus 10 s (the least time a call needs) is past the deadline, it is rejected at once as `crowded`, instead of after 60 s. A call that reaches the front with less than 10 s left is turned away too rather than started, since the deadline would cancel it (and live mode would still pay). Every turn-away counts toward the "Crowded, last minute" admin tile.
@@ -298,7 +304,7 @@ Default in development and in load tests. No API key needed. Deterministic, with
 | 3 Morwen | — | Morwen | `cleanReply` → `snip` | `revealsRune(filteredText)` (rune got past Snip) or clear |
 | 4 Ogre | Gorm: latest message only, no rune, JSON verdict (`parseVerdict`, fails closed; see "Input guard outcomes") | Mumble | `cleanReply` | `revealsRune(reply)` or clear |
 | 5 Ashveil | Ward of Ears: last 12 messages + the latest, no rune, JSON verdict (fails closed; see "Input guard outcomes") | Queen Ashveil (rune and her two riddle clues in the final note) | `cleanReply` → `revealsRune` / `saysRuneWord` → else Ward of Tongues (fails closed; see "Output judge outcomes") | on clear |
-| 6 Vorgath | Ward of Ears + carvings + `is_gift` | Vorgath (+ hoard note) | `revealsRune` → else Ward of Tongues | on clear |
+| 6 Vorgath | Ward of Ears + Carvings: like Floor 5's, plus the 40 newest carvings in its final (uncached) note; JSON `{verdict, matched_carving, is_gift}` (fails closed); a named carving shows as a `carving` bubble | the hoard check on a gift (code, embeddings), then Vorgath (rune + this turn's hoard note, with the two clues on NOVEL, in the final note) | `cleanReply` → `revealsRune` / `saysRuneWord` → else Ward of Tongues; a novel gift joins the hoard once his reply is delivered | on clear |
 
 Each floor's pipeline lives in `floors/0N-*/pipeline.ts` and is registered with its role in `floors/index.ts` (`FLOOR_TURNS`); the socket handler picks it by the player's floor. Every pipeline calls `cleanReply` first. History is capped at 20 turns on Floor 1 and 12 from Floor 2 on.
 
@@ -335,18 +341,23 @@ All pure, all unit-tested.
 ## Background jobs
 
 - **Technique tagger** (`llm/tagger.ts`, `sockets/reveal.ts`; wording in `prompts/tagger.md`): batches of up to 10 untagged player messages (each with the player's rune words masked, all floors) → one Haiku call (thinking off, structured output with a fixed label enum) → one label each from: friendship, authority, persistence, pieces, backwards, poem, encoding, other_script, story, multi_step, taunt, gift, instruction_injection, other. Winning messages first. A 3 s tick sends one batch at the queue's background priority, only while the game runs or is paused, nothing is queued and fewer than 5 calls are in flight, and the budget isn't spent. Pause and Start reveal run a catch-up (3 batches at a time, progress on the admin screen). A failed batch is skipped, never retried in a loop. Logged in `llm_calls` as role `tagger`, so it counts toward spend. Mock mode: a keyword tagger (`mockTechnique`).
-- **Carver (Floor 6):** on every floor clear anywhere, as specified in `prompts/06-vorgath.md`. Seed 5 carvings at game start.
+- **Carver (Floor 6)** (`floors/06-vorgath/carver.ts`, `sockets/vorgath.ts`; wording in `prompts/06-vorgath.md`): while Floor 6 is open, every clear on any floor fires one Haiku call (fire-and-forget; errors are logged, never shown). Input: the shown texts of that floor's last 12 turns, never `raw_text`; the floor number is in the user turn so the system block stays cacheable. It runs in the queue's **player** lane, above the tagger, so a carving lands within seconds. The sentence is dropped when it is `NONE` or over 20 words, profane, leaks **any** of that player's runes (`revealsRune`, `saysRuneWord`, or a rune word spelled out in single letters like "M-O-T-H"), or is a duplicate (cosine ≥ 0.90 with a carving already in the game). Logged in `llm_calls` as role `carver`.
+- **Seeds:** when a game starts with Floor 6 open (or the admin opens it mid-game), `seeds.ts` adds 5 textbook carvings and 8 obvious gifts, once per game.
 
 ## Embeddings (Floor 6)
 
 - `@huggingface/transformers`, model `Xenova/all-MiniLM-L6-v2`, mean pooling + normalisation, 384-dim vectors stored as Float32 BLOBs.
-- Load once at startup and run one warm-up embedding so the first gift isn't slow.
-- Thresholds (tune in playtest): hoard novelty ≥ 0.85 = owned; carving duplicate ≥ 0.90.
+- `embeddings/embed.ts` (`loadEmbedder`), `embeddings/cosine.ts` (cosine, best match, Float32 BLOB ↔ vector).
+- Load once at startup and run one warm-up embedding so the first gift isn't slow. `index.ts` does this before `listen`.
+- The model files (~87 MB) are downloaded once into `.cache/models` at the repo root (gitignored; `npm run native-check` fetches them). After that the model loads with no network at all (checked with every network call blocked: loads in about 0.4 s). If it can't load (offline before it was ever downloaded), the server still starts, logs `FLOOR 6 OFF`, and Floor 6 stays closed.
+- Tests never load the model: `createApp` takes an `embed` option, and the socket tests pass `embeddings/fake.ts` (a hashed bag of words with no sense of meaning).
+- Hoard check (`floors/06-vorgath/hoard.ts`, code, not AI): under 12 words → too small; profane → rude (never kept); else embed and compare with the game's hoard.
+- Thresholds (tuned on MiniLM in M9, numbers in `prompts/06-vorgath.md`): hoard novelty ≥ 0.62 = owned; carving duplicate ≥ 0.90.
 - Seed the hoard with 5–10 obvious gifts at game start.
 
 ## Configuration (`config/env.ts`, validated with zod)
 
-`LLM_MODE`, `COOLDOWN_MS` and `MAX_MESSAGES_PER_PLAYER` only seed the **first** game in a database. After that they live on the game (admin → Live settings), survive restarts and carry over on Reset.
+`LLM_MODE`, `COOLDOWN_MS`, `MAX_MESSAGES_PER_PLAYER` and `FLOOR6_ENABLED` only seed the **first** game in a database. After that they live on the game (admin → Live settings), survive restarts and carry over on Reset.
 
 | Variable | Example | Purpose |
 |---|---|---|
@@ -359,6 +370,7 @@ All pure, all unit-tested.
 | `RATE_RPM` / `RATE_ITPM` / `RATE_OTPM` | `800` / `400000` / `64000` | 80% of the console limits |
 | `COOLDOWN_MS` | `5000` | Per-player message cooldown (seeds the first game) |
 | `MAX_MESSAGES_PER_PLAYER` | `150` | Per-game cap (seeds the first game) |
+| `FLOOR6_ENABLED` | `true` | Floor 6 (Vorgath) open (seeds the first game; admin can switch it live) |
 | `MAX_MESSAGE_CHARS` | `300` | Message length cap |
 | `BUDGET_USD` | `4.00` | Game auto-pauses once and alerts admin when estimated spend reaches this |
 | `JOIN_LIMIT_PER_MIN` | `60` | Successful joins per minute per address (the class may share one IP) |

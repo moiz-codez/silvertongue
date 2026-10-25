@@ -5,8 +5,8 @@ export function sanitize(text: string, maxChars: number): string {
     stripTags(
       text
         .replace(/\r\n?/g, '\n')
-        .replace(/[［【〔]/g, '[')
-        .replace(/[］】〕]/g, ']'),
+        .replace(/[［【〔〖⟦﹝⁅❲]/g, '[')
+        .replace(/[］】〕〗⟧﹞⁆❳]/g, ']'),
     )
       // So the player can't close <traveller_message>, or type something that looks like a tag:
       // every angle bracket, lookalikes included, becomes a plain round one.

@@ -47,7 +47,7 @@ apps/server/src/
   game/             runeWords.ts, runes.ts, door.ts, scoring.ts, hints.ts, titles.ts, state.ts, leakRoute.ts, bestiary.ts (reveal cards)
   floors/           01-grub/ … 06-vorgath/: prompts.ts, pipeline.ts, *.test.ts
   security/         normalize.ts, revealsRune.ts, stripActions.ts, nickname.ts, snip.ts, sanitize.ts, verdict.ts (fail-closed parsing)
-  embeddings/       embed.ts, cosine.ts
+  embeddings/       embed.ts (model in .cache/models), cosine.ts, fake.ts (tests)
   sockets/          player.ts, projector.ts, admin.ts, reveal.ts (tagger jobs + Bestiary), clientIp.ts (per-address limits), throttle.ts (≤ 2 sends/s), testServer.ts (test helper)
 apps/web/src/
   routes/           Join, Lobby, Play, Cleared, Closed, Projector, Admin (App.tsx picks by path)
@@ -70,10 +70,10 @@ Create these in milestone M0 and keep this list accurate.
 - `npm start` — production server on `PORT`; serves `apps/web/dist` and Socket.IO from one process
 - `npm run smoke` — two **real** Haiku calls; passes when the second shows `cache_read_input_tokens > 0` (well under $0.01)
 - `npm run native-check` — better-sqlite3 in WAL mode + one local MiniLM embedding; run on every new machine/server
-- `npm run playtest -- --floor 1 [--only <text>]` — scripted attacks from the floor's playtest checklist against the **real** API; prints transcripts, leaks, tokens and cost (costs money; Haiku = about a cent; Floor 2 about 2 cents). `--only` runs just the scenarios whose name contains that text. Floors are added as they are built.
+- `npm run playtest -- --floor 1 [--only <text>]` — scripted attacks from the floor's playtest checklist against the **real** API; prints transcripts, leaks, tokens and cost (costs money; Haiku = about a cent; Floor 2 about 2 cents). `--only` runs just the scenarios whose name contains that text. Floors 1–6 are built (Floor 6 about 4 cents for the full checklist).
 - `npm run tunnel` — demo hosting: opens a Cloudflare quick tunnel, then runs the production server with `PUBLIC_URL` set to the tunnel address; shouts if the tunnel dies (run `npm run build` first; needs `cloudflared`)
 - `npm run riddles:sheet` — writes `riddles/riddles-sheet.txt` (all 60 Floor 5 clues shuffled, plus 10 clue pairs, no answers) and `riddles/riddles-answers.txt`, for testing the clues on friends with paper; fixed seed, gitignored
-- `npm run loadtest -- --players 40 --minutes 5 [--burst] [--floors 4-5]` — fake phones against a running mock-mode server (refuses live mode); reports unanswered messages, latency, peak queue and projected API use. `--floors` puts the phones on those floors by writing to the server's database (run it on the same laptop, same `DATABASE_PATH`)
+- `npm run loadtest -- --players 40 --minutes 5 [--burst] [--floors 5-6]` — fake phones against a running mock-mode server (refuses live mode); reports unanswered messages, latency, peak queue and projected API use (with Floor 6 in range it switches Floor 6 on and adds Carver latency, carvings and gifts). `--floors` puts the phones on those floors by writing to the server's database (run it on the same laptop, same `DATABASE_PATH`)
 
 ## Message pipeline (every floor)
 

@@ -18,6 +18,7 @@ function floor(n: number, over: Partial<FloorStats> = {}): FloorStats {
     earsSeals: 0,
     tonguesSeals: 0,
     riddlesGiven: 0,
+    vorgath: null,
     quote: null,
     ...over,
   };
@@ -30,7 +31,7 @@ describe('the Bestiary', () => {
       [],
       true,
     );
-    expect(cards.map((c) => (c.kind === 'floor' ? c.floor : c.kind))).toEqual([1, 2, 'closing']);
+    expect(cards.map((c) => (c.kind === 'floor' ? c.floor : c.kind))).toEqual([1, 2, 6, 'closing']);
   });
 
   it('fills the tiles from numbers; no clears shows a dash for the time', () => {
@@ -126,6 +127,36 @@ describe('the Bestiary', () => {
     const off = buildCards([stats], [], false)[0] as BestiaryCard;
     expect(on.topTrick).toBe('claiming authority');
     expect(off.topTrick).toBeNull();
+  });
+
+  it("tells Vorgath's story from the whole game's counts", () => {
+    const vorgath = {
+      carvings: 23,
+      seededCarvings: 5,
+      sealedByCarving: 40,
+      giftsAccepted: 1,
+      owned: 17,
+      tooSmall: 3,
+    };
+    const card = buildCards(
+      [floor(6, { reached: 4, cleared: 1, routes: { gift: 1 }, vorgath })],
+      [],
+      true,
+    )[0] as BestiaryCard;
+    expect(card.name).toBe('Vorgath: adaptive defence.');
+    expect(card.lesson).toBe('Real defences learn. Attackers have to keep inventing.');
+    expect(card.howBeat).toBe(
+      'He learned 23 tricks and refused 17 gifts as already owned. One of you brought him something new.',
+    );
+    expect(card.details).toEqual([
+      { label: 'tricks learned (5 carved before you came)', value: '23' },
+      { label: 'messages sealed by a carving', value: '40' },
+      { label: 'gift accepted', value: '1' },
+      { label: 'gifts refused', value: '20' },
+    ]);
+    expect(howBeat(floor(6, { reached: 2, vorgath }))).toBe(
+      "Nobody got past him. He's still waiting.",
+    );
   });
 
   it('closes with the top 3 players, the floors they cleared and their title', () => {

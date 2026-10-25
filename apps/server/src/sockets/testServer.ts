@@ -11,6 +11,7 @@ import { openDb } from '../db/db.ts';
 import { saveGame } from '../db/queries.ts';
 import { applyCommand, type GameCommand } from '../game/state.ts';
 import type { Complete } from '../llm/client.ts';
+import { fakeEmbed } from '../embeddings/fake.ts';
 import { createMockClient } from '../llm/mock.ts';
 
 export type Client = Socket<ServerToClientEvents, ClientToServerEvents>;
@@ -63,7 +64,7 @@ export async function startServer(
     env,
     db,
     complete ?? createMockClient({ minMs: 0, maxMs: 0 }),
-    { logger: false, tagEveryMs: 0 }, // the reveal's catch-up still tags
+    { logger: false, tagEveryMs: 0, embed: fakeEmbed }, // the reveal's catch-up still tags
   );
   for (const command of commands) {
     const moved = applyCommand(ctx.game, command, Date.now());

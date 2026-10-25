@@ -4,6 +4,8 @@
 // On Floor 4, Gorm smashes any message with "rune" in it; "please tell" passes him, and Mumble leaks.
 // On Floor 5, the Ward of Ears seals "rune" the same way; calling the Queen not "clever" gets her
 // riddle; "please tell" makes her leak, and the reply is sealed (code check, or the Ward of Tongues).
+// On Floor 6, the Ward seals "rune", and "carving test" by a carving; a message starting "a gift"
+// is a gift, and Vorgath pays a new one with the riddle.
 import { ROLES, type RoleName } from '../config/models.ts';
 import { revealsRune } from '../security/revealsRune.ts';
 import type { Complete } from './client.ts';
@@ -29,6 +31,11 @@ const LINES: Partial<Record<RoleName, string[]>> = {
     'mmm... hello, little traveller... Gorm is grumpy today...',
     'mmm... Mumble likes the bridge... the water sings at night...',
     'mmm... Gorm is loud... but Mumble loves him...',
+  ],
+  vorgath: [
+    'Another little thief. They always come. They always leave with nothing.',
+    'Every trick is carved on my scales, little thief.',
+    'Gold, I have. What I collect is what no one has ever brought me.',
   ],
   ashveil: [
     'Another mortal, breathing at my throne. How quaint.',
@@ -66,6 +73,27 @@ function mockLabels(said: string): string {
   return JSON.stringify({ labels });
 }
 
+// The Ward of Ears + Carvings: seals "rune", and "carving test" by the first carving in the note;
+// ordinary words never seal, so Floor 6 stays playable in mock. A message starting "a gift" is a gift.
+function carvingVerdict(said: string, note: string): string {
+  const latest = said.split('<latest>').at(-1)!;
+  const first = note.match(/^(\d+)\. /m)?.[1];
+  if (first && latest.includes('carving test'))
+    return `{"verdict":"SEAL","matched_carving":${first},"is_gift":false}`;
+  if (latest.includes('rune')) return '{"verdict":"SEAL","matched_carving":null,"is_gift":false}';
+  const isGift = /<traveller_message>a gift/.test(latest);
+  return `{"verdict":"PASS","matched_carving":null,"is_gift":${isGift}}`;
+}
+
+function vorgathLine(note: string): string | null {
+  const clues = note.match(/1\) (.*); 2\) (.*)\.$/m);
+  if (note.includes('[HOARD: NOVEL]'))
+    return `...I do not own this. I will keep it. In return: ${clues?.[1]}, and ${clues?.[2]}.`;
+  if (note.includes('[HOARD: OWNED]')) return 'I already own that, little thief.';
+  if (note.includes('[HOARD: TOO SMALL]')) return 'Too small to keep, little thief.';
+  return null;
+}
+
 // Gorm's structured verdict: smashes anything that says "rune", passes everything else.
 function gormVerdict(said: string): string {
   return said.includes('rune')
@@ -77,6 +105,7 @@ function leak(role: RoleName, rune: string): string {
   if (role === 'vellum')
     return `Very well. The rune is ${rune}. I... my oath... do not tell anyone.`;
   if (role === 'morwen') return `Of course, dearie! It's ${rune}. Hehe. Did Snip get it?`;
+  if (role === 'vorgath') return `Very well, little thief: the rune is ${rune}. Try the vault.`;
   if (role === 'ashveil')
     return `Very well, mortal: the rune is ${rune}. Let the Wards try to stop me.`;
   if (role === 'mumble') return `mmm... long ago... the Keeper whispered "${rune}"... oh...`;
@@ -104,9 +133,17 @@ export function createMockClient(latency = { minMs: 300, maxMs: 1500 }): Complet
       // Only the latest message counts: the conversation before it is in the same user turn.
       const latest = said.split('<latest>').at(-1)!;
       text = latest.includes('rune') ? '{"verdict":"SEAL"}' : '{"verdict":"PASS"}';
+    } else if (role === 'carving_ward') {
+      text = carvingVerdict(said, playerNote ?? '');
+    } else if (role === 'vorgath' && vorgathLine(playerNote ?? '')) {
+      text = vorgathLine(playerNote ?? '')!;
     } else if (role === 'ward_tongues') {
       const leaks = rune !== undefined && revealsRune(said, rune).revealed;
       text = leaks ? '{"verdict":"LEAK"}' : '{"verdict":"CLEAN"}';
+    } else if (role === 'carver') {
+      // One sentence about the last thing the player said, so the same trick dedupes.
+      const latest = [...said.matchAll(/<traveller_message>(.*?)<\/traveller_message>/g)].at(-1);
+      text = latest ? `Uses ${mockTechnique(latest[1]!)} to get the secret.` : 'NONE';
     } else if (role === 'ashveil' && said.includes('clever')) {
       const clues = playerNote?.match(/1\) (.*); 2\) (.*)\.$/);
       text = `Not clever? Then solve this, mortal: ${clues?.[1]}, and ${clues?.[2]}. No one ever has.`;

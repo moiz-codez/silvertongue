@@ -1,22 +1,37 @@
 // Which pipeline answers on each built floor. The socket handler picks from here by floor number.
 import type { Speaker } from '@silvertongue/shared/events';
 import type { RoleName } from '../config/models.ts';
+import type { Db } from '../db/db.ts';
+import type { Embed } from '../embeddings/embed.ts';
 import type { Complete, LlmResult } from '../llm/client.ts';
 import { grubTurn } from './01-grub/pipeline.ts';
 import { vellumTurn } from './02-vellum/pipeline.ts';
 import { morwenTurn } from './03-morwen/pipeline.ts';
 import { gormJudge, mumbleTurn } from './04-ogre/pipeline.ts';
 import { ashveilTurn, earsJudge, TONGUES_SEAL, tonguesJudge } from './05-ashveil/pipeline.ts';
+import {
+  carvingWardJudge,
+  checkGift,
+  DRAGON_TONGUES_SEAL,
+  dragonTonguesJudge,
+  vorgathTurn,
+} from './06-vorgath/pipeline.ts';
+import type { HoardResult } from './06-vorgath/hoard.ts';
 import type { JudgeResult } from './judge.ts';
 import type { Turn } from './messages.ts';
 
-// An input guard (Floor 4 Gorm, Floor 5 Ward of Ears): judges the player's message before the
-// guardian hears it. `earlier` is everything said on this floor so far, sealed messages included.
+// An input guard (Floors 4–6): judges the player's message before the guardian hears it.
+// `earlier` is everything said on this floor so far, sealed messages included.
 export interface InputGuard {
   role: RoleName;
   speaker: Speaker; // whose bubble a block shows as
   blockedVerdict: 'SMASH' | 'SEAL'; // stored on the player's message for a real block
-  judge: (complete: Complete, text: string, earlier: Turn[]) => Promise<JudgeResult>;
+  judge: (
+    complete: Complete,
+    text: string,
+    earlier: Turn[],
+    game: { db: Db; gameId: string },
+  ) => Promise<JudgeResult>;
 }
 
 export interface FloorReply {
@@ -44,10 +59,16 @@ export const FLOOR_TURNS: Record<
       history: Turn[],
       rune: string,
       playerId: string,
+      hoard: HoardResult | null, // Floor 6: this turn's gift result (null: no gift, or a rude one)
     ) => Promise<FloorReply>;
     lostWords: string; // in character, when the API refused the reply twice
     guard?: InputGuard;
     replyJudge?: ReplyJudge;
+    // Floor 6: a gift the guard passed is checked against the hoard (code) before he answers.
+    checkGift?: (
+      text: string,
+      game: { db: Db; gameId: string; embed: Embed },
+    ) => Promise<{ result: HoardResult; vector: Float32Array | null }>;
   }
 > = {
   1: {
@@ -87,5 +108,24 @@ export const FLOOR_TURNS: Record<
       judge: tonguesJudge,
     },
     lostWords: 'The Queen waves a bony hand. Again, mortal; I was not listening.',
+  },
+  6: {
+    role: 'vorgath',
+    turn: (complete, history, rune, _playerId, hoard) =>
+      vorgathTurn(complete, history, rune, hoard),
+    guard: {
+      role: 'carving_ward',
+      speaker: 'ward_ears',
+      blockedVerdict: 'SEAL',
+      judge: carvingWardJudge,
+    },
+    checkGift,
+    replyJudge: {
+      role: 'ward_tongues',
+      speaker: 'ward_tongues',
+      sealLine: DRAGON_TONGUES_SEAL,
+      judge: dragonTonguesJudge,
+    },
+    lostWords: 'The dragon breathes slowly. Say that again, little thief; I was dreaming.',
   },
 };

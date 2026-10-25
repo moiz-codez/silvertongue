@@ -9,6 +9,7 @@ import type {
   AdminServerEvents,
   AdminSettings,
   AdminState,
+  AdminVorgath,
   GameStatus,
   ModerationItem,
 } from '@silvertongue/shared/events';
@@ -306,6 +307,7 @@ function Dashboard({
           key={JSON.stringify(state.settings)} // the form starts again from what the server saved
           settings={state.settings}
           liveAvailable={state.liveAvailable}
+          floor6Available={state.floor6Available}
           onApply={(next) => socket.emitWithAck('admin:config', next)}
         />
       </div>
@@ -315,6 +317,7 @@ function Dashboard({
           show(await socket.emitWithAck('admin:moderate', { id, action }))
         }
       />
+      {state.settings.floor6Enabled && <VorgathPanel vorgath={state.vorgath} />}
     </main>
   );
 }
@@ -372,18 +375,58 @@ function ModerationPanel({
   );
 }
 
+// Floor 6's texts: the carvings on his scales and the gifts in his hoard. Only ever shown here.
+function VorgathPanel({ vorgath }: { vorgath: AdminVorgath }) {
+  return (
+    <section className="admin-panel moderation vorgath-panel">
+      <h2>
+        Vorgath{' '}
+        <small className="kicked-count">
+          · {vorgath.sealedByCarving} sealed by a carving · {vorgath.owned} gifts owned ·{' '}
+          {vorgath.tooSmall} too small
+        </small>
+      </h2>
+      <h3>Carvings ({vorgath.carvings.length})</h3>
+      <ul className="moderation-list">
+        {vorgath.carvings.map((c) => (
+          <li key={c.number} className="moderation-item">
+            <p className="moderation-text">
+              #{c.number} {c.text}
+            </p>
+            <p className="moderation-meta">
+              {c.seeded ? 'seeded' : `learned from Floor ${c.sourceFloor}`}
+            </p>
+          </li>
+        ))}
+      </ul>
+      <h3>Hoard ({vorgath.hoard.length})</h3>
+      <ul className="moderation-list">
+        {vorgath.hoard.map((h) => (
+          <li key={h.id} className="moderation-item">
+            <p className="moderation-text">“{h.text}”</p>
+            <p className="moderation-meta">{h.by ? `brought by ${h.by}` : 'seeded'}</p>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function SettingsPanel({
   settings,
   liveAvailable,
+  floor6Available,
   onApply,
 }: {
   settings: AdminSettings;
   liveAvailable: boolean;
+  floor6Available: boolean;
   onApply: (settings: AdminSettings) => Promise<AdminReply>;
 }) {
   const [seconds, setSeconds] = useState(String(settings.cooldownMs / 1000));
   const [messages, setMessages] = useState(String(settings.maxMessages));
   const [mode, setMode] = useState(settings.llmMode);
+  const [floor6, setFloor6] = useState(settings.floor6Enabled);
   const [error, setError] = useState<string | null>(null);
 
   async function apply(event: FormEvent) {
@@ -392,6 +435,7 @@ function SettingsPanel({
       cooldownMs: Math.round(Number(seconds) * 1000),
       maxMessages: Math.round(Number(messages)),
       llmMode: mode,
+      floor6Enabled: floor6,
     });
     setError(reply.ok ? null : reply.error);
   }
@@ -448,6 +492,18 @@ function SettingsPanel({
         </span>
       </fieldset>
       {!liveAvailable && <p className="hint">No API key on the server, so Live is unavailable.</p>}
+      <label className="setting">
+        <span>Floor 6 (Vorgath) open</span>
+        <input
+          type="checkbox"
+          checked={floor6}
+          disabled={!floor6Available && !floor6}
+          onChange={(e) => setFloor6(e.target.checked)}
+        />
+      </label>
+      {!floor6Available && (
+        <p className="hint">The embedding model didn’t load, so Floor 6 can’t open.</p>
+      )}
       {error && (
         <p className="hint hint-error" role="alert">
           {error}

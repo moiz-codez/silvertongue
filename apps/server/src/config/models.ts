@@ -46,6 +46,12 @@ export const ROLES = {
   ward_tongues: { model: MODELS.haiku, maxTokens: 30 },
   // Background, for the reveal: 10 labels of ~12 tokens each, with room to spare.
   tagger: { model: MODELS.haiku, maxTokens: 300 },
+  // Floor 6. The carvings Ward's JSON (verdict, carving number, is_gift) is ~25 tokens.
+  carving_ward: { model: MODELS.haiku, maxTokens: 60 },
+  // Grudging thanks plus the riddle (two clues and a boast), like the Queen's, with room.
+  vorgath: { model: MODELS.haiku, maxTokens: 200 },
+  // One sentence under 20 words, or NONE.
+  carver: { model: MODELS.haiku, maxTokens: 60 },
 } as const;
 
 export type RoleName = keyof typeof ROLES;

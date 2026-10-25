@@ -4,7 +4,7 @@ import Database from 'better-sqlite3';
 
 export type Db = Database.Database;
 
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 
 // Steps that bring an older file up to date. Key = the version the step upgrades FROM.
 const MIGRATIONS: Record<number, string> = {
@@ -41,6 +41,33 @@ const MIGRATIONS: Record<number, string> = {
     ALTER TABLE floor_progress ADD COLUMN leak_route TEXT;
     ALTER TABLE floor_progress ADD COLUMN winning_message_id INTEGER;
     ALTER TABLE floor_progress ADD COLUMN leak_message_id INTEGER;`,
+  // Floor 6: carvings, the hoard, what each message met there, and the live switch.
+  6: `
+    CREATE TABLE carvings (                 -- Floor 6: tricks Vorgath has learned. Text is for the phone and admin, never the projector
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      game_id TEXT NOT NULL,
+      number INTEGER NOT NULL,                -- "carving #12": 1, 2, 3… within the game, seeds first
+      text TEXT NOT NULL,
+      vector BLOB NOT NULL,                   -- 384 Float32 (embeddings/embed.ts), for the duplicate check
+      source_floor INTEGER,                   -- the floor whose clear it describes; null for a seed
+      player_id TEXT,                         -- whose clear it describes; null for a seed
+      seeded INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      UNIQUE (game_id, number)
+    );
+    
+    CREATE TABLE hoard (                    -- Floor 6: gifts Vorgath keeps. Text is for the admin only
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      game_id TEXT NOT NULL,
+      player_id TEXT,                         -- null for a seed
+      text TEXT NOT NULL,
+      vector BLOB NOT NULL,
+      seeded INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL
+    );
+    ALTER TABLE messages ADD COLUMN carving_id INTEGER;
+    ALTER TABLE messages ADD COLUMN hoard TEXT;
+    ALTER TABLE games ADD COLUMN floor6_enabled INTEGER;`,
 };
 
 // Opens (or creates) the database file. Pass ':memory:' in tests.

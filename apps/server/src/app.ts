@@ -6,6 +6,7 @@ import Fastify from 'fastify';
 import { Server } from 'socket.io';
 import { effectiveMode, type Env } from './config/env.ts';
 import type { Db } from './db/db.ts';
+import type { Embed } from './embeddings/embed.ts';
 import { getCurrentGame } from './db/queries.ts';
 import { createLiveClient, type Complete } from './llm/client.ts';
 import { createMockClient } from './llm/mock.ts';
@@ -14,14 +15,16 @@ import { registerAdmin } from './sockets/admin.ts';
 import { registerProjector } from './sockets/projector.ts';
 import { createReveal } from './sockets/reveal.ts';
 import { registerPlayerHandlers, type GameContext, type PlayerServer } from './sockets/player.ts';
+import { createVorgath } from './sockets/vorgath.ts';
 
 // `mock` is the client used in mock mode (tests pass a fake one). The live client is only
 // created the first time the game is switched to live, and only if there is an API key.
+// `embed`: Floor 6's embeddings (index.ts loads the real model; tests pass a fake). Null = none.
 export async function createApp(
   env: Env,
   db: Db,
   mock: Complete = createMockClient(),
-  opts: { logger: boolean; tagEveryMs?: number } = { logger: true },
+  opts: { logger: boolean; tagEveryMs?: number; embed?: Embed | null } = { logger: true },
 ) {
   const app = Fastify({ logger: opts.logger });
 
@@ -53,26 +56,30 @@ export async function createApp(
     env,
     complete: queue.complete,
     queueStats: queue.stats,
+    embed: opts.embed ?? null,
     // A restart picks up where the game was, settings included. .env only seeds the first game.
     game: getCurrentGame(db, Date.now(), {
       cooldown_ms: env.COOLDOWN_MS,
       max_messages: env.MAX_MESSAGES_PER_PLAYER,
       llm_mode: env.LLM_MODE,
+      floor6_enabled: env.FLOOR6_ENABLED,
     }),
     changed: () => {}, // the projector and admin screens hook in here
     runCommand: () => ({ ok: false, error: 'Not ready yet.' }), // the admin module hooks in here
     logError: (err) => app.log.error(err),
   };
   const io: PlayerServer = new Server(app.server);
-  const phones = registerPlayerHandlers(io, ctx);
+  const vorgath = createVorgath(ctx);
+  const phones = registerPlayerHandlers(io, ctx, vorgath);
   const reveal = createReveal(ctx);
-  const projectorChanged = registerProjector(io, ctx, reveal);
-  const admin = registerAdmin(io, ctx, phones, reveal);
+  const projectorChanged = registerProjector(io, ctx, reveal, vorgath);
+  const admin = registerAdmin(io, ctx, phones, reveal, vorgath);
   ctx.changed = () => {
     projectorChanged();
     admin.changed();
   };
   ctx.runCommand = admin.runCommand;
+  vorgath.seed(); // a game already under way (e.g. after a restart) gets its seeds too
 
   // The health tiles show the last minute, so they need refreshing even when nothing happens.
   const healthTimer = setInterval(admin.changed, 5000);

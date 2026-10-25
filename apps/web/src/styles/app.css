@@ -278,6 +278,30 @@
   color: var(--name-ashveil);
 }
 
+.bubble-guardian.floor-6 {
+  background: var(--bubble-vorgath);
+}
+
+.bubble-row.guardian:has(.floor-6) .bubble-name {
+  color: var(--name-vorgath);
+}
+
+/* A carving on Vorgath's scales sealed it: like a Ward's line, in gold. */
+.bubble-row.carving {
+  align-self: flex-start;
+}
+
+.bubble-carving {
+  padding: 6px 12px;
+  border: 1px dashed currentColor;
+  border-radius: 0;
+  background: transparent;
+  color: var(--carving);
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+}
+
 /* A Ward sealed it: stone, not a voice. Dashed, all caps, cyan for Ears and magenta for Tongues. */
 .bubble-row.ward_ears,
 .bubble-row.ward_tongues {

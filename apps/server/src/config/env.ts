@@ -16,6 +16,8 @@ const EnvSchema = z
     MAX_MESSAGES_PER_PLAYER: z.coerce.number().int().positive().default(150),
     MAX_MESSAGE_CHARS: z.coerce.number().int().positive().default(300),
     BUDGET_USD: z.coerce.number().positive().default(4),
+    // Floor 6 (Vorgath) for the first game; after that a live admin setting that survives Reset.
+    FLOOR6_ENABLED: z.stringbool().default(true),
     JOIN_LIMIT_PER_MIN: z.coerce.number().int().positive().default(60), // per address; a class shares one
   })
   .refine((env) => env.LLM_MODE === 'mock' || env.ANTHROPIC_API_KEY !== '', {

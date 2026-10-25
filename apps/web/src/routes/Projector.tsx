@@ -11,7 +11,7 @@ import type {
   ProjectorServerEvents,
   ProjectorSnapshot,
 } from '@silvertongue/shared/events';
-import { DEEPEST_BUILT_FLOOR, GUARDIANS } from '@silvertongue/shared/floors';
+import { GUARDIANS } from '@silvertongue/shared/floors';
 import type { Socket } from 'socket.io-client';
 import { clock } from '../clock.ts';
 import { GUARDIAN_SPRITES } from '../sprites.ts';
@@ -25,6 +25,7 @@ const FEED_LABEL: Record<FeedItem['type'], string> = {
 };
 
 const MAX_CHIPS = 20; // per floor; the rest become "+N more" so a crowded row never spills off-screen
+const DRAGONTONGUE_MS = 8000; // the full-screen moment when someone beats Vorgath
 
 export function Projector() {
   const [snapshot, setSnapshot] = useState<ProjectorSnapshot | null>(null);
@@ -44,7 +45,7 @@ export function Projector() {
   else if (snapshot.status === 'lobby') screen = <ProjectorLobby snapshot={snapshot} />;
   else if (snapshot.status === 'reveal')
     screen = snapshot.reveal ? (
-      <Bestiary card={snapshot.reveal.card} />
+      <Bestiary card={snapshot.reveal.card} deepestFloor={snapshot.deepestFloor} />
     ) : (
       <Holding text="The Bestiary is being written…" />
     );
@@ -100,14 +101,14 @@ function ProjectorLobby({ snapshot }: { snapshot: ProjectorSnapshot }) {
 
 function DungeonMap({ snapshot, receivedAt }: { snapshot: ProjectorSnapshot; receivedAt: number }) {
   const running = snapshot.status === 'running';
-  const now = useNow(running);
+  const now = useNow(running || snapshot.dragontongue !== null);
   const elapsed = snapshot.elapsedMs + (running ? Math.max(0, now - receivedAt) : 0);
 
-  // Players past the deepest built floor wait in its row with a ✓ (they cleared it).
+  // Players past the deepest open floor wait in its row with a ✓ (they cleared it).
   const rows = Array.from({ length: FLOOR_COUNT }, (_, i) => i + 1).map((floor) => ({
     floor,
     players: snapshot.players
-      .filter((p) => Math.min(p.floor, DEEPEST_BUILT_FLOOR) === floor)
+      .filter((p) => Math.min(p.floor, snapshot.deepestFloor) === floor)
       .map((p) => ({ nickname: p.nickname, cleared: p.floor > floor })),
   }));
 
@@ -144,10 +145,19 @@ function DungeonMap({ snapshot, receivedAt }: { snapshot: ProjectorSnapshot; rec
                     className="pj-ward pj-ward-tongues"
                   />
                 )}
+                {floor === 6 && snapshot.vorgath && (
+                  <span key={`carving-${snapshot.vorgath.carvings}`} className="pj-carving" />
+                )}
               </span>
               <div className="pj-floor-name">
                 <h2>{guardian.name}</h2>
                 <p>{guardian.title}</p>
+                {floor === 6 && snapshot.vorgath && (
+                  <p className="pj-vorgath-counts">
+                    Tricks learned: <strong>{snapshot.vorgath.carvings}</strong> · Gifts in the
+                    hoard: <strong>{snapshot.vorgath.gifts}</strong>
+                  </p>
+                )}
               </div>
               <div className="pj-floor-players">
                 {players.length > 0 ? (
@@ -198,6 +208,17 @@ function DungeonMap({ snapshot, receivedAt }: { snapshot: ProjectorSnapshot; rec
           ))}
         </div>
       </aside>
+
+      {snapshot.dragontongue &&
+        now < receivedAt + DRAGONTONGUE_MS - snapshot.dragontongue.ageMs && (
+          <div className="pj-dragontongue" role="alert">
+            <img className="sprite" src={GUARDIAN_SPRITES[6]!.slipped} alt="" />
+            <p className="eyebrow">The vault is open</p>
+            <h1>{snapshot.dragontongue.nickname}</h1>
+            <p className="pj-dragontongue-title">Dragontongue</p>
+            <p>His scales now carry your trick.</p>
+          </div>
+        )}
     </div>
   );
 }
@@ -221,7 +242,13 @@ function Chips({ names }: { names: { nickname: string; cleared: boolean }[] }) {
 
 // The reveal: one card per floor, then the closing card. Everything on it came from the server
 // as numbers, fixed text and admin-approved quotes.
-function Bestiary({ card }: { card: BestiaryCard | ClosingCard }) {
+function Bestiary({
+  card,
+  deepestFloor,
+}: {
+  card: BestiaryCard | ClosingCard;
+  deepestFloor: number;
+}) {
   if (card.kind === 'closing') {
     return (
       <div className="bx bx-closing">
@@ -241,7 +268,7 @@ function Bestiary({ card }: { card: BestiaryCard | ClosingCard }) {
             </li>
           ))}
         </ol>
-        <FloorProgress current={FLOOR_COUNT} />
+        <FloorProgress current={FLOOR_COUNT + 1} deepestFloor={deepestFloor} />
       </div>
     );
   }
@@ -285,18 +312,19 @@ function Bestiary({ card }: { card: BestiaryCard | ClosingCard }) {
         )}
         <p className="bx-lesson">{card.lesson}</p>
       </div>
-      <FloorProgress current={card.floor} />
+      <FloorProgress current={card.floor} deepestFloor={deepestFloor} />
     </div>
   );
 }
 
-// Six segments: floors up to this one lit, this one brightest, Floor 6 hidden until M9.
-function FloorProgress({ current }: { current: number }) {
+// Six segments: floors up to this one lit, this one brightest, Floor 6 a "?" while he is shut.
+// The closing card passes FLOOR_COUNT + 1: every open floor done.
+function FloorProgress({ current, deepestFloor }: { current: number; deepestFloor: number }) {
   return (
     <ol className="bx-progress" aria-label={`Floor ${current} of ${FLOOR_COUNT}`}>
       {Array.from({ length: FLOOR_COUNT }, (_, i) => i + 1).map((floor) => {
         const state =
-          floor === FLOOR_COUNT
+          floor > deepestFloor
             ? 'locked'
             : floor === current
               ? 'now'
@@ -305,7 +333,7 @@ function FloorProgress({ current }: { current: number }) {
                 : '';
         return (
           <li key={floor} className={`bx-segment ${state}`}>
-            {floor === FLOOR_COUNT ? '?' : floor}
+            {floor > deepestFloor ? '?' : floor}
           </li>
         );
       })}
