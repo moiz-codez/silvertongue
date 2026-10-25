@@ -83,6 +83,22 @@ To check cloudflared on its own: `cloudflared tunnel --url http://localhost:3000
 
 **On demo day, start the tunnel early** (well before class). That leaves time to wait out a slow or rate-limited service.
 
+## Backup: ngrok
+
+Use this when `npm run tunnel` can't get an address. Your ngrok domain stays the same every time, so phones keep their progress across restarts. Run `npm run build` first, and close any `npm run tunnel` window, because both use port 3000.
+
+1. Window 1: `npm run serve -- --url https://snuggle-steerable-subatomic.ngrok-free.dev`. Wait for the green **READY** banner. The QR and the join address on the lobby and map now show the ngrok address.
+2. Window 2: `ngrok http --domain=snuggle-steerable-subatomic.ngrok-free.dev 3000`. Add `--region=in` if it feels slow. This ngrok is an older v3, which takes `--domain`, not `--url`.
+3. Projector and admin stay on `http://localhost:3000/projector` and `/admin`, as with the tunnel.
+
+- **Free ngrok first shows a "Visit Site" warning page.** Each phone taps **Visit Site** once, and then the game loads. Tell the class before they scan.
+- In this mode the server reads each phone's real address from ngrok's `X-Forwarded-For` header, so the join limit and the admin lockout work per phone, just as with the tunnel. `npm run serve` sets this up by itself; never set `TRUST_FORWARDED_FOR` in `.env`.
+- If the server stops, it prints a red banner. Run the same `npm run serve` command again. The address is the same, so phones carry on by themselves.
+
+## Backup: same Wi-Fi
+
+Use this when neither the tunnel nor ngrok works but the laptop and the phones share a Wi-Fi (or the laptop's hotspot). Run `npm run serve` with no `--url`. The QR then points at the laptop's Wi-Fi address (`http://192.168.x.x:3000`). Only phones on that same network can join, and university Wi-Fi often blocks phone-to-laptop traffic, so test it first. Never open `/admin` through that address.
+
 ## Afterwards
 
 - Ctrl+C in the tunnel terminal stops both cloudflared and the server (and anything they started).

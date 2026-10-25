@@ -224,7 +224,7 @@ export function registerPlayerHandlers(
         if (ctx.game.status === 'reveal' || ctx.game.status === 'ended') {
           return ack({ ok: false, error: 'The dungeon is closed. Look up at the big screen.' });
         }
-        const ip = clientIp(socket.handshake);
+        const ip = clientIp(socket.handshake, ctx.env.TRUST_FORWARDED_FOR);
         if (joinsByIp.full(ip)) {
           return ack({ ok: false, error: 'Too many new adventurers at once. Wait a minute.' });
         }

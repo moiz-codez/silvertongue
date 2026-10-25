@@ -267,6 +267,19 @@ describe('admin', () => {
     expect(latest()).toMatchObject({ status: 'running', budgetAlert: true });
   });
 
+  it('behind ngrok, a guesser is not "this laptop": X-Forwarded-For addresses get locked out', async () => {
+    const { url } = await startServer({ TRUST_FORWARDED_FOR: 'true' });
+    const refusal = (s: Admin) =>
+      new Promise<string>((resolve) => s.on('connect_error', (e) => resolve(e.message)));
+    const via = (token: string, ip: string) =>
+      open<Admin>(`${url}/admin`, { token }, { 'x-forwarded-for': ip }).socket;
+    for (let i = 0; i < 5; i++)
+      expect(await refusal(via('guess-guess-guess', '203.0.113.9'))).toBe('Wrong admin token.');
+    expect(await refusal(via(ADMIN_TOKEN, '203.0.113.9'))).toBe('Too many tries. Wait a minute.');
+    const other = via(ADMIN_TOKEN, '203.0.113.10');
+    await new Promise((resolve) => other.on('admin:state', resolve));
+  });
+
   it('locks out an address that guesses through the tunnel, but never this laptop', async () => {
     const { url } = await startServer();
     const refusal = (s: Admin) =>

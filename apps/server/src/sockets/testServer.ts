@@ -83,9 +83,9 @@ export async function startServer(
 export function open<S extends Socket>(
   url: string,
   auth?: Record<string, string>,
-  viaTunnel?: string,
+  via?: string | Record<string, string>, // a tunnel visitor's address, or raw headers (ngrok)
 ) {
-  const extraHeaders = viaTunnel ? { 'cf-connecting-ip': viaTunnel } : undefined;
+  const extraHeaders = typeof via === 'string' ? { 'cf-connecting-ip': via } : via;
   const socket = connect(url, {
     transports: ['websocket'],
     forceNew: true,
@@ -99,7 +99,8 @@ export function open<S extends Socket>(
 }
 
 // A phone.
-export const client = (url: string, viaTunnel?: string) => open<Client>(url, undefined, viaTunnel);
+export const client = (url: string, via?: string | Record<string, string>) =>
+  open<Client>(url, undefined, via);
 
 // Resolves with the next `event` payload that matches.
 export function next<E extends keyof ServerToClientEvents>(
