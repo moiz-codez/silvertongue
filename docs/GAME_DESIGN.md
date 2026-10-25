@@ -107,7 +107,7 @@ After ~12 minutes of play, the admin pauses the game and presses Start reveal. P
   - the most common winning trick (from the technique tags);
   - an optional quote: the newest admin-approved best attempt for that floor;
   - a 6-segment floor progress bar along the bottom.
-  - All text is at least 28 px. Every number on the projector (tiles, stats, progress, ranks, map counts, timer) is in bold IBM Plex Sans, because the pixel font's 5 reads as an S; the pixel font is for headings, with ligatures off (its "fi" reads as an "A").
+  - All text is at least 28 px. Every number on the projector (tiles, stats, progress, ranks, map counts, timer, and the join address) is in bold IBM Plex Sans, because the pixel font's 5 reads as an S; the pixel font is for headings, with ligatures off (its "fi" reads as an "A").
   - Counted words match their number ("1 riddle given", "The winning plan took 4 messages").
 - Closing card: the top 3 players (nickname, floors cleared, title) and "Every defence you broke today is a real technique, and every one can be beaten."
 

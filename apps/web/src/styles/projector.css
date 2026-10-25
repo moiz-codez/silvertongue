@@ -25,7 +25,10 @@
 }
 
 /* In the pixel font a 5 reads as an S ("5/5" looked like "S/S"), so every number on the big
-   screen uses bold Plex Sans with even-width digits. The pixel font stays for headings. */
+   screen uses bold Plex Sans with even-width digits, and so does the join address people type.
+   The pixel font stays for headings. */
+.pj-host,
+.pj-map-host,
 .pj-steps span,
 .pj-gate span,
 .pj-floor-number,
@@ -121,7 +124,6 @@
 
 .pj-host {
   margin: 1em 0 0;
-  font-family: var(--font-heading);
   color: var(--color-accent);
   font-size: 1.7em;
   overflow-wrap: anywhere;
@@ -195,7 +197,6 @@
 
 .pj-map-host {
   margin-left: auto;
-  font-family: var(--font-heading);
   color: var(--color-muted);
   font-size: 1.2em;
 }
