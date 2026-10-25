@@ -84,7 +84,7 @@ describe('Floor 6 prompts', () => {
     expect(vorgathNote(RUNE, 'novel')).toContain(`1) ${first}; 2) ${second}.`);
     expect(vorgathNote(RUNE, 'owned')).toMatch(/\[HOARD: OWNED\]$/);
     expect(vorgathNote(RUNE, 'too_small')).toMatch(/\[HOARD: TOO SMALL\]$/);
-    expect(vorgathNote(RUNE, null)).not.toContain('HOARD');
+    expect(vorgathNote(RUNE, null)).toMatch(/\[HOARD: NONE\]$/);
     expect(vorgathNote(RUNE, null)).not.toContain(first);
   });
 
@@ -173,6 +173,12 @@ describe('the hoard check and Vorgath', () => {
     expect(seen[0]!.playerNote).toBe(vorgathNote(RUNE, 'owned'));
     expect(JSON.stringify(seen[0]!.messages)).not.toContain('HOARD');
     expect(turn).toMatchObject({ text: 'The kettle sings, little thief.', slipped: true });
+  });
+
+  it('empties a reply that talks about his notes, so the server asks again', async () => {
+    const { complete } = says('[HOARD: NONE] means there is no gift, so Vorgath should not pay.');
+    const turn = await vorgathTurn(complete, [{ speaker: 'player', text: 'hi' }], RUNE, 'novel');
+    expect(turn.text).toBe('');
   });
 
   it('seals a LEAK with the dragon line', async () => {

@@ -13,6 +13,7 @@ const db = openDb(path.resolve(repoRoot, env.DATABASE_PATH)); // relative to the
 let embed: Embed | null = null;
 try {
   embed = await loadEmbedder();
+  console.log('Floor 6: embedding model loaded from .cache/models.');
 } catch (err) {
   console.error('FLOOR 6 OFF: the embedding model could not load.', err);
 }

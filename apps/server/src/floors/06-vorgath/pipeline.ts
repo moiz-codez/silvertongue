@@ -26,6 +26,9 @@ import {
 } from './prompts.ts';
 
 const MAX_HISTORY = 12;
+// Vorgath reasoning about his notes instead of speaking (seen once in playtest). Such a reply is
+// emptied, so the socket handler asks once more, exactly as for a refusal.
+const META = /\[HOARD|final note|the traveller|\bVorgath (should|does|must)\b/i;
 
 // Fixed lines chosen by the server.
 export const CARVINGS_SEAL = 'THE CARVINGS SEAL YOUR WORDS.';
@@ -97,7 +100,8 @@ export async function vorgathTurn(
     playerNote: vorgathNote(rune, hoard),
     messages: toMessages(history, MAX_HISTORY),
   });
-  const text = cleanReply(result, rune).replace(/^\s*Vorgath:\s*/gim, '');
+  const spoken = cleanReply(result, rune).replace(/^\s*Vorgath:\s*/gim, '');
+  const text = META.test(spoken) ? '' : spoken;
   return { text, slipped: revealsRune(text, rune).revealed || saysRuneWord(text, rune), result };
 }
 
