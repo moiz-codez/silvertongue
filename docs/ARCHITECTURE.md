@@ -304,7 +304,7 @@ Default in development and in load tests. No API key needed. Deterministic, with
 | 3 Morwen | — | Morwen | `cleanReply` → `snip` | `revealsRune(filteredText)` (rune got past Snip) or clear |
 | 4 Ogre | Gorm: latest message only, no rune, JSON verdict (`parseVerdict`, fails closed; see "Input guard outcomes") | Mumble | `cleanReply` | `revealsRune(reply)` or clear |
 | 5 Ashveil | Ward of Ears: last 12 messages + the latest, no rune, JSON verdict (fails closed; see "Input guard outcomes") | Queen Ashveil (rune and her two riddle clues in the final note) | `cleanReply` → `revealsRune` / `saysRuneWord` → else Ward of Tongues (fails closed; see "Output judge outcomes") | on clear |
-| 6 Vorgath | Ward of Ears + carvings + `is_gift` | Vorgath (+ hoard note) | `revealsRune` → else Ward of Tongues | on clear |
+| 6 Vorgath | Ward of Ears + Carvings: like Floor 5's, plus the 40 newest carvings in its final (uncached) note; JSON `{verdict, matched_carving, is_gift}` (fails closed); a named carving shows as a `carving` bubble | the hoard check on a gift (code, embeddings), then Vorgath (rune + this turn's hoard note, with the two clues on NOVEL, in the final note) | `cleanReply` → `revealsRune` / `saysRuneWord` → else Ward of Tongues; a novel gift joins the hoard once his reply is delivered | on clear |
 
 Each floor's pipeline lives in `floors/0N-*/pipeline.ts` and is registered with its role in `floors/index.ts` (`FLOOR_TURNS`); the socket handler picks it by the player's floor. Every pipeline calls `cleanReply` first. History is capped at 20 turns on Floor 1 and 12 from Floor 2 on.
 

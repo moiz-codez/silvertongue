@@ -1,4 +1,5 @@
 // What every guard and judge (Gorm, both Wards) returns, read the same fail-closed way.
+import type { Speaker } from '@silvertongue/shared/events';
 import type { z } from 'zod';
 import type { LlmResult } from '../llm/client.ts';
 import { parseVerdict } from '../security/verdict.ts';
@@ -9,6 +10,9 @@ export interface JudgeResult {
   outcome: 'pass' | 'blocked' | 'unparseable';
   line: string; // what the phone shows when it isn't a pass
   result: LlmResult; // SERVER ONLY: for the logs
+  speaker?: Speaker; // Floor 6: a block a named carving made shows as a carving bubble
+  carvingId?: number; // Floor 6: which carving sealed it (stored on the message)
+  gift?: boolean; // Floor 6: the Ward passed a gift for the hoard check
 }
 
 // Only the allow value passes, only the block value is a real block, anything else is unparseable.

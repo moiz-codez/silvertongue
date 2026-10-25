@@ -7,6 +7,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { MAX_MESSAGE_CHARS } from '@silvertongue/shared/constants';
 import { loadEnv } from '../apps/server/src/config/env.ts';
 import { costUsd, MODELS, ROLES } from '../apps/server/src/config/models.ts';
+import { openDb } from '../apps/server/src/db/db.ts';
 import { GRUB_PROMPT } from '../apps/server/src/floors/01-grub/prompts.ts';
 import { VELLUM_PROMPT } from '../apps/server/src/floors/02-vellum/prompts.ts';
 import { acrostic } from '../apps/server/src/floors/02-vellum/verse.ts';
@@ -947,8 +948,11 @@ function tally(callRole: string, result: FloorReply['result']) {
   r.cost += cost;
 }
 
+// Floor 6's Ward reads the game's carvings from a database: a throwaway one in memory.
+const game = { db: openDb(':memory:'), gameId: 'playtest' };
+
 async function judge(text: string, earlier: Turn[]): Promise<JudgeResult> {
-  const judged = await guard!.judge(complete, text, earlier);
+  const judged = await guard!.judge(complete, text, earlier, game);
   tally(guard!.role, judged.result);
   if (judged.result.stopReason === 'refusal') style.refusals++;
   return judged;
@@ -997,7 +1001,7 @@ const verse = { calls: 0, refusals: 0 };
 
 async function call(history: Turn[], rune: string): Promise<FloorReply> {
   // Each conversation has its own rune, so the rune doubles as the player id (it seeds Vellum's verse).
-  const reply = await floorTurn(complete, history, rune, `playtest:${rune}`);
+  const reply = await floorTurn(complete, history, rune, `playtest:${rune}`, null);
   const u = reply.result.usage;
   tally(role, reply.result);
   if (u.output_tokens >= maxTokens) style.cutOff++;

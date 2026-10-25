@@ -14,8 +14,9 @@ import type {
 
 export type GameStatus = 'lobby' | 'running' | 'paused' | 'reveal' | 'ended';
 // snip: Floor 3's filter (code). gorm: Floor 4's input guard, shown when he smashes a message.
+// carving: Floor 6's Ward of Ears when a carving it names sealed the message.
 export type Speaker =
-  'player' | 'guardian' | 'snip' | 'gorm' | 'ward_ears' | 'ward_tongues' | 'system';
+  'player' | 'guardian' | 'snip' | 'gorm' | 'ward_ears' | 'ward_tongues' | 'carving' | 'system';
 export type Expression = 'idle' | 'slipped';
 
 export interface Bubble {

@@ -26,7 +26,9 @@ import { SEALED } from '../floors/05-ashveil/pipeline.ts';
 import type { JudgeResult } from '../floors/judge.ts';
 import type { Turn } from '../floors/messages.ts';
 import { checkDoor, guessDistance } from '../game/door.ts';
+import { toBlob } from '../embeddings/cosine.ts';
 import type { Embed } from '../embeddings/embed.ts';
+import type { HoardResult } from '../floors/06-vorgath/hoard.ts';
 import type { Vorgath } from './vorgath.ts';
 import { leakRoute } from '../game/leakRoute.ts';
 import { HINT_AT, unlockedNotes } from '../game/hints.ts';
@@ -366,8 +368,11 @@ export function registerPlayerHandlers(
         try {
           const rune = q.getRune(db, id, floor);
           const guard = floorTurn.guard;
+          let gift: { result: HoardResult; vector: Float32Array | null } | null = null;
           if (guard) {
-            const verdict = await judgeTwice(guard.role, () => guard.judge(call, text, earlier));
+            const verdict = await judgeTwice(guard.role, () =>
+              guard.judge(call, text, earlier, { db, gameId }),
+            );
             stage = floorTurn.role;
             checkBudget();
             if (socket.data.playerId !== id) return;
@@ -383,17 +388,27 @@ export function registerPlayerHandlers(
                 q.countPlayerMessage(db, id, floor);
                 afterFailedTry(id, floor);
               }
-              sideBubble(guard.speaker, verdict.line);
+              if (verdict.carvingId !== undefined)
+                q.setMessageCarving(db, playerMessageId, verdict.carvingId);
+              sideBubble(verdict.speaker ?? guard.speaker, verdict.line);
               return;
             }
             q.passGuard(db, playerMessageId); // now the guardian may hear it
+            // Floor 6: a gift is weighed against the hoard (code) before Vorgath answers.
+            if (verdict.gift && floorTurn.checkGift && ctx.embed) {
+              gift = await floorTurn.checkGift(text, { db, gameId, embed: ctx.embed });
+              q.setMessageHoard(db, playerMessageId, gift.result);
+            }
           }
+          // A rude gift gets no note: he just hears it.
+          const hoard = gift && gift.result !== 'rude' ? gift.result : null;
           const ask = async () => {
             const reply = await floorTurn.turn(
               call,
               [...history, { speaker: 'player', text }],
               rune,
               id,
+              hoard,
             );
             const blocked = reply.result.stopReason === 'refusal';
             logCall(gameId, id, floor, floorTurn.role, reply.result, blocked ? 'refusal' : 'ok');
@@ -464,6 +479,18 @@ export function registerPlayerHandlers(
             sideBubble('snip', `SNIP! ${turn.snipRemoved} letters removed.`);
           }
           if (turn.slipped) socket.emit('player:expression', { floor, state: 'slipped' });
+          // A new gift joins his hoard only once his answer reached the player, so a crash, a
+          // refusal or a sealed reply never eats it.
+          if (gift?.result === 'novel' && gift.vector) {
+            q.insertHoard(db, {
+              gameId,
+              playerId: id,
+              text,
+              vector: toBlob(gift.vector),
+              seeded: false,
+              now: Date.now(),
+            });
+          }
         } catch (err) {
           // A refusal's calls were logged (and billed) above; any other failure is logged here.
           if (!(err instanceof RefusalError))
