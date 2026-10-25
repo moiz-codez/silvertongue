@@ -11,10 +11,13 @@ interface Handshake {
 
 const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 
+// One header per mode: ngrok passes a visitor's own cf-connecting-ip through untouched.
+const headerFor = (trustForwardedFor: boolean) =>
+  trustForwardedFor ? 'x-forwarded-for' : 'cf-connecting-ip';
+
 function forwardedIp(handshake: Handshake, trustForwardedFor: boolean): string | null {
   if (!LOOPBACK.has(handshake.address)) return null;
-  // One header per mode: ngrok passes a visitor's own cf-connecting-ip through untouched.
-  const header = handshake.headers[trustForwardedFor ? 'x-forwarded-for' : 'cf-connecting-ip'];
+  const header = handshake.headers[headerFor(trustForwardedFor)];
   if (typeof header !== 'string') return null;
   return header.split(',').at(-1)!.trim() || null;
 }
@@ -23,9 +26,12 @@ export function clientIp(handshake: Handshake, trustForwardedFor = false): strin
   return forwardedIp(handshake, trustForwardedFor) ?? handshake.address;
 }
 
-// A browser on this laptop itself (not through the tunnel or ngrok).
+// A browser on this laptop itself (not through the tunnel or ngrok): any forwarding header at
+// all, even an empty one, means it came through the proxy.
 export function isLocal(handshake: Handshake, trustForwardedFor = false): boolean {
-  return LOOPBACK.has(handshake.address) && forwardedIp(handshake, trustForwardedFor) === null;
+  return (
+    LOOPBACK.has(handshake.address) && handshake.headers[headerFor(trustForwardedFor)] === undefined
+  );
 }
 
 // At most `max` hits per key in any `windowMs`.

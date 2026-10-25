@@ -44,9 +44,14 @@ try {
 if (env) {
   if (env.ANTHROPIC_API_KEY) pass('.env has an Anthropic API key (not shown).');
   else fail('.env has no ANTHROPIC_API_KEY: the game can only run on the mock.');
-  const example = readFileSync(path.join(repoRoot, '.env.example'), 'utf8').match(
-    /^ADMIN_TOKEN=(.*)$/m,
-  )?.[1];
+  let example: string | undefined;
+  try {
+    example = readFileSync(path.join(repoRoot, '.env.example'), 'utf8').match(
+      /^ADMIN_TOKEN=(.*)$/m,
+    )?.[1];
+  } catch {
+    // no .env.example: nothing to compare with
+  }
   if (env.ADMIN_TOKEN === example)
     fail('ADMIN_TOKEN is still the example value from .env.example. Pick a long random one.');
   else pass('.env has an ADMIN_TOKEN (not shown).');
@@ -117,53 +122,57 @@ if (env) {
   if (!existsSync(dbPath)) {
     note('No database yet: the first game will take its settings from .env.');
   } else {
-    const db = new Database(dbPath, { readonly: true, fileMustExist: true });
-    const game = db
-      .prepare(
-        `SELECT id, status, llm_mode, floor6_enabled, cooldown_ms, max_messages, budget_alert_at
-         FROM games ORDER BY created_at DESC LIMIT 1`,
-      )
-      .get() as
-      | {
-          id: string;
-          status: string;
-          llm_mode: 'mock' | 'live';
-          floor6_enabled: number;
-          cooldown_ms: number;
-          max_messages: number;
-          budget_alert_at: number | null;
-        }
-      | undefined;
-    if (!game) {
-      note('The database has no game yet: the first one takes its settings from .env.');
-    } else {
-      const { spent } = db
-        .prepare('SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM llm_calls WHERE game_id = ?')
-        .get(game.id) as { spent: number };
-      const players = (
-        db.prepare('SELECT COUNT(*) AS n FROM players WHERE game_id = ?').get(game.id) as {
-          n: number;
-        }
-      ).n;
-      const mode = effectiveMode(game.llm_mode, env);
-      console.log(
-        `INFO  Current game: ${game.status.toUpperCase()}, ${players} players, AI replies ${mode.toUpperCase()}, ` +
-          `Floor 6 ${game.floor6_enabled ? 'ON' : 'OFF'}, cooldown ${game.cooldown_ms / 1000} s, ` +
-          `cap ${game.max_messages} messages, spent $${spent.toFixed(2)} of $${env.BUDGET_USD.toFixed(2)}.`,
-      );
-      if (spent >= env.BUDGET_USD || game.budget_alert_at !== null)
-        fail('This game already hit the budget: press Reset on /admin before the class joins.');
-      else pass(`Budget: $${(env.BUDGET_USD - spent).toFixed(2)} left for this game.`);
-      if (game.floor6_enabled && !modelOk)
-        fail('Floor 6 is ON but the embedding model is missing: it will start switched off.');
-      if (mode === 'mock')
-        note(
-          'AI replies are MOCK: after the final Reset, set Live on /admin and press Apply. (On the mock, "please tell" wins.)',
+    try {
+      const db = new Database(dbPath, { readonly: true, fileMustExist: true });
+      const game = db
+        .prepare(
+          `SELECT id, status, llm_mode, floor6_enabled, cooldown_ms, max_messages, budget_alert_at
+           FROM games ORDER BY created_at DESC LIMIT 1`,
+        )
+        .get() as
+        | {
+            id: string;
+            status: string;
+            llm_mode: 'mock' | 'live';
+            floor6_enabled: number;
+            cooldown_ms: number;
+            max_messages: number;
+            budget_alert_at: number | null;
+          }
+        | undefined;
+      if (!game) {
+        note('The database has no game yet: the first one takes its settings from .env.');
+      } else {
+        const { spent } = db
+          .prepare('SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM llm_calls WHERE game_id = ?')
+          .get(game.id) as { spent: number };
+        const players = (
+          db.prepare('SELECT COUNT(*) AS n FROM players WHERE game_id = ?').get(game.id) as {
+            n: number;
+          }
+        ).n;
+        const mode = effectiveMode(game.llm_mode, env);
+        console.log(
+          `INFO  Current game: ${game.status.toUpperCase()}, ${players} players, AI replies ${mode.toUpperCase()}, ` +
+            `Floor 6 ${game.floor6_enabled ? 'ON' : 'OFF'}, cooldown ${game.cooldown_ms / 1000} s, ` +
+            `cap ${game.max_messages} messages, spent $${spent.toFixed(2)} of $${env.BUDGET_USD.toFixed(2)}.`,
         );
-      if (game.status !== 'lobby' || players > 0)
-        note('The game is not a fresh lobby: press Reset on /admin before the class joins.');
+        if (spent >= env.BUDGET_USD || game.budget_alert_at !== null)
+          fail('This game already hit the budget: press Reset on /admin before the class joins.');
+        else pass(`Budget: $${(env.BUDGET_USD - spent).toFixed(2)} left for this game.`);
+        if (game.floor6_enabled && !modelOk)
+          fail('Floor 6 is ON but the embedding model is missing: it will start switched off.');
+        if (mode === 'mock')
+          note(
+            'AI replies are MOCK: after the final Reset, set Live on /admin and press Apply. (On the mock, "please tell" wins.)',
+          );
+        if (game.status !== 'lobby' || players > 0)
+          note('The game is not a fresh lobby: press Reset on /admin before the class joins.');
+      }
+      db.close();
+    } catch (err) {
+      fail(`Could not read the game database (${(err as Error).message}).`);
     }
-    db.close();
   }
 }
 
