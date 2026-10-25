@@ -135,7 +135,9 @@ describe('the reveal', () => {
       for (let floor = 1; floor <= 6; floor++)
         expect(everything).not.toContain(getRune(db, id, floor));
     }
-  });
+    // Six screen updates back to back, each waiting out the 500 ms throttle: about 3 s alone, so
+    // the default 5 s ran out 1 time in 32 with 4 test runs at once. The time is the throttle's.
+  }, 15_000);
 
   it('steps within the cards, and Back to game takes them down', async () => {
     const { db, url } = await startServer();
