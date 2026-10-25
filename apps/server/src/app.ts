@@ -6,6 +6,7 @@ import Fastify from 'fastify';
 import { Server } from 'socket.io';
 import { effectiveMode, type Env } from './config/env.ts';
 import type { Db } from './db/db.ts';
+import type { Embed } from './embeddings/embed.ts';
 import { getCurrentGame } from './db/queries.ts';
 import { createLiveClient, type Complete } from './llm/client.ts';
 import { createMockClient } from './llm/mock.ts';
@@ -17,11 +18,12 @@ import { registerPlayerHandlers, type GameContext, type PlayerServer } from './s
 
 // `mock` is the client used in mock mode (tests pass a fake one). The live client is only
 // created the first time the game is switched to live, and only if there is an API key.
+// `embed`: Floor 6's embeddings (index.ts loads the real model; tests pass a fake). Null = none.
 export async function createApp(
   env: Env,
   db: Db,
   mock: Complete = createMockClient(),
-  opts: { logger: boolean; tagEveryMs?: number } = { logger: true },
+  opts: { logger: boolean; tagEveryMs?: number; embed?: Embed | null } = { logger: true },
 ) {
   const app = Fastify({ logger: opts.logger });
 
@@ -53,6 +55,7 @@ export async function createApp(
     env,
     complete: queue.complete,
     queueStats: queue.stats,
+    embed: opts.embed ?? null,
     // A restart picks up where the game was, settings included. .env only seeds the first game.
     game: getCurrentGame(db, Date.now(), {
       cooldown_ms: env.COOLDOWN_MS,

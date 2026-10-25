@@ -47,7 +47,7 @@ apps/server/src/
   game/             runeWords.ts, runes.ts, door.ts, scoring.ts, hints.ts, titles.ts, state.ts, leakRoute.ts, bestiary.ts (reveal cards)
   floors/           01-grub/ … 06-vorgath/: prompts.ts, pipeline.ts, *.test.ts
   security/         normalize.ts, revealsRune.ts, stripActions.ts, nickname.ts, snip.ts, sanitize.ts, verdict.ts (fail-closed parsing)
-  embeddings/       embed.ts, cosine.ts
+  embeddings/       embed.ts (model in .cache/models), cosine.ts, fake.ts (tests)
   sockets/          player.ts, projector.ts, admin.ts, reveal.ts (tagger jobs + Bestiary), clientIp.ts (per-address limits), throttle.ts (≤ 2 sends/s), testServer.ts (test helper)
 apps/web/src/
   routes/           Join, Lobby, Play, Cleared, Closed, Projector, Admin (App.tsx picks by path)

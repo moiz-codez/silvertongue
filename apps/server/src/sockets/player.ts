@@ -26,6 +26,7 @@ import { SEALED } from '../floors/05-ashveil/pipeline.ts';
 import type { JudgeResult } from '../floors/judge.ts';
 import type { Turn } from '../floors/messages.ts';
 import { checkDoor, guessDistance } from '../game/door.ts';
+import type { Embed } from '../embeddings/embed.ts';
 import { leakRoute } from '../game/leakRoute.ts';
 import { HINT_AT, unlockedNotes } from '../game/hints.ts';
 import { generateRunes } from '../game/runes.ts';
@@ -55,6 +56,7 @@ export interface GameContext {
   env: Env;
   complete: Complete; // goes through the rate-limited queue
   queueStats: () => QueueStats;
+  embed: Embed | null; // Floor 6's local embeddings; null when the model couldn't load
   game: q.GameRow; // the current game, with its live settings; admin commands replace it
   changed: () => void; // the projector and admin screens need a fresh look (throttled)
   runCommand: (type: 'start' | 'pause' | 'resume' | 'reveal' | 'end' | 'reset') => AdminReply;

@@ -13,3 +13,6 @@ coverage/
 .claude/settings.local.json
 CLAUDE.local.md
 riddles/
+
+# Floor 6 embedding model (downloaded once by the server or npm run native-check)
+.cache/
