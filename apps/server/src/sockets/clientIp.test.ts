@@ -13,6 +13,22 @@ it('uses cf-connecting-ip only when the socket comes from cloudflared on this ma
   expect(clientIp(via('127.0.0.1'))).toBe('127.0.0.1');
 });
 
+it('behind ngrok, uses the last X-Forwarded-For address, and only from loopback', () => {
+  const xff = (address: string, header: string, cf?: string) => ({
+    address,
+    headers: { 'x-forwarded-for': header, ...(cf ? { 'cf-connecting-ip': cf } : {}) },
+  });
+  expect(clientIp(xff('127.0.0.1', '198.51.100.7'), true)).toBe('198.51.100.7');
+  expect(clientIp(xff('127.0.0.1', '10.0.0.1, 198.51.100.7'), true)).toBe('198.51.100.7');
+  expect(clientIp(xff('192.168.1.20', '198.51.100.7'), true)).toBe('192.168.1.20'); // spoofed
+  expect(clientIp(xff('127.0.0.1', '198.51.100.7', '203.0.113.1'), true)).toBe('198.51.100.7');
+  expect(clientIp(xff('127.0.0.1', '198.51.100.7'))).toBe('127.0.0.1'); // tunnel mode: ignored
+  expect(isLocal(xff('127.0.0.1', '198.51.100.7'), true)).toBe(false);
+  expect(isLocal(via('127.0.0.1'), true)).toBe(true);
+  expect(isLocal(xff('127.0.0.1', '1.2.3.4, '), true)).toBe(false); // empty last entry: not local
+  expect(isLocal(via('127.0.0.1', ''))).toBe(false);
+});
+
 it('counts only a loopback socket without the header as local', () => {
   expect(isLocal(via('127.0.0.1'))).toBe(true);
   expect(isLocal(via('::1'))).toBe(true);

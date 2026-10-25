@@ -27,8 +27,11 @@ export function registerProjector(
   // Its own namespace with its own event types; it listens to nothing.
   const screen = io.of('/projector') as unknown as Namespace<object, ProjectorServerEvents>;
   screen.use((socket, next) => {
-    const ip = clientIp(socket.handshake);
-    const open = [...screen.sockets.values()].filter((s) => clientIp(s.handshake) === ip).length;
+    const trust = ctx.env.TRUST_FORWARDED_FOR;
+    const ip = clientIp(socket.handshake, trust);
+    const open = [...screen.sockets.values()].filter(
+      (s) => clientIp(s.handshake, trust) === ip,
+    ).length;
     if (open >= MAX_SCREENS_PER_IP) return next(new Error('Too many screens from this address.'));
     next();
   });

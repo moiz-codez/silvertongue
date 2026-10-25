@@ -49,8 +49,8 @@ export function registerAdmin(
   // that minute. A browser on this laptop is never locked out of its own admin page.
   const wrongTokens = slidingLimit(5, 60_000);
   admin.use((socket, next) => {
-    const local = isLocal(socket.handshake);
-    const ip = clientIp(socket.handshake);
+    const local = isLocal(socket.handshake, env.TRUST_FORWARDED_FOR);
+    const ip = clientIp(socket.handshake, env.TRUST_FORWARDED_FOR);
     if (!local && wrongTokens.full(ip)) return next(new Error('Too many tries. Wait a minute.'));
     if (tokenMatches(socket.handshake.auth.token, env.ADMIN_TOKEN)) return next();
     if (!local) wrongTokens.add(ip);

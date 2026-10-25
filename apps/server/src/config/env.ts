@@ -18,6 +18,8 @@ const EnvSchema = z
     BUDGET_USD: z.coerce.number().positive().default(4),
     // Floor 6 (Vorgath) for the first game; after that a live admin setting that survives Reset.
     FLOOR6_ENABLED: z.stringbool().default(true),
+    // Set only by `npm run serve -- --url` (ngrok): per-address limits read X-Forwarded-For.
+    TRUST_FORWARDED_FOR: z.stringbool().default(false),
     JOIN_LIMIT_PER_MIN: z.coerce.number().int().positive().default(60), // per address; a class shares one
   })
   .refine((env) => env.LLM_MODE === 'mock' || env.ANTHROPIC_API_KEY !== '', {

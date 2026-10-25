@@ -308,6 +308,24 @@ describe('Floor 1, end to end in mock mode', () => {
     expect(await join(client(url, '198.51.100.2').socket, 'Four')).toMatchObject({ ok: true });
   });
 
+  it('behind ngrok, limits joins per X-Forwarded-For address, so a class of 40 gets in', async () => {
+    const { url } = await startServer({ JOIN_LIMIT_PER_MIN: '2', TRUST_FORWARDED_FOR: 'true' });
+    const via = (ip: string) => client(url, { 'x-forwarded-for': ip });
+    const joins = Array.from({ length: 40 }, (_, i) =>
+      join(via(`198.51.100.${i + 1}`).socket, `P${i}`),
+    );
+    for (const joined of await Promise.all(joins)) expect(joined).toMatchObject({ ok: true });
+    // A visitor's own fake addresses come first; ngrok's real one is last.
+    expect(await join(via('10.0.0.1, 198.51.100.1').socket, 'Again')).toMatchObject({ ok: true });
+    expect(await join(via('10.0.0.2, 198.51.100.1').socket, 'Third')).toMatchObject({ ok: false });
+    // In this mode a made-up cf-connecting-ip counts for nothing.
+    const cf = (ip: string) =>
+      client(url, { 'x-forwarded-for': '198.51.100.99', 'cf-connecting-ip': ip });
+    expect(await join(cf('203.0.113.1').socket, 'Cf1')).toMatchObject({ ok: true });
+    expect(await join(cf('203.0.113.2').socket, 'Cf2')).toMatchObject({ ok: true });
+    expect(await join(cf('203.0.113.3').socket, 'Cf3')).toMatchObject({ ok: false });
+  });
+
   it('will not switch a socket to a different player', async () => {
     const { url } = await startServer();
     const a = client(url).socket;

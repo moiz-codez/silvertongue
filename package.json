@@ -23,6 +23,8 @@
     "playtest": "node scripts/playtest.ts",
     "loadtest": "node scripts/loadtest.ts",
     "tunnel": "node scripts/tunnel.ts",
+    "serve": "node scripts/serve.ts",
+    "preflight": "node scripts/preflight.ts",
     "riddles:sheet": "node scripts/riddlesSheet.ts"
   },
   "devDependencies": {
