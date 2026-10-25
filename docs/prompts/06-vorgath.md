@@ -240,7 +240,21 @@ Phone lines, chosen by the server:
 
 1. under 12 words → `too_small`
 2. profane → `rude`
-3. embed with `Xenova/all-MiniLM-L6-v2` (local, mean pooling, normalised, 384 numbers) and take the highest cosine similarity with every gift in this game's hoard, seeds included: ≥ `NOVELTY_THRESHOLD` (0.85, tuned in playtest) → `owned`, else `novel`.
+3. embed with `Xenova/all-MiniLM-L6-v2` (local, mean pooling, normalised, 384 numbers) and take the highest cosine similarity with every gift in this game's hoard, seeds included: ≥ `NOVELTY_THRESHOLD` (0.62) → `owned`, else `novel`.
+
+Tuning (M9, MiniLM, 12 base gifts written fresh, each with an exact repeat, 2 rewordings and 2 different gifts; 15 carving pairs):
+
+| Pair | Cosine similarity |
+|---|---|
+| Same gift again | 1.000 |
+| Gift reworded (24) | 0.582 – 0.942, median 0.873; 23 of 24 ≥ 0.62 |
+| Different gifts (24) | −0.061 – 0.490, median 0.169 |
+| Fresh gift vs the seeded hoard (12) | 0.266 – 0.609 |
+| Obvious gift reworded vs its seed (3) | 0.900 – 0.915 |
+| Same trick, two carvings (8) | 0.566 – 0.851 |
+| Different tricks, two carvings (7) | 0.237 – 0.793 |
+
+0.85 let 11 of 24 rewordings through as new, so the hoard threshold sits in the gap at 0.62. Carvings have no gap (the same trick reworded scores below some different tricks), so the duplicate threshold stays at 0.90: it only merges near-identical sentences and never throws away a new trick; the cost is an occasional second carving of the same trick.
 
 Embeddings turn text into a list of numbers so that texts with similar MEANING end up close together, even with different words. Cosine similarity of two normalised vectors is just their dot product: 1 = same meaning, near 0 = unrelated.
 

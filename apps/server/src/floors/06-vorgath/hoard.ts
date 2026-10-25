@@ -4,7 +4,10 @@ import type { Embed } from '../../embeddings/embed.ts';
 import { bestMatch } from '../../embeddings/cosine.ts';
 import { isProfane } from '../../security/profanity.ts';
 
-export const NOVELTY_THRESHOLD = 0.85; // this close or closer to something in the hoard = owned
+// This close or closer to something in the hoard = owned. Tuned on MiniLM (M9): rewordings of a
+// gift scored 0.58–0.94 (23 of 24 at 0.62 or more), different gifts at most 0.49, fresh gifts
+// against the seeds at most 0.61.
+export const NOVELTY_THRESHOLD = 0.62;
 export const MIN_GIFT_WORDS = 12; // "a poem: roses are red" is too small to keep
 
 export type HoardResult = 'too_small' | 'rude' | 'owned' | 'novel';

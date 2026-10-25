@@ -352,7 +352,7 @@ All pure, all unit-tested.
 - The model files (~87 MB) are downloaded once into `.cache/models` at the repo root (gitignored; `npm run native-check` fetches them). After that the model loads with no network at all (checked with every network call blocked: loads in about 0.4 s). If it can't load (offline before it was ever downloaded), the server still starts, logs `FLOOR 6 OFF`, and Floor 6 stays closed.
 - Tests never load the model: `createApp` takes an `embed` option, and the socket tests pass `embeddings/fake.ts` (a hashed bag of words with no sense of meaning).
 - Hoard check (`floors/06-vorgath/hoard.ts`, code, not AI): under 12 words → too small; profane → rude (never kept); else embed and compare with the game's hoard.
-- Thresholds (tune in playtest): hoard novelty ≥ 0.85 = owned; carving duplicate ≥ 0.90.
+- Thresholds (tuned on MiniLM in M9, numbers in `prompts/06-vorgath.md`): hoard novelty ≥ 0.62 = owned; carving duplicate ≥ 0.90.
 - Seed the hoard with 5–10 obvious gifts at game start.
 
 ## Configuration (`config/env.ts`, validated with zod)

@@ -11,7 +11,10 @@ import type { Complete, LlmResult } from '../../llm/client.ts';
 import { isProfane } from '../../security/profanity.ts';
 import { revealsRune, saysRuneWord } from '../../security/revealsRune.ts';
 
-export const CARVING_DUPLICATE = 0.9; // this close to an existing carving = the same trick again
+// This close to an existing carving = the same trick again. Measured on MiniLM (M9): the same trick
+// in other words scored 0.57–0.85 and different tricks up to 0.79, so no line separates them;
+// 0.90 only merges near-identical sentences and never drops a new trick (more carvings, not fewer).
+export const CARVING_DUPLICATE = 0.9;
 export const MAX_CARVING_WORDS = 20;
 const MAX_TURNS = 12;
 
