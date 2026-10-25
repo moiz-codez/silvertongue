@@ -45,7 +45,7 @@ export function Projector() {
   else if (snapshot.status === 'lobby') screen = <ProjectorLobby snapshot={snapshot} />;
   else if (snapshot.status === 'reveal')
     screen = snapshot.reveal ? (
-      <Bestiary card={snapshot.reveal.card} />
+      <Bestiary card={snapshot.reveal.card} deepestFloor={snapshot.deepestFloor} />
     ) : (
       <Holding text="The Bestiary is being written…" />
     );
@@ -242,7 +242,13 @@ function Chips({ names }: { names: { nickname: string; cleared: boolean }[] }) {
 
 // The reveal: one card per floor, then the closing card. Everything on it came from the server
 // as numbers, fixed text and admin-approved quotes.
-function Bestiary({ card }: { card: BestiaryCard | ClosingCard }) {
+function Bestiary({
+  card,
+  deepestFloor,
+}: {
+  card: BestiaryCard | ClosingCard;
+  deepestFloor: number;
+}) {
   if (card.kind === 'closing') {
     return (
       <div className="bx bx-closing">
@@ -262,7 +268,7 @@ function Bestiary({ card }: { card: BestiaryCard | ClosingCard }) {
             </li>
           ))}
         </ol>
-        <FloorProgress current={FLOOR_COUNT} />
+        <FloorProgress current={FLOOR_COUNT + 1} deepestFloor={deepestFloor} />
       </div>
     );
   }
@@ -306,18 +312,19 @@ function Bestiary({ card }: { card: BestiaryCard | ClosingCard }) {
         )}
         <p className="bx-lesson">{card.lesson}</p>
       </div>
-      <FloorProgress current={card.floor} />
+      <FloorProgress current={card.floor} deepestFloor={deepestFloor} />
     </div>
   );
 }
 
-// Six segments: floors up to this one lit, this one brightest, Floor 6 hidden until M9.
-function FloorProgress({ current }: { current: number }) {
+// Six segments: floors up to this one lit, this one brightest, Floor 6 a "?" while he is shut.
+// The closing card passes FLOOR_COUNT + 1: every open floor done.
+function FloorProgress({ current, deepestFloor }: { current: number; deepestFloor: number }) {
   return (
     <ol className="bx-progress" aria-label={`Floor ${current} of ${FLOOR_COUNT}`}>
       {Array.from({ length: FLOOR_COUNT }, (_, i) => i + 1).map((floor) => {
         const state =
-          floor === FLOOR_COUNT
+          floor > deepestFloor
             ? 'locked'
             : floor === current
               ? 'now'
@@ -326,7 +333,7 @@ function FloorProgress({ current }: { current: number }) {
                 : '';
         return (
           <li key={floor} className={`bx-segment ${state}`}>
-            {floor === FLOOR_COUNT ? '?' : floor}
+            {floor > deepestFloor ? '?' : floor}
           </li>
         );
       })}

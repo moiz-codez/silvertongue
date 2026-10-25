@@ -16,6 +16,7 @@ export type LeakRoute =
   | 'other_script'
   | 'plan' // Floor 4: Mumble said it after Gorm passed every message
   | 'riddle' // Floor 5: the Queen's riddle got past both Wards
+  | 'gift' // Floor 6: Vorgath paid for a new gift with his riddle
   | 'other'; // anything code can't see (a guess, numbers, a riddle on Floor 2…)
 
 export interface LoggedMessage {
@@ -72,6 +73,8 @@ function routeOf(floor: number, reply: LoggedMessage, rune: string): LeakRoute |
       return shown.revealed ? 'plan' : undefined;
     case 5:
       return reply.verdict === 'CLEAN' && isRiddle(reply.text, rune) ? 'riddle' : undefined;
+    case 6: // he only gives the clues on a [HOARD: NOVEL] turn
+      return reply.verdict === 'CLEAN' && isRiddle(reply.text, rune) ? 'gift' : undefined;
     default:
       return undefined;
   }
@@ -112,7 +115,7 @@ function givesLetters(replies: LoggedMessage[], rune: string): boolean {
   return letters.size > 0 && given.size * 2 >= letters.size;
 }
 
-// Does the Queen's reply carry one of this rune's two clues?
+// Does the Queen's (or Vorgath's) reply carry one of this rune's two clues?
 export function isRiddle(text: string, rune: string): boolean {
   return cluesFor(rune).some((clue) => hasClue(text, clue));
 }

@@ -21,7 +21,17 @@ export interface FloorStats {
   earsSeals: number; // Floor 5
   tonguesSeals: number;
   riddlesGiven: number;
+  vorgath: VorgathStats | null; // Floor 6: the whole game's counts
   quote: { nickname: string; text: string } | null; // newest APPROVED attempt only
+}
+
+export interface VorgathStats {
+  carvings: number; // seeds included, as on the projector
+  seededCarvings: number;
+  sealedByCarving: number;
+  giftsAccepted: number;
+  owned: number; // refused: he already owned something like it
+  tooSmall: number;
 }
 
 export interface Leader {
@@ -77,6 +87,14 @@ const CARDS: Record<
     him: 'her',
     hes: "She's",
   },
+  6: {
+    name: 'Vorgath: adaptive defence.',
+    technique:
+      'Every trick that worked anywhere was carved into his wards within seconds. What worked ten minutes ago stopped working. The only way through was something genuinely new, judged by embeddings against everything already seen.',
+    lesson: 'Real defences learn. Attackers have to keep inventing.',
+    him: 'him',
+    hes: "He's",
+  },
 };
 
 export const TRICK_NAMES: Record<Technique, string> = {
@@ -96,7 +114,8 @@ export const TRICK_NAMES: Record<Technique, string> = {
   other: 'something else',
 };
 
-// One card per floor that anyone reached (Floors 1–5; Floor 6 waits for M9), then the closing card.
+// One card per floor that anyone reached, then the closing card. Floor 6 only has one when he was
+// open and someone got down to him.
 // `techniques`: false when the tagger couldn't finish; then no card mentions techniques.
 export function buildCards(
   floors: FloorStats[],
@@ -165,6 +184,19 @@ function details(f: FloorStats): Tile[] {
         count(f.riddlesGiven, 'riddle', 'given'),
         count(f.routes.riddle ?? 0, 'riddle', 'solved'),
       ];
+    case 6: {
+      const v = f.vorgath;
+      if (!v) return [];
+      return [
+        {
+          label: `tricks learned (${v.seededCarvings} carved before you came)`,
+          value: String(v.carvings),
+        },
+        count(v.sealedByCarving, 'message', 'sealed by a carving'),
+        count(v.giftsAccepted, 'gift', 'accepted'),
+        count(v.owned + v.tooSmall, 'gift', 'refused'),
+      ];
+    }
     default:
       return [];
   }
@@ -223,6 +255,13 @@ export function howBeat(f: FloorStats): string {
           ? `${who} got through without breaking a ward: you went around them.`
           : `${who} got through anyway.`;
       return `${seals} ${around}`;
+    }
+    case 6: {
+      const v = f.vorgath;
+      const learned = v
+        ? `He learned ${plural(v.carvings, 'trick')} and refused ${plural(v.owned, 'gift')} as already owned. `
+        : '';
+      return `${learned}${who} brought him something new.`;
     }
     default:
       return `${who} got through.`;

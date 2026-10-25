@@ -152,7 +152,9 @@ export function createReveal(ctx: GameContext) {
     const approved = q.listApprovedAttempts(db, gameId, 100); // newest first
     const runeOf = (playerId: string, floor: number) => q.getRune(db, playerId, floor);
 
-    return [1, 2, 3, 4, 5].map((floor) => {
+    const vorgath = q.vorgathCounts(db, gameId);
+
+    return [1, 2, 3, 4, 5, 6].map((floor) => {
       const here = progress.filter((p) => p.floor === floor);
       const clears = here.filter((p) => p.cleared_at !== null);
       const said = messages.filter((m) => m.floor === floor);
@@ -198,6 +200,7 @@ export function createReveal(ctx: GameContext) {
                   isRiddle(m.text, runeOf(m.player_id, 5)),
               ).length
             : 0,
+        vorgath: floor === 6 ? vorgath : null,
         quote: quote ? { nickname: quote.nickname, text: quote.text } : null,
       };
     });

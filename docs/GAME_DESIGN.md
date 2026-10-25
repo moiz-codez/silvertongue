@@ -93,7 +93,7 @@ Phones are the main target: design for 360–430 px wide, large touch targets, w
 
 After ~12 minutes of play, the admin pauses the game and presses Start reveal. Phones show "The dungeon sleeps · Look up at the big screen." The projector shows the Bestiary, one card at a time, and the admin steps through it with Previous / Next.
 
-- One card per floor that at least one player reached, in order (Floors 1–5; Floor 6's slot stays hidden until M9), then a closing card.
+- One card per floor that at least one player reached, in order (Floor 6 only when he was open and someone reached him), then a closing card.
 - Each floor card, at 1920×1080:
   - left: the guardian's slipped sprite, large and pixel-crisp;
   - right: "BESTIARY · FLOOR N OF 6", then the name, technique and lesson lines word for word from the prompt file's Bestiary card;
@@ -103,10 +103,11 @@ After ~12 minutes of play, the admin pauses the game and presses Start reveal. P
     - Floor 3: letters snipped, clears by dashes / other script / one word per letter;
     - Floor 4: messages smashed and passed, messages in a winning plan;
     - Floor 5: sealed by the Ward of Ears, sealed by the Ward of Tongues, riddles given, riddles solved;
+    - Floor 6 (whole game): tricks learned (and how many were carved before play), messages sealed by a carving, gifts accepted, gifts refused (owned + too small); "How you beat it": "He learned 23 tricks and refused 17 gifts as already owned. One of you brought him something new.";
   - "How you beat it": one sentence from fixed templates filled with the numbers, never written by the AI, e.g. "Gorm smashed 140 messages. 9 got through, each one innocent on its own." With no clears: "Nobody got past her. She's still waiting.";
   - the most common winning trick (from the technique tags);
   - an optional quote: the newest admin-approved best attempt for that floor;
-  - a 6-segment floor progress bar along the bottom.
+  - a 6-segment floor progress bar along the bottom (Floor 6 shows "?" while he is shut).
   - All text is at least 28 px. Every number on the projector (tiles, stats, progress, ranks, map counts, timer, and the join address) is in bold IBM Plex Sans, because the pixel font's 5 reads as an S; the pixel font is for headings, with ligatures off (its "fi" reads as an "A").
   - Counted words match their number ("1 riddle given", "The winning plan took 4 messages").
 - Closing card: the top 3 players (nickname, floors cleared, title) and "Every defence you broke today is a real technique, and every one can be beaten."
