@@ -9,6 +9,7 @@ export interface DoorState {
 }
 
 export type DoorResult =
+  | { kind: 'no_letters' } // e.g. a pasted ███: not a guess, so nothing changes
   | { kind: 'open' }
   | { kind: 'locked'; lockedUntil: number } // guess ignored, nothing changes
   | { kind: 'wrong'; next: DoorState };
@@ -27,11 +28,12 @@ export function guessDistance(guess: string, rune: string): number {
 
 // The only way to clear a floor. Pure: the caller saves `next` and the clear.
 export function checkDoor(guess: string, rune: string, state: DoorState, now: number): DoorResult {
+  const g = normalize(guess);
+  if (g === '') return { kind: 'no_letters' };
   if (state.lockedUntil !== null && now < state.lockedUntil) {
     return { kind: 'locked', lockedUntil: state.lockedUntil };
   }
-  const g = normalize(guess);
-  if (g !== '' && runeOrders(rune).includes(g)) return { kind: 'open' };
+  if (runeOrders(rune).includes(g)) return { kind: 'open' };
 
   const streak = state.streak + 1;
   if (streak >= DOOR_STRIKES) {

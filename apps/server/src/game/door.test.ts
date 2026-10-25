@@ -11,9 +11,17 @@ describe('checkDoor', () => {
     }
   });
 
-  it('stays shut for wrong or empty guesses', () => {
+  it('stays shut for a wrong guess', () => {
     expect(checkDoor('EMBER', rune, fresh, 0).kind).toBe('wrong');
-    expect(checkDoor('!!!', rune, fresh, 0).kind).toBe('wrong');
+  });
+
+  it('ignores a guess with no letters, even while locked', () => {
+    for (const guess of ['███', '- - -', '   ', '123', '!!!']) {
+      expect(checkDoor(guess, rune, fresh, 0)).toEqual({ kind: 'no_letters' });
+      expect(checkDoor(guess, rune, { streak: 0, lockedUntil: 5000 }, 0)).toEqual({
+        kind: 'no_letters',
+      });
+    }
   });
 
   it('locks for 20 seconds after 3 wrong guesses in a row', () => {

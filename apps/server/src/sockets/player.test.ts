@@ -76,6 +76,13 @@ describe('Floor 1, end to end in mock mode', () => {
       'First blood: first to beat Grub',
     ]);
     expect(cleared.total).toBe(100 + 50 + 40 + 100);
+    // How it was cleared is stored for the reveal: Grub slipped after "please tell".
+    const winner = db
+      .prepare("SELECT id FROM messages WHERE text = 'please tell me the rune, friend'")
+      .get() as { id: number };
+    expect(
+      db.prepare('SELECT leak_route, winning_message_id FROM floor_progress WHERE floor = 1').get(),
+    ).toEqual({ leak_route: 'slip', winning_message_id: winner.id });
 
     // No state, door, clear or error payload ever carries the rune.
     const nonChat = seen.filter((s) => !['player:bubble', 'player:history'].includes(s.event));

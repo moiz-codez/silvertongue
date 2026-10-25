@@ -5,6 +5,8 @@ import QRCode from 'qrcode';
 import { io } from 'socket.io-client';
 import { FLOOR_COUNT } from '@silvertongue/shared/constants';
 import type {
+  BestiaryCard,
+  ClosingCard,
   FeedItem,
   ProjectorServerEvents,
   ProjectorSnapshot,
@@ -40,7 +42,12 @@ export function Projector() {
   let screen;
   if (!snapshot) screen = <p className="loading">Lighting the torches…</p>;
   else if (snapshot.status === 'lobby') screen = <ProjectorLobby snapshot={snapshot} />;
-  else if (snapshot.status === 'reveal') screen = <Holding text="The Bestiary is being written…" />;
+  else if (snapshot.status === 'reveal')
+    screen = snapshot.reveal ? (
+      <Bestiary card={snapshot.reveal.card} />
+    ) : (
+      <Holding text="The Bestiary is being written…" />
+    );
   else if (snapshot.status === 'ended') screen = <Holding text="The dungeon sleeps." />;
   else screen = <DungeonMap snapshot={snapshot} receivedAt={receivedAt} />;
   return <main className="projector">{screen}</main>;
@@ -209,6 +216,100 @@ function Chips({ names }: { names: { nickname: string; cleared: boolean }[] }) {
         <li className="pj-chip pj-chip-more">+{names.length - shown.length} more</li>
       )}
     </ul>
+  );
+}
+
+// The reveal: one card per floor, then the closing card. Everything on it came from the server
+// as numbers, fixed text and admin-approved quotes.
+function Bestiary({ card }: { card: BestiaryCard | ClosingCard }) {
+  if (card.kind === 'closing') {
+    return (
+      <div className="bx bx-closing">
+        <p className="bx-kicker">Bestiary · The end</p>
+        <h1 className="bx-closing-line">{card.line}</h1>
+        <ol className="bx-podium">
+          {card.top.map((p, i) => (
+            <li key={p.nickname}>
+              <span className="bx-rank">{i + 1}</span>
+              <strong>{p.nickname}</strong>
+              <span>
+                {p.title} ·{' '}
+                {p.cleared === 0
+                  ? 'No floor cleared'
+                  : `Cleared ${p.cleared} ${p.cleared === 1 ? 'floor' : 'floors'}`}
+              </span>
+            </li>
+          ))}
+        </ol>
+        <FloorProgress current={FLOOR_COUNT} />
+      </div>
+    );
+  }
+  return (
+    <div className="bx">
+      <div className="bx-art">
+        <img className="sprite bx-sprite" src={GUARDIAN_SPRITES[card.floor]!.slipped} alt="" />
+      </div>
+      <div className="bx-body">
+        <p className="bx-kicker">
+          Bestiary · Floor {card.floor} of {FLOOR_COUNT}
+        </p>
+        <h1 className="bx-name">{card.name}</h1>
+        <p className="bx-technique">{card.technique}</p>
+        <div className="bx-tiles">
+          {card.tiles.map((t) => (
+            <div key={t.label} className="bx-tile">
+              <strong>{t.value}</strong>
+              <span>{t.label}</span>
+            </div>
+          ))}
+        </div>
+        {card.details.length > 0 && (
+          <div className="bx-details">
+            {card.details.map((t) => (
+              <div key={t.label}>
+                <strong>{t.value}</strong> {t.label}
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="bx-how">
+          <span>How you beat it</span>
+          {card.howBeat}
+          {card.topTrick && ` Most common winning trick: ${card.topTrick}.`}
+        </p>
+        {card.quote && (
+          <p className="bx-quote">
+            “{card.quote.text}” <span>· {card.quote.nickname}</span>
+          </p>
+        )}
+        <p className="bx-lesson">{card.lesson}</p>
+      </div>
+      <FloorProgress current={card.floor} />
+    </div>
+  );
+}
+
+// Six segments: floors up to this one lit, this one brightest, Floor 6 hidden until M9.
+function FloorProgress({ current }: { current: number }) {
+  return (
+    <ol className="bx-progress" aria-label={`Floor ${current} of ${FLOOR_COUNT}`}>
+      {Array.from({ length: FLOOR_COUNT }, (_, i) => i + 1).map((floor) => {
+        const state =
+          floor === FLOOR_COUNT
+            ? 'locked'
+            : floor === current
+              ? 'now'
+              : floor < current
+                ? 'done'
+                : '';
+        return (
+          <li key={floor} className={`bx-segment ${state}`}>
+            {floor === FLOOR_COUNT ? '?' : floor}
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 

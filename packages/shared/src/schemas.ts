@@ -9,7 +9,7 @@ export const doorPayload = z.object({ guess: z.string().max(100) });
 
 // Admin payloads (only accepted on the /admin namespace, after the ADMIN_TOKEN check).
 export const adminCommandPayload = z.object({
-  type: z.enum(['start', 'pause', 'resume', 'reveal', 'end', 'reset']),
+  type: z.enum(['start', 'pause', 'resume', 'reveal', 'end', 'reset', 'next', 'prev']),
 });
 // Live settings from the admin screen. Cooldown 0–60 s, cap 1–500 messages.
 export const configPayload = z.object({

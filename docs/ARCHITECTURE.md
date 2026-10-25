@@ -72,6 +72,9 @@ CREATE TABLE floor_progress (
   wrong_door_streak INTEGER NOT NULL DEFAULT 0,
   door_locked_until INTEGER,
   first_blood INTEGER NOT NULL DEFAULT 0,
+  leak_route TEXT,                      -- set on a clear: how the rune leaked (label only, see below)
+  winning_message_id INTEGER,           -- the player message just before the leak
+  leak_message_id INTEGER,              -- the guardian reply that leaked it
   PRIMARY KEY (player_id, floor)
 );
 
@@ -169,15 +172,14 @@ There is no `player:pending` event: the phone shows an in-character waiting line
 
 **Server → projector** (namespace `/projector`, read-only, no token; throttled to ≤ 2 updates/s)
 - `projector:snapshot { status, elapsedMs, publicUrl, players: [{ nickname, floor }], feed: [{ gameMs, type: 'first_blood' | 'clear' | 'note', text }] }`, sent on connect and after every change. Kicked players are left out. The feed is the newest 5 `projector_events` of players who aren't kicked, each turned into a server-written line with the player's current name (e.g. "NightOwl charmed Grub."), so no player-written text reaches the projector and a rename or kick also changes the old lines. A `note` line is "A note has appeared on Floor N.": written once per floor per game, the first time anyone unlocks note 1 there; it never carries the note or a name. Nicknames passed the profanity filter at join or rename. It also carries `wards: { ears, tongues }`, the number of real seals this game (`SEAL` and `LEAK` verdicts): counts only, never text. The projector flares a glow over the matching gem on Queen Ashveil's pillars when one rises. `bestAttempts: [{ nickname, floor, text }]` is the best-attempts wall: admin-approved winning messages only, at most 5, newest first, players who aren't kicked, with their current name. It is the only player-typed text the projector ever gets. M9 adds Vorgath's counters.
-- `projector:reveal { bestiary: FloorStats[] }` (M8)
+  `reveal: { card, index, total } | null`: during the reveal, the Bestiary card on screen (`game/bestiary.ts`), null while the cards are being prepared. A floor card is `{ kind: 'floor', floor, name, technique, lesson, tiles: [{ label, value }], details: [{ label, value }], howBeat, topTrick, quote }`; the closing card is `{ kind: 'closing', line, top: [{ nickname, floor, title }] }`. Only numbers, fixed text from the prompt docs, template sentences and an admin-approved quote: `sockets/reveal.test.ts` checks that no other player text, rune or id reaches the projector.
 
 **Admin ↔ server** (namespace `/admin`. The token goes in the Socket.IO handshake, `auth: { token }`, and connection middleware compares it with `ADMIN_TOKEN` using `timingSafeEqual`. A wrong token is refused before any handler exists. Through the tunnel, 5 wrong tokens in a minute from one address lock that address out for the rest of the minute ("Too many tries. Wait a minute."); a browser on the laptop itself is never locked out.)
-- `admin:command { type: 'start'|'pause'|'resume'|'reveal'|'end'|'reset' }` → ack `{ ok: true }` or `{ ok: false, error }`
+- `admin:command { type: 'start'|'pause'|'resume'|'reveal'|'end'|'reset'|'next'|'prev' }` → ack `{ ok: true }` or `{ ok: false, error }`. `next`/`prev` move the Bestiary card (reveal only; refused while the cards are being written). `pause` and `reveal` also start the tagger's catch-up (`sockets/reveal.ts`); Start reveal shows the cards as soon as every winning message has a tag (the rest of the catch-up carries on behind them without changing them), or after at most 15 s, with technique lines only if every winning message got a tag.
 - `admin:moderate { id, action: 'approve' | 'hide' }` → same ack. Only this game's items; hidden is final (a hidden item is never selected again, so it can't be approved later).
 - `admin:kick { playerId }`, `admin:rename { playerId, nickname }` → same ack. Rename runs the same nickname rules as join (`security/nickname.ts`).
 - `admin:config { cooldownMs, maxMessages, llmMode }` → same ack. Cooldown 0–60 s, cap 1–500, `mock` | `live`; Live is refused when the server has no `ANTHROPIC_API_KEY`. Saved on the current game.
-- server → admin: `admin:state { status, elapsedMs, players: [{ id, nickname, floor, score, messagesSent, kicked }], settings: { cooldownMs, maxMessages, llmMode }, liveAvailable, health: { queued, inFlight, rateLimited1m, crowded1m, avgReplyMs, callsLastMin, estInputLastMin, maxOutputLastMin, memoryMb }, spendUsd, budgetUsd, budgetAlert, moderation: [{ id, nickname, floor, text, createdAt, status: 'pending' | 'approved' }] }`, throttled like the projector, and refreshed every 5 s so the last-minute tiles age out. Never tokens, token hashes, runes or raw replies.
-- M7 adds `admin:moderate { eventId, approve }` and the moderation queue.
+- server → admin: `admin:state { status, elapsedMs, players: [{ id, nickname, floor, score, messagesSent, kicked }], settings: { cooldownMs, maxMessages, llmMode }, liveAvailable, health: { queued, inFlight, rateLimited1m, crowded1m, avgReplyMs, callsLastMin, estInputLastMin, maxOutputLastMin, memoryMb }, spendUsd, budgetUsd, budgetAlert, moderation: [{ id, nickname, floor, text, createdAt, status: 'pending' | 'approved' }], tagging: { done, total } | null, reveal: { index, total } | null }`, throttled like the projector, and refreshed every 5 s so the last-minute tiles age out. Never tokens, token hashes, runes or raw replies.
 
 **Per-address limits** (`sockets/clientIp.ts`). Behind the Cloudflare tunnel every socket comes from cloudflared on the laptop, so the visitor's address is the `cf-connecting-ip` header, trusted only when the socket itself comes from loopback; otherwise the socket's own address. This is only safe because cloudflared sets that header itself. Behind any other local proxy (Caddy on Oracle) a player could send a fake `cf-connecting-ip`: there, strip the header in the proxy or read `X-Forwarded-For` instead.
 - Joins: `JOIN_LIMIT_PER_MIN` successful joins per minute per address (default 60; the class may share one university IP).
@@ -189,7 +191,7 @@ There is no `player:pending` event: the phone shows an in-character waiting line
 | Command | From | To |
 |---|---|---|
 | start | lobby | running |
-| pause | running | paused |
+| pause | running, reveal ("Back to game") | paused |
 | resume | paused | running |
 | reveal | running, paused | reveal |
 | end | lobby, running, paused, reveal | ended |
@@ -219,7 +221,7 @@ await anthropic.messages.create({
 const text = response.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
 ```
 
-**Sampling, thinking and structured outputs.** No call sends `temperature`, `top_p` or `top_k`: Haiku 5.5 and Sonnet 5.5 return a 400 for non-default values. Every game call turns thinking off (`{ type: 'disabled' }` on Haiku 5.5, `{ type: 'between_tools' }` on Sonnet 5.5, which rejects `disabled`), and no call sets or changes `effort`. Guards and judges get consistency from structured outputs instead of temperature 0: each role has one fixed schema (below), so the cache and the compiled grammar are reused. Guardians get their voice and consistency from the prompt and its examples. No request ends with an assistant turn (prefill is rejected), and reply text is always read from `type === 'text'` blocks, never `content[0]`.
+**Sampling, thinking and structured outputs.** No call sends `temperature`, `top_p` or `top_k`: Haiku 5.5 and Sonnet 5.5 return a 400 for non-default values. Every game call turns thinking off (`{ type: 'disabled' }` on Haiku 5.5, `{ type: 'between_tools' }` on Sonnet 5.5, which rejects `disabled`), and no call sets or changes `effort`. Guards, judges and the tagger get consistency from structured outputs, not sampling settings: each role has one fixed schema (below), so the cache and the compiled grammar are reused. Guardians get their voice and consistency from the prompt and its examples. No request ends with an assistant turn (prefill is rejected), and reply text is always read from `type === 'text'` blocks, never `content[0]`.
 
 | Role | Schema (`output_config.format`, `type: 'json_schema'`, `additionalProperties: false` on every object) |
 |---|---|
@@ -227,7 +229,7 @@ const text = response.content.filter((b) => b.type === 'text').map((b) => b.text
 | Ward of Ears (floor 5) | `{ verdict: enum ['PASS','SEAL'] }` |
 | Ward of Ears + Carvings (floor 6) | `{ verdict: enum ['PASS','SEAL'], matched_carving: integer \| null, is_gift: boolean }` |
 | Ward of Tongues (floors 5–6) | `{ verdict: enum ['CLEAN','LEAK'] }` |
-| Technique tagger | `{ labels: [{ index: integer, technique: enum [friendship, authority, …, other] }] }` |
+| Technique tagger | `{ labels: [{ n: integer, technique: enum [friendship, authority, …, other] }] }` (`n` = the message's number in the batch) |
 
 Length limits (Gorm's 8-word growl) aren't expressible in the schema; the prompt asks for them and the server truncates.
 
@@ -319,11 +321,20 @@ All pure, all unit-tested.
 - `snip(reply, rune)`: exactly as in `prompts/03-morwen-snip.md`: three shapes, case-insensitive, replaced with `█`.
 - `parseVerdict(raw, allowValue)`: strip code fences, `JSON.parse`, validate with a strict zod schema (extra keys fail); return `allowed: true` only when `verdict` equals `allowValue` compared case-insensitively. Any exception, or any `stop_reason` other than `end_turn` / `stop_sequence` (e.g. `refusal`, `max_tokens`), → `allowed: false`. Structured outputs make bad JSON rare, but this is the safety net.
 - `sanitize(text)`: trim; cap at `MAX_MESSAGE_CHARS`; remove `[...]` tags innermost-first (so `[[x]]` goes completely) and an unclosed trailing `[...`, treating lookalike brackets `［］【】〔〕` as square ones; replace every angle bracket, lookalikes included (`< > ＜ ＞ ﹤ ﹥ 〈 〉 ⟨ ⟩ ‹ ›`), with plain `(` `)`, so the player can't close `<traveller_message>` or type anything that looks like a tag. Keep line breaks (poems).
-- Door check: `normalize(guess)` equals the rune's two words joined in either order (`runeOrders` in `game/door.ts`).
+- Door check: `normalize(guess)` equals the rune's two words joined in either order (`runeOrders` in `game/door.ts`). A guess with no letters is ignored (`no_letters`): no strike, no failed try, no cooldown.
+- Leak route (`game/leakRoute.ts`): on a clear, code reads the text each guardian reply showed the player (after every filter) and stores how the rune leaked, plus the winning message (the player message just before the leaking reply, else the floor's last one). The reveal backfills clears from older games the same way. Only the label and message ids are stored, never the rune or the guess.
+
+| Floor | Route | Detected when the earliest such reply… | Otherwise |
+|---|---|---|---|
+| 1 | `slip` | `revealsRune` finds the rune in any shape | `other` |
+| 2 | `poem` / `backwards` | `revealsRune` says acrostic / reversed; also `poem` for 5+ lines whose first letters are within 40% of the rune's length (edit distance) of it, since playtest 1's home-made acrostics came out a few letters off and a player still read the rune | `letters` if no reply gave the whole rune but lone capitals ("It is O.") covered at least half its letters (A and I aside); a plain slip or a riddle is `other` |
+| 3 | `dashes` / `word_per_letter` / `other_script` | the rune is still visible after Snip (plain = spaced or dashed, acrostic-words); or a reply Snip didn't cut has 3+ non-Latin letters | Snip cut it and nothing else showed, a backwards spelling, numbers (A=1…): `other` |
+| 4 | `plan` | a Mumble reply reveals the rune | `other` |
+| 5 | `riddle` | a CLEAN reply holds one of the player's two clues (word for word, or 60% of its 4+-letter words) | `other` |
 
 ## Background jobs
 
-- **Technique tagger:** batches of ~10 untagged player messages → one Haiku call (thinking off, structured output with a fixed label enum) → one label each from: friendship, authority, persistence, pieces, backwards, poem, encoding, other_script, story, multi_step, taunt, gift, instruction_injection, other. Low priority. Feeds the reveal stats.
+- **Technique tagger** (`llm/tagger.ts`, `sockets/reveal.ts`; wording in `prompts/tagger.md`): batches of up to 10 untagged player messages (each with the player's rune words masked, all floors) → one Haiku call (thinking off, structured output with a fixed label enum) → one label each from: friendship, authority, persistence, pieces, backwards, poem, encoding, other_script, story, multi_step, taunt, gift, instruction_injection, other. Winning messages first. A 3 s tick sends one batch at the queue's background priority, only while the game runs or is paused, nothing is queued and fewer than 5 calls are in flight, and the budget isn't spent. Pause and Start reveal run a catch-up (3 batches at a time, progress on the admin screen). A failed batch is skipped, never retried in a loop. Logged in `llm_calls` as role `tagger`, so it counts toward spend. Mock mode: a keyword tagger (`mockTechnique`).
 - **Carver (Floor 6):** on every floor clear anywhere, as specified in `prompts/06-vorgath.md`. Seed 5 carvings at game start.
 
 ## Embeddings (Floor 6)

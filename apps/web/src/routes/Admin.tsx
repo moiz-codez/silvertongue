@@ -17,7 +17,7 @@ import { useNow } from '../useGame.ts';
 import '../styles/admin.css';
 
 type AdminSocket = Socket<AdminServerEvents, AdminClientEvents>;
-type Command = 'start' | 'pause' | 'resume' | 'reveal' | 'end' | 'reset';
+type Command = 'start' | 'pause' | 'resume' | 'reveal' | 'end' | 'reset' | 'next' | 'prev';
 
 const TOKEN_KEY = 'silvertongue-admin-token';
 
@@ -49,7 +49,11 @@ const BUTTONS: Record<GameStatus, { command: Command; label: string; kind: strin
     { command: 'resume', label: 'Resume game', kind: 'primary' },
     { command: 'reveal', label: 'Start reveal', kind: 'plain' },
   ],
-  reveal: [],
+  reveal: [
+    { command: 'prev', label: 'Previous', kind: 'plain' },
+    { command: 'next', label: 'Next', kind: 'primary' },
+    { command: 'pause', label: 'Back to game', kind: 'plain' },
+  ],
   ended: [],
 };
 const NEEDS_CONFIRM: Command[] = ['end', 'reset'];
@@ -200,6 +204,18 @@ function Dashboard({
       {error && (
         <p className="admin-error" role="alert">
           {error}
+        </p>
+      )}
+      {state.tagging && (
+        <p className="admin-note" role="status">
+          Tagging techniques for the Bestiary: {state.tagging.done} / {state.tagging.total}
+        </p>
+      )}
+      {state.status === 'reveal' && (
+        <p className="admin-note" role="status">
+          {state.reveal
+            ? `Bestiary: card ${state.reveal.index + 1} of ${state.reveal.total} on the projector`
+            : 'Writing the Bestiary… (at most 15 s)'}
         </p>
       )}
       {state.budgetAlert && (

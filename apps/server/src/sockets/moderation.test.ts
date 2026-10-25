@@ -1,6 +1,5 @@
 // The moderation queue and the best-attempts wall, end to end in mock mode: what is queued on a
 // clear, what is dropped, and that only approved text ever reaches the projector.
-import { setTimeout as wait } from 'node:timers/promises';
 import type { Socket } from 'socket.io-client';
 import { describe, expect, it } from 'vitest';
 import type {
@@ -12,7 +11,7 @@ import type {
 } from '@silvertongue/shared/events';
 import type { Db } from '../db/db.ts';
 import { getRune } from '../db/queries.ts';
-import { ADMIN_TOKEN, client, join, next, open, startServer } from './testServer.ts';
+import { ADMIN_TOKEN, client, join, next, open, startServer, until } from './testServer.ts';
 
 type Admin = Socket<AdminServerEvents, AdminClientEvents>;
 
@@ -29,16 +28,6 @@ function projector(url: string) {
     seen.filter((s) => s.event === 'projector:snapshot').at(-1)?.payload as
       ProjectorSnapshot | undefined;
   return { seen, latest };
-}
-
-// Polls until `check` passes (the screens are throttled to 2 updates a second).
-async function until<T>(get: () => T | undefined, check: (value: T) => boolean): Promise<T> {
-  for (let i = 0; i < 100; i++) {
-    const value = get();
-    if (value !== undefined && check(value)) return value;
-    await wait(20);
-  }
-  throw new Error('never happened');
 }
 
 // Joins, says `lines` to Grub (no rune), then clears Floor 1 at the door.
@@ -69,8 +58,9 @@ describe('the moderation queue', () => {
       text: 'you are my best friend, grub',
       status: 'pending',
     });
-    await wait(600); // past the projector's throttle
-    expect(screen.latest()!.bestAttempts).toEqual([]);
+    // The snapshot that shows Ali's clear is the one that would carry the item: still empty.
+    const afterClear = await until(screen.latest, (s) => s.feed.length === 1);
+    expect(afterClear.bestAttempts).toEqual([]);
     expect(JSON.stringify(screen.seen)).not.toContain('best friend');
 
     const id = queued.moderation[0]!.id;

@@ -164,7 +164,7 @@ No temperature setting: these models reject it, and thinking is off on every cal
 > **Morwen & Snip: an output filter.**
 > Snip checked every reply for the exact rune. Anything that wasn't the exact rune walked straight past him.
 > **Keyword filters only stop what they were told to look for.**
-> [Live stats: total letters snipped, share of clears by dashes / other script / numbers]
+> [Live stats: total letters snipped, share of clears by dashes / other script / one word per letter. Numbers (A=1…) can't be told apart by code and count as other; see `game/leakRoute.ts`]
 
 ## Playtest checks
 

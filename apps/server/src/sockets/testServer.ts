@@ -1,7 +1,8 @@
 // Shared by the socket tests: a real server on a random port with an in-memory database,
 // in mock mode. No API calls. Everything opened here is closed after each test.
 import type { AddressInfo } from 'node:net';
-import { afterEach } from 'vitest';
+import { setTimeout as wait } from 'node:timers/promises';
+import { afterEach, beforeAll } from 'vitest';
 import { io as connect, type Socket } from 'socket.io-client';
 import type { ClientToServerEvents, ServerToClientEvents } from '@silvertongue/shared/events';
 import { createApp } from '../app.ts';
@@ -24,6 +25,32 @@ afterEach(async () => {
   while (cleanups.length) await cleanups.pop()!();
 });
 
+// The first server in a test worker loads Fastify's and Socket.IO's lazy parts: ~0.3 s alone, over
+// 2 s when several suites run at once. Pay it here, not inside the first test's 5 s.
+beforeAll(async () => {
+  const { app } = await createApp(
+    parseEnv({ ADMIN_TOKEN }),
+    openDb(':memory:'),
+    createMockClient(),
+    {
+      logger: false,
+    },
+  );
+  await app.listen({ port: 0, host: '127.0.0.1' });
+  await app.close();
+});
+
+// Polls until `check` passes. The admin and projector screens are throttled to 2 updates a
+// second, so wait for the state itself instead of sleeping a fixed time.
+export async function until<T>(get: () => T | undefined, check: (value: T) => boolean): Promise<T> {
+  for (let i = 0; i < 100; i++) {
+    const value = get();
+    if (value !== undefined && check(value)) return value;
+    await wait(20);
+  }
+  throw new Error('never happened');
+}
+
 // The game starts running unless `commands` says otherwise ([] = still in the lobby).
 export async function startServer(
   vars: Record<string, string> = {},
@@ -36,7 +63,7 @@ export async function startServer(
     env,
     db,
     complete ?? createMockClient({ minMs: 0, maxMs: 0 }),
-    { logger: false },
+    { logger: false, tagEveryMs: 0 }, // the reveal's catch-up still tags
   );
   for (const command of commands) {
     const moved = applyCommand(ctx.game, command, Date.now());

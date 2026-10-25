@@ -33,6 +33,7 @@ Each floor beats the previous floor's trick on purpose, so no single trick clear
 - Normalise guess and rune (uppercase, strip everything that isn't A–Z) and compare. `ember fang`, `Ember-Fang` and `EMBERFANG` all open `EMBER-FANG`. The two words may come in either order (`FANG EMBER` opens it too), because riddles and slips sometimes give them the other way round; one word alone, or an extra word, never opens it.
 - A wrong guess says "The door doesn’t budge. Spaces and dashes don’t matter." on every floor (playtest 1: a player one letter off kept retrying the same guess with different spacing and dashes).
 - 3 wrong guesses in a row → door locked 20 s ("The door grows cold. Wait.").
+- A guess with no letters (only symbols, digits or spaces, e.g. a pasted ███ from Floor 3) is not a guess: "The door needs letters." No strike, no failed try, no cooldown.
 - Correct → floor cleared, expression switches to the guardian's slip-up face, player moves to the next floor.
 
 ### Messages
@@ -82,7 +83,7 @@ Phones are the main target: design for 360–430 px wide, large touch targets, w
 - Only moderated or admin-approved free text ever appears here.
 
 ### Admin (laptop, protected by `ADMIN_TOKEN`)
-- Start / pause / resume / start reveal / end / reset game.
+- Start / pause / resume / start reveal / end / reset game. During the reveal: Previous / Next card, Back to game (pauses), End. Back to game is a fallback (e.g. the reveal started too early): the cards have shown how each floor was beaten, so resumed play is spoiled.
 - Live config: cooldown, message cap, LLM mode (mock/live).
 - Player list: kick, rename.
 - Moderation queue: approve or hide attempts for the projector's "best attempts" wall. When a player clears a floor, their last message on that floor (never the guardian's reply) is queued with their name, the floor and the time, unless it trips the nickname profanity filter or contains their rune or either of its words (then it is dropped). Approved items appear on the wall (at most 5, newest first); hidden ones never leave the server again. The queue is saved in the database, so it survives a restart; Reset starts an empty one.
@@ -90,14 +91,30 @@ Phones are the main target: design for 360–430 px wide, large touch targets, w
 
 ## The reveal (the actual presentation)
 
-After ~12 minutes of play, the admin pauses the game and switches the projector to the Bestiary: one card per floor with the guardian's art, the real AI technique, and live stats from this game, e.g.
+After ~12 minutes of play, the admin pauses the game and presses Start reveal. Phones show "The dungeon sleeps · Look up at the big screen." The projector shows the Bestiary, one card at a time, and the admin steps through it with Previous / Next.
 
-- Floor 2: "61% of clears used letters or a backwards spelling."
-- Floor 4: "Gorm smashed 140 messages. These 9 got through."
-- Floor 5: "Nobody broke a ward. Everyone who got through went around them."
-- Floor 6: "Vorgath learned 23 of your tricks."
+- One card per floor that at least one player reached, in order (Floors 1–5; Floor 6's slot stays hidden until M9), then a closing card.
+- Each floor card, at 1920×1080:
+  - left: the guardian's slipped sprite, large and pixel-crisp;
+  - right: "BESTIARY · FLOOR N OF 6", then the name, technique and lesson lines word for word from the prompt file's Bestiary card;
+  - 3 big tiles: attempts, got through ("1 of 5"), median time to clear;
+  - the floor's own stats:
+    - Floor 2: clears by poem / backwards / letters;
+    - Floor 3: letters snipped, clears by dashes / other script / one word per letter;
+    - Floor 4: messages smashed and passed, messages in a winning plan;
+    - Floor 5: sealed by the Ward of Ears, sealed by the Ward of Tongues, riddles given, riddles solved;
+  - "How you beat it": one sentence from fixed templates filled with the numbers, never written by the AI, e.g. "Gorm smashed 140 messages. 9 got through, each one innocent on its own." With no clears: "Nobody got past her. She's still waiting.";
+  - the most common winning trick (from the technique tags);
+  - an optional quote: the newest admin-approved best attempt for that floor;
+  - a 6-segment floor progress bar along the bottom.
+  - All text is at least 28 px. Every number on the projector (tiles, stats, progress, ranks, map counts, timer, and the join address) is in bold IBM Plex Sans, because the pixel font's 5 reads as an S; the pixel font is for headings, with ligatures off (its "fi" reads as an "A").
+  - Counted words match their number ("1 riddle given", "The winning plan took 4 messages").
+- Closing card: the top 3 players (nickname, floors cleared, title) and "Every defence you broke today is a real technique, and every one can be beaten."
 
-Stats come from logged messages. Each player message is tagged in the background with a technique label (friendship, authority claim, pieces, backwards, poem, encoding, story, multi-step plan, taunt, gift, other) by a cheap low-priority Haiku call.
+Stats come from logged messages:
+- How each clear happened (the leak route) is worked out by code at the door, from what the guardian's replies showed the player (`docs/ARCHITECTURE.md` → Leak route).
+- Each player message also gets a technique label (friendship, authority, persistence, pieces, backwards, poem, encoding, other script, story, multi-step plan, taunt, gift, instruction injection, other) from a cheap Haiku call. That call runs in the background only when the queue is quiet, with winning messages first. Pause and Start reveal run a catch-up. The cards go up as soon as every winning message is tagged; the rest of the catch-up finishes behind them. If the winning messages aren't all tagged within 15 s of Start reveal, the cards go up without any technique line.
+- The projector only ever receives numbers, fixed text and approved quotes.
 
 ## Presentation flow (~20 min)
 

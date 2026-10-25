@@ -41,8 +41,14 @@
   --radius-bubble: 18px;
 }
 
+/* The pixel font's "fi" ligature reads as an "A" ("output filter" showed as "output Alter"),
+   so ligatures are off everywhere (inherited by every element, buttons and inputs too). */
 * {
   box-sizing: border-box;
+  font-variant-ligatures: none;
+  font-feature-settings:
+    'liga' 0,
+    'clig' 0;
 }
 
 html,

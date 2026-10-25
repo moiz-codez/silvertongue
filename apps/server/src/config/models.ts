@@ -44,6 +44,8 @@ export const ROLES = {
   ward_ears: { model: MODELS.haiku, maxTokens: 30 },
   ashveil: { model: MODELS.haiku, maxTokens: 150 },
   ward_tongues: { model: MODELS.haiku, maxTokens: 30 },
+  // Background, for the reveal: 10 labels of ~12 tokens each, with room to spare.
+  tagger: { model: MODELS.haiku, maxTokens: 300 },
 } as const;
 
 export type RoleName = keyof typeof ROLES;

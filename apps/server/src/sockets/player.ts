@@ -26,6 +26,7 @@ import { SEALED } from '../floors/05-ashveil/pipeline.ts';
 import type { JudgeResult } from '../floors/judge.ts';
 import type { Turn } from '../floors/messages.ts';
 import { checkDoor, guessDistance } from '../game/door.ts';
+import { leakRoute } from '../game/leakRoute.ts';
 import { HINT_AT, unlockedNotes } from '../game/hints.ts';
 import { generateRunes } from '../game/runes.ts';
 import { scoreFloorClear } from '../game/scoring.ts';
@@ -528,6 +529,10 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
           now,
         );
 
+        if (result.kind === 'no_letters') {
+          socket.emit('player:door-result', { correct: false, lockedMs: 0, noLetters: true });
+          return;
+        }
         if (result.kind === 'locked') {
           socket.emit('player:door-result', { correct: false, lockedMs: result.lockedUntil - now });
           return;
@@ -560,12 +565,10 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
           messagesUsed: progress.messages_used,
           firstBlood,
         });
+        const floorMessages = q.listFloorMessages(db, id, floor);
         // Their last message on this floor goes to the admin's queue for the best-attempts wall,
         // unless it is rude or gives away any part of this rune.
-        const winning = q
-          .listFloorMessages(db, id, floor)
-          .filter((m) => m.speaker === 'player')
-          .at(-1)?.text;
+        const winning = floorMessages.filter((m) => m.speaker === 'player').at(-1)?.text;
         if (
           winning &&
           !isProfane(winning) &&
@@ -574,7 +577,14 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
         ) {
           q.insertAttempt(db, { gameId: ctx.game.id, playerId: id, floor, text: winning, now });
         }
-        q.clearFloor(db, { playerId: id, floor, points: score.total, firstBlood, now });
+        q.clearFloor(db, {
+          playerId: id,
+          floor,
+          points: score.total,
+          firstBlood,
+          clear: leakRoute(floor, floorMessages, rune), // for the reveal
+          now,
+        });
         // The projector turns this into "NightOwl charmed Grub." when it sends the feed.
         q.insertProjectorEvent(db, {
           gameId: ctx.game.id,
@@ -606,9 +616,10 @@ export function registerPlayerHandlers(io: PlayerServer, ctx: GameContext): Phon
   function checkBudget(): void {
     if (ctx.game.budget_alert_at !== null) return;
     if (q.gameSpendUsd(db, ctx.game.id) < env.BUDGET_USD) return;
-    if (ctx.game.status === 'running') ctx.runCommand('pause');
+    // The alert first, so the pause's tagger catch-up already sees the budget is spent.
     ctx.game = { ...ctx.game, budget_alert_at: Date.now() };
     q.saveGame(db, ctx.game, Date.now());
+    if (ctx.game.status === 'running') ctx.runCommand('pause');
   }
 
   function logCall(

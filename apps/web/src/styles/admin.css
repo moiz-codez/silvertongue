@@ -97,6 +97,11 @@
   color: var(--color-danger);
 }
 
+.admin-note {
+  margin: var(--space-3) 0 0;
+  color: var(--color-muted);
+}
+
 .admin-tiles {
   margin: var(--space-4) 0;
   display: grid;

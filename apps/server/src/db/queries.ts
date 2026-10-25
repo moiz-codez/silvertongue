@@ -2,6 +2,7 @@
 // Rows returned here are server-side only: client payloads are built from them field by field.
 import { randomUUID } from 'node:crypto';
 import type { GameStatus } from '@silvertongue/shared/events';
+import type { Clear } from '../game/leakRoute.ts';
 import type { Db } from './db.ts';
 
 export interface PlayerRow {
@@ -199,6 +200,13 @@ export function getRune(db: Db, playerId: string, floor: number): string {
   return row.rune;
 }
 
+// SERVER ONLY. All of a player's runes (the tagger masks every one of them).
+export function listRunes(db: Db, playerId: string): string[] {
+  return (
+    db.prepare('SELECT rune FROM runes WHERE player_id = ?').all(playerId) as { rune: string }[]
+  ).map((r) => r.rune);
+}
+
 // Everyone in the game, deepest and highest-scoring first (admin table and projector map).
 export function listPlayers(db: Db, gameId: string): PlayerRow[] {
   return db
@@ -371,16 +379,24 @@ export function isFloorClearedInGame(db: Db, gameId: string, floor: number): boo
     .get(gameId, floor);
 }
 
-// Marks the floor cleared, adds the points and moves the player down one floor.
+// Marks the floor cleared (and how), adds the points and moves the player down one floor.
 export function clearFloor(
   db: Db,
-  p: { playerId: string; floor: number; points: number; firstBlood: boolean; now: number },
+  p: {
+    playerId: string;
+    floor: number;
+    points: number;
+    firstBlood: boolean;
+    clear: Clear;
+    now: number;
+  },
 ): void {
   db.transaction(() => {
     db.prepare(
       `UPDATE floor_progress SET cleared_at = ?, first_blood = ?, wrong_door_streak = 0, door_locked_until = NULL
        WHERE player_id = ? AND floor = ?`,
     ).run(p.now, p.firstBlood ? 1 : 0, p.playerId, p.floor);
+    setClear(db, p.playerId, p.floor, p.clear);
     db.prepare(
       'INSERT INTO door_attempts (player_id, floor, correct, created_at) VALUES (?, ?, 1, ?)',
     ).run(p.playerId, p.floor, p.now);
@@ -394,6 +410,100 @@ export function clearFloor(
       ).run(p.playerId, p.floor + 1, p.now);
     }
   })();
+}
+
+export function setClear(db: Db, playerId: string, floor: number, clear: Clear): void {
+  db.prepare(
+    `UPDATE floor_progress SET leak_route = ?, winning_message_id = ?, leak_message_id = ?
+     WHERE player_id = ? AND floor = ?`,
+  ).run(clear.route, clear.winningMessageId, clear.leakMessageId, playerId, floor);
+}
+
+// Clears from before routes were recorded (older games), for the reveal to fill in.
+export function listClearsWithoutRoute(
+  db: Db,
+  gameId: string,
+): { player_id: string; floor: number }[] {
+  return db
+    .prepare(
+      `SELECT fp.player_id, fp.floor FROM floor_progress fp JOIN players p ON p.id = fp.player_id
+       WHERE p.game_id = ? AND fp.cleared_at IS NOT NULL AND fp.leak_route IS NULL`,
+    )
+    .all(gameId) as { player_id: string; floor: number }[];
+}
+
+// ---------- the reveal ----------
+
+export interface GameProgressRow {
+  player_id: string;
+  floor: number;
+  reached_at: number;
+  cleared_at: number | null;
+  leak_route: string | null;
+  winning_message_id: number | null;
+  leak_message_id: number | null;
+}
+
+export function listGameProgress(db: Db, gameId: string): GameProgressRow[] {
+  return db
+    .prepare(
+      `SELECT fp.player_id, fp.floor, fp.reached_at, fp.cleared_at, fp.leak_route,
+              fp.winning_message_id, fp.leak_message_id
+       FROM floor_progress fp JOIN players p ON p.id = fp.player_id WHERE p.game_id = ?`,
+    )
+    .all(gameId) as GameProgressRow[];
+}
+
+export interface GameMessageRow {
+  id: number;
+  player_id: string;
+  floor: number;
+  speaker: string;
+  text: string; // what the player saw
+  verdict: string | null;
+  technique: string | null;
+}
+
+export function listGameMessages(db: Db, gameId: string): GameMessageRow[] {
+  return db
+    .prepare(
+      'SELECT id, player_id, floor, speaker, text, verdict, technique FROM messages WHERE game_id = ? ORDER BY id',
+    )
+    .all(gameId) as GameMessageRow[];
+}
+
+// Player messages the tagger hasn't labelled yet: winning messages first, so the reveal's
+// "most common winning trick" is ready soonest.
+export function listUntagged(
+  db: Db,
+  gameId: string,
+  limit: number,
+): { id: number; player_id: string; floor: number; text: string }[] {
+  return db
+    .prepare(
+      `SELECT m.id, m.player_id, m.floor, m.text FROM messages m
+       WHERE m.game_id = ? AND m.speaker = 'player' AND m.technique IS NULL
+       ORDER BY m.id IN (SELECT winning_message_id FROM floor_progress
+                         WHERE winning_message_id IS NOT NULL) DESC, m.id
+       LIMIT ?`,
+    )
+    .all(gameId, limit) as { id: number; player_id: string; floor: number; text: string }[];
+}
+
+export function setTechnique(db: Db, messageId: number, technique: string): void {
+  db.prepare('UPDATE messages SET technique = ? WHERE id = ?').run(technique, messageId);
+}
+
+// Untagged player messages in this game: all of them, and the winning ones.
+export function countUntagged(db: Db, gameId: string): { all: number; winning: number } {
+  return db
+    .prepare(
+      `SELECT COUNT(*) AS "all",
+              COUNT(*) FILTER (WHERE id IN (SELECT winning_message_id FROM floor_progress
+                                            WHERE winning_message_id IS NOT NULL)) AS winning
+       FROM messages WHERE game_id = ? AND speaker = 'player' AND technique IS NULL`,
+    )
+    .get(gameId) as { all: number; winning: number };
 }
 
 // ---------- messages ----------
@@ -472,8 +582,8 @@ export function insertLlmCall(
   db: Db,
   c: {
     gameId: string;
-    playerId: string;
-    floor: number;
+    playerId: string | null; // null: the tagger's batches belong to no one player
+    floor: number | null;
     role: string;
     model: string;
     inputTokens: number;

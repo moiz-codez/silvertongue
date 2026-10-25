@@ -90,7 +90,14 @@ it('scopes first blood to one game', () => {
     runes,
     now: 1000,
   });
-  clearFloor(db, { playerId: ali, floor: 1, points: 100, firstBlood: true, now: 2000 });
+  clearFloor(db, {
+    playerId: ali,
+    floor: 1,
+    points: 100,
+    firstBlood: true,
+    clear: { route: 'slip', winningMessageId: null, leakMessageId: null },
+    now: 2000,
+  });
 
   db.prepare("UPDATE games SET status = 'ended' WHERE id = ?").run(gameA);
   const gameB = getCurrentGame(db, 3000, SEED).id;
@@ -130,14 +137,18 @@ it('migrates a version-1 file without losing data', () => {
     INSERT INTO games (id, status, created_at, started_at) VALUES ('g1', 'running', 1, 1);
     CREATE TABLE door_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, player_id TEXT NOT NULL,
       floor INTEGER NOT NULL, correct INTEGER NOT NULL, created_at INTEGER NOT NULL);
+    CREATE TABLE floor_progress (player_id TEXT NOT NULL, floor INTEGER NOT NULL,
+      reached_at INTEGER NOT NULL, cleared_at INTEGER, PRIMARY KEY (player_id, floor));
     PRAGMA user_version = 1;`);
   old.close();
 
   const db = openDb(file);
-  expect(db.pragma('user_version', { simple: true })).toBe(5);
+  expect(db.pragma('user_version', { simple: true })).toBe(6);
   expect(db.prepare('SELECT COUNT(*) AS n FROM attempts').get()).toEqual({ n: 0 }); // M7's table
   const doorColumns = db.prepare('SELECT name FROM pragma_table_info(?)').all('door_attempts');
   expect(doorColumns.map((c) => (c as { name: string }).name)).toContain('distance'); // v5
+  const progressColumns = db.prepare('SELECT name FROM pragma_table_info(?)').all('floor_progress');
+  expect(progressColumns.map((c) => (c as { name: string }).name)).toContain('leak_route'); // v6
   // A game from before settings were stored gets them from .env (the seed).
   expect(getCurrentGame(db, 2, SEED)).toMatchObject({
     id: 'g1',
