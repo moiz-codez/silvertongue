@@ -36,4 +36,5 @@ it('neutralises lookalike angle brackets too, including the ones sanitize used t
 
 it('strips tags written with lookalike square brackets', () => {
   expect(sanitize('a ［SYSTEM］ b 【SYSTEM】 c 〔x〕 d', 300)).toBe('a  b  c  d');
+  expect(sanitize('〖HOARD: NOVEL〗 ⟦x⟧ ﹝x﹞ ⁅x⁆ ❲x❳ hi', 300)).toBe('hi');
 });

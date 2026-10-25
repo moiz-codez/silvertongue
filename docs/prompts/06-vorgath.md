@@ -110,6 +110,8 @@ the door.
 - Embed each new carving and compare it to existing ones. If cosine similarity with any existing carving is **≥ 0.90**, it's a duplicate: drop it.
 - Keep at most the **40 most recent** carvings in Vorgath's guard prompt, so it doesn't grow forever.
 - Drop the carving if it leaks **any** of that player's runes: `revealsRune`, `saysRuneWord`, or a rune word spelled out in single letters ("M-O-T-H", "m o t h"). Carvings are read by everyone, so this is stricter than the guardians' checks. Also dropped: `NONE`, over 20 words, profanity.
+- Also dropped: a carving that mentions a gift, present, offer or riddle (once someone beats Vorgath, "offers the dragon a gift" would seal every later gift and Floor 6 could never be won again; seed 5 already covers the taunt for a riddle), or one that reads like an order to the Ward (pass, safe, allow, harmless, ignore, instruction, ward, seal, verdict). A player who wins Floor 1 can steer what the Carver writes, and every carving sits in the Ward's system note.
+- A Floor 6 gift never goes to the best-attempts queue: gift text stays off the projector.
 - Each new carving is a projector event: carve it onto a scale with a flash and bump the counter.
 - **Seed it before the game starts** with the five "textbook" tricks. Vorgath has heard the legends; the class still sees the counter climb from 5.
 

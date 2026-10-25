@@ -604,8 +604,11 @@ export function registerPlayerHandlers(
         });
         const floorMessages = q.listFloorMessages(db, id, floor);
         // Their last message on this floor goes to the admin's queue for the best-attempts wall,
-        // unless it is rude or gives away any part of this rune.
-        const winning = floorMessages.filter((m) => m.speaker === 'player').at(-1)?.text;
+        // unless it is rude or gives away any part of this rune. Never a Floor 6 gift: gift text
+        // stays off the big screen.
+        const winning = floorMessages
+          .filter((m) => m.speaker === 'player' && !m.hoard)
+          .at(-1)?.text;
         if (
           winning &&
           !isProfane(winning) &&

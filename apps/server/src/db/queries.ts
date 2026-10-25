@@ -47,6 +47,7 @@ export interface MessageRow {
   text: string;
   in_guardian_history: number;
   verdict: string | null;
+  hoard: string | null; // Floor 6: set when the message was checked as a gift
 }
 
 // ---------- games ----------
@@ -537,7 +538,7 @@ export function countUntagged(db: Db, gameId: string): { all: number; winning: n
 export function listFloorMessages(db: Db, playerId: string, floor: number): MessageRow[] {
   return db
     .prepare(
-      'SELECT id, speaker, text, in_guardian_history, verdict FROM messages WHERE player_id = ? AND floor = ? ORDER BY id',
+      'SELECT id, speaker, text, in_guardian_history, verdict, hoard FROM messages WHERE player_id = ? AND floor = ? ORDER BY id',
     )
     .all(playerId, floor) as MessageRow[];
 }

@@ -93,7 +93,15 @@ export function carverMessages(
   ];
 }
 
-// The sentence, or null for NONE, nothing, or anything too long to be one general sentence.
+// Carvings the Ward must never be shown: a gift or riddle carving would seal every later gift
+// (Floor 6 could become unwinnable after the first Dragontongue; seed 5 already covers the taunt
+// for a riddle), and a sentence about passing, the Ward or
+// its verdicts reads like an instruction to it. A dropped carving only means one trick less.
+const NOT_A_CARVING =
+  /\b(gifts?|presents?|offers?|offering|riddles?|pass(es|ed)?|safe|allow(s|ed)?|harmless|ignores?|instructions?|wards?|seals?|sealed|verdicts?)\b/i;
+
+// The sentence, or null for NONE, nothing, anything too long to be one general sentence, or a
+// sentence the Ward must not read (NOT_A_CARVING).
 export function readCarving(text: string): string | null {
   const line = (text.trim().split('\n')[0] ?? '')
     .replace(/^["'“”‘’\s]+|["'“”‘’\s]+$/g, '')
@@ -101,6 +109,7 @@ export function readCarving(text: string): string | null {
     .trim();
   if (line === '' || /^NONE\b/i.test(line)) return null;
   if (line.split(/\s+/).length > MAX_CARVING_WORDS) return null;
+  if (NOT_A_CARVING.test(line)) return null;
   return line;
 }
 
