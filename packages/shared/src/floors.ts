@@ -77,6 +77,19 @@ export const FLOORS: Record<number, FloorInfo> = {
     clearQuote: '“Impossible. IMPOSSIBLE.”',
     clearLine: 'The door behind the throne opens. Neither Ward saw it coming.',
   },
+  6: {
+    guardian: 'Vorgath',
+    subtitle: 'the Dragon Who Remembers · coiled around the vault',
+    placeholder: 'Speak to the dragon…',
+    waitingLines: [
+      'Vorgath opens one enormous eye…',
+      'The carvings on his scales glow faintly…',
+      'Vorgath breathes out slowly. The torches flicker…',
+      'Vorgath turns your words over, very slowly…',
+    ],
+    clearQuote: '“…I did not see that one coming. I will remember it.”',
+    clearLine: 'The vault opens. Your trick is already being carved into his scales.',
+  },
 };
 
 // All six guardians, built or not: what the projector map and the feed need. Nothing secret.
@@ -115,8 +128,9 @@ export const GUARDIANS: Record<number, GuardianInfo> = {
   },
 };
 
-// A floor is built once its phone info exists in FLOORS.
+// A floor is built once its phone info exists in FLOORS. Floor 6 also needs the admin's switch
+// (the server's floorOpen).
 export const isBuilt = (floor: number): boolean => floor in FLOORS;
 
-// The deepest built floor. Players below it wait on its row of the projector map, marked cleared.
+// The deepest built floor. The projector gets the deepest OPEN one in its snapshot (deepestFloor).
 export const DEEPEST_BUILT_FLOOR = Math.max(...Object.keys(FLOORS).map(Number));

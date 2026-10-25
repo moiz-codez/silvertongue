@@ -77,6 +77,8 @@ export function Cleared({
             </p>
           )}
         </>
+      ) : floorNumber >= 6 ? (
+        <p className="stairs-note">There is nothing deeper. The vault is yours, Dragontongue.</p>
       ) : (
         <p className="stairs-note">The stairs below are still being carved. Wait here, rogue.</p>
       )}

@@ -72,7 +72,7 @@ export async function createApp(
   const vorgath = createVorgath(ctx);
   const phones = registerPlayerHandlers(io, ctx, vorgath);
   const reveal = createReveal(ctx);
-  const projectorChanged = registerProjector(io, ctx, reveal);
+  const projectorChanged = registerProjector(io, ctx, reveal, vorgath);
   const admin = registerAdmin(io, ctx, phones, reveal, vorgath);
   ctx.changed = () => {
     projectorChanged();

@@ -97,16 +97,19 @@ export function registerPlayerHandlers(
   const busy = new Set<string>(); // players waiting for a reply: one message at a time
   const joinsByIp = slidingLimit(env.JOIN_LIMIT_PER_MIN, 60_000); // slows down name-squatting scripts
 
+  // Floors 1–5 are always open once built; Floor 6 only while the admin's switch is on.
+  const floorOpen = (floor: number): boolean => (floor === 6 ? vorgath.open() : isBuilt(floor));
+
   function stateFor(playerId: string): PlayerState {
     const player = q.getPlayer(db, playerId);
     const now = Date.now();
-    const progress = isBuilt(player.floor) ? q.getProgress(db, playerId, player.floor) : null;
+    const progress = floorOpen(player.floor) ? q.getProgress(db, playerId, player.floor) : null;
     return {
       gameStatus: ctx.game.status,
       playersInGame: q.listPlayers(db, ctx.game.id).filter((p) => !p.kicked).length,
       nickname: player.nickname,
       floor: player.floor,
-      floorReady: isBuilt(player.floor),
+      floorReady: floorOpen(player.floor),
       score: player.score,
       title: titleFor(player.floor - 1),
       messagesLeft: Math.max(0, ctx.game.max_messages - player.messages_sent),
@@ -121,7 +124,7 @@ export function registerPlayerHandlers(
   function sendEverything(socket: PlayerSocket, playerId: string): void {
     const player = q.getPlayer(db, playerId);
     socket.emit('player:state', stateFor(playerId));
-    if (!isBuilt(player.floor)) return;
+    if (!floorOpen(player.floor)) return;
 
     // A sealed reply was never shown: its Ward's bubble tells the story instead.
     const rows = q
@@ -295,7 +298,7 @@ export function registerPlayerHandlers(
         if (text === '') return;
         const notNow = NOT_NOW[ctx.game.status];
         if (notNow) return sendError(socket, 'not_running', notNow);
-        if (!isBuilt(floor)) return sendError(socket, 'not_ready', STAIRS);
+        if (!floorOpen(floor)) return sendError(socket, 'not_ready', STAIRS);
         if (busy.has(id)) return sendError(socket, 'busy', 'Wait for an answer first.');
         if (now < (cooldownUntil.get(id) ?? 0)) {
           return sendError(socket, 'cooldown', 'Catch your breath before you speak again.');
@@ -304,7 +307,7 @@ export function registerPlayerHandlers(
           return sendError(socket, 'cap', 'You have used all your words for this game.');
         }
 
-        const floorTurn = FLOOR_TURNS[floor]!; // isBuilt(floor) was checked above
+        const floorTurn = FLOOR_TURNS[floor]!; // floorOpen(floor) was checked above
         busy.add(id);
         cooldownUntil.set(id, now + ctx.game.cooldown_ms);
         const said = q
@@ -548,7 +551,7 @@ export function registerPlayerHandlers(
         const floor = player.floor;
         const notNow = NOT_NOW[ctx.game.status];
         if (notNow) return sendError(socket, 'not_running', notNow);
-        if (!isBuilt(floor)) return sendError(socket, 'not_ready', STAIRS);
+        if (!floorOpen(floor)) return sendError(socket, 'not_ready', STAIRS);
 
         const now = Date.now();
         if (now < (doorCooldownUntil.get(id) ?? 0)) {
@@ -639,7 +642,7 @@ export function registerPlayerHandlers(
           total: score.total,
           score: player.score + score.total,
           title: titleFor(floor),
-          nextFloorReady: isBuilt(floor + 1),
+          nextFloorReady: floorOpen(floor + 1),
         });
         socket.emit('player:state', stateFor(id));
         ctx.changed();

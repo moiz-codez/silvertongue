@@ -278,6 +278,21 @@ export function listProjectorEvents(db: Db, gameId: string, limit: number): Proj
     .all(gameId, limit) as ProjectorEventRow[];
 }
 
+// The newest clear of Floor 6, for the projector's Dragontongue moment.
+export function lastVaultClear(
+  db: Db,
+  gameId: string,
+): { nickname: string; created_at: number } | undefined {
+  return db
+    .prepare(
+      `SELECT p.nickname, e.created_at FROM projector_events e
+       JOIN players p ON p.id = e.player_id
+       WHERE e.game_id = ? AND e.floor = 6 AND e.type IN ('clear', 'first_blood') AND p.kicked = 0
+       ORDER BY e.id DESC LIMIT 1`,
+    )
+    .get(gameId) as { nickname: string; created_at: number } | undefined;
+}
+
 // ---------- the best-attempts wall ----------
 
 export interface AttemptRow {
@@ -543,7 +558,7 @@ export function setMessageVerdict(db: Db, messageId: number, verdict: string): v
 export function countWardSeals(db: Db, gameId: string): { ears: number; tongues: number } {
   const row = db
     .prepare(
-      "SELECT COUNT(*) FILTER (WHERE verdict = 'SEAL') AS ears, COUNT(*) FILTER (WHERE verdict = 'LEAK') AS tongues FROM messages WHERE game_id = ?",
+      "SELECT COUNT(*) FILTER (WHERE verdict = 'SEAL') AS ears, COUNT(*) FILTER (WHERE verdict = 'LEAK') AS tongues FROM messages WHERE game_id = ? AND floor = 5",
     )
     .get(gameId) as { ears: number; tongues: number };
   return { ears: row.ears, tongues: row.tongues };

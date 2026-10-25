@@ -350,6 +350,11 @@
   grid-row: 1 / span 2;
 }
 
+.vorgath-panel h3 {
+  margin: var(--space-4) 0 0;
+  font-size: 1rem;
+}
+
 .moderation .admin-button {
   min-height: 44px;
 }

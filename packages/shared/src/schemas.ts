@@ -16,6 +16,7 @@ export const configPayload = z.object({
   cooldownMs: z.number().int().min(0).max(60_000),
   maxMessages: z.number().int().min(1).max(500),
   llmMode: z.enum(['mock', 'live']),
+  floor6Enabled: z.boolean(),
 });
 export const moderatePayload = z.object({
   id: z.number().int().positive(),

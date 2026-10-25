@@ -131,6 +131,11 @@ export interface ProjectorSnapshot {
   bestAttempts: { nickname: string; floor: number; text: string }[];
   // While the reveal runs: the card on screen. Null before the cards are ready.
   reveal: { card: RevealCard; index: number; total: number } | null;
+  deepestFloor: number; // the deepest open floor: players past it wait on its row, marked cleared
+  // Floor 6 while he is open: counts only, never a carving's or a gift's text.
+  vorgath: { carvings: number; gifts: number } | null;
+  // Someone just beat Vorgath: the full-screen moment, shown until ageMs reaches 8 s.
+  dragontongue: { nickname: string; ageMs: number } | null;
 }
 
 export interface ProjectorServerEvents {
@@ -186,6 +191,16 @@ export interface AdminState {
   moderation: ModerationItem[]; // newest first
   tagging: { done: number; total: number } | null; // the tagger's catch-up, while it runs
   reveal: { index: number; total: number } | null; // the card on the projector
+  floor6Available: boolean; // the embedding model loaded, so Floor 6 can be switched on
+  vorgath: AdminVorgath; // the texts the projector never gets
+}
+
+export interface AdminVorgath {
+  carvings: { number: number; text: string; sourceFloor: number | null; seeded: boolean }[];
+  hoard: { id: number; text: string; by: string | null }[]; // by: nickname; null = seeded
+  owned: number; // gifts refused as already owned
+  tooSmall: number;
+  sealedByCarving: number;
 }
 
 export type AdminReply = { ok: true } | { ok: false; error: string };

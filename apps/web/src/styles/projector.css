@@ -288,6 +288,64 @@
   }
 }
 
+/* Floor 6: a gold mark flashes onto his scales each time a carving is learned. */
+.pj-carving {
+  position: absolute;
+  top: 30%;
+  left: 40%;
+  width: 0.5em;
+  height: 0.2em;
+  opacity: 0;
+  color: var(--carving);
+  animation: pj-ward-pulse 3s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pj-carving {
+    animation-duration: 0.01s;
+  }
+}
+
+.pj-floor-name .pj-vorgath-counts {
+  color: var(--carving);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Someone beat Vorgath: the whole screen is theirs for a few seconds. */
+.pj-dragontongue {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3em;
+  background: color-mix(in srgb, var(--color-bg) 94%, transparent);
+  text-align: center;
+}
+
+.pj-dragontongue .sprite {
+  width: 8em;
+  height: 8em;
+}
+
+.pj-dragontongue h1 {
+  margin: 0;
+  font-size: 4em;
+}
+
+.pj-dragontongue p {
+  margin: 0;
+  font-size: 1.4em;
+}
+
+.pj-dragontongue .pj-dragontongue-title {
+  color: var(--carving);
+  font-family: var(--font-heading);
+  font-size: 2.4em;
+}
+
 .pj-floor-name h2 {
   margin: 0;
   font-size: 1.5em;
